@@ -1054,8 +1054,9 @@ classdef GUI < handle
     methods
 
         function onExportMeasurements(app, ~, ~)
-            [file, path] = uiputfile('*.xlsx', 'Export region measurements', ...
-                'region_measurements.xlsx');
+            defaultName = fullfile(app.Settings.IO.DefaultFolder, 'region_measurements.xlsx');
+            [file, path] = uiputfile('*.xlsx', ...
+                'Export region measurements', defaultName);
 
             if isequal(file,0)
                 return;  % user cancelled
