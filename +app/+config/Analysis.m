@@ -1,0 +1,111 @@
+classdef Analysis < handle
+
+
+    % Group analysis parameters; validate on set; raise Changed.
+    properties (Access=private)
+        MinPeakDistance_ (1,1) double {mustBeNonnegative} = 15
+        MinPeakHeight_   (1,1) double {mustBeNonnegative} = 0.4
+        BoxSize_         (1,1) double {mustBePositive}    = 200
+        PeakSmoothing_   (1,1) double {mustBeNonnegative} = 15
+        PixelSizeValue_ (1,1) double {mustBePositive} = 1
+        PixelSizeUnit_  (1,:) char = 'px'
+    end
+
+    events
+        Changed           % generic
+        AnalysisChanged   % domain-specific
+    end
+
+    properties (Dependent)
+        MinPeakDistance
+        MinPeakHeight
+        BoxSize
+        PeakSmoothing
+        PixelSizeValue   % numeric, e.g. 4
+        PixelSizeUnit    % string, e.g. 'nm'
+    end
+
+    methods
+        % Getters
+        function v = get.MinPeakDistance(this), v = this.MinPeakDistance_; end
+        function v = get.MinPeakHeight(this),   v = this.MinPeakHeight_;   end
+        function v = get.BoxSize(this),         v = this.BoxSize_;         end
+        function v = get.PeakSmoothing(this),   v = this.PeakSmoothing_;   end
+        function v = get.PixelSizeValue(this),   v = this.PixelSizeValue_;   end
+        function v = get.PixelSizeUnit(this),   v = this.PixelSizeUnit_;   end
+
+        % Setters (with any extra cross-field validation)
+        function set.MinPeakDistance(this,v)
+            old = this.MinPeakDistance_;
+            this.MinPeakDistance_ = v;
+            ev = app.config.ChangeEvent("Analysis","MinPeakDistance",old,v);
+            notify(this,'AnalysisChanged',ev);
+            notify(this,'Changed');
+        end
+        function set.MinPeakHeight(this,v)
+            old = this.MinPeakHeight_;
+            this.MinPeakHeight_ = v;
+            ev = app.config.ChangeEvent("Analysis","MinPeakHeight",old,v);
+            notify(this,'AnalysisChanged',ev);
+            notify(this,'Changed');
+        end
+        function set.BoxSize(this,v)
+            old = this.BoxSize_;
+            this.BoxSize_ = v;
+            ev = app.config.ChangeEvent("Analysis","BoxSize",old,v);
+            notify(this,'AnalysisChanged',ev);
+            notify(this,'Changed');
+        end
+        function set.PeakSmoothing(this,v)
+            old = this.PeakSmoothing_;
+            this.PeakSmoothing_ = v;
+            ev = app.config.ChangeEvent("Analysis","PeakSmoothing",old,v);
+            notify(this,'AnalysisChanged',ev);
+            notify(this,'Changed');
+        end
+        function set.PixelSizeValue(this,v)
+            old = this.PixelSizeValue_;
+            this.PixelSizeValue_ = v;
+            ev = app.config.ChangeEvent("Analysis","PixelSizeValue",old,v);
+            notify(this,'AnalysisChanged',ev);
+            notify(this,'Changed');
+        end
+        function set.PixelSizeUnit(this,v)
+            old = this.PixelSizeUnit_;
+            this.PixelSizeUnit_ = v;
+            ev = app.config.ChangeEvent("Analysis","PixelSizeUnit",old,v);
+            notify(this,'AnalysisChanged',ev);
+            notify(this,'Changed');
+        end
+
+        % Serialization helpers
+        function S = toStruct(this)
+            S = struct( ...
+                'MinPeakDistance', this.MinPeakDistance, ...
+                'MinPeakHeight',   this.MinPeakHeight, ...
+                'BoxSize',         this.BoxSize, ...
+                'PeakSmoothing',   this.PeakSmoothing, ...
+                'PixelSizeValue',  this.PixelSizeValue, ...
+                'PixelSizeUnit',   this.PixelSizeUnit);
+        end
+        
+        function fromStruct(this,S)
+            f = fieldnames(this.toStruct());
+            for i=1:numel(f)
+                if isfield(S,f{i}), this.(f{i}) = S.(f{i}); end
+            end
+        end
+
+    end
+
+    %% Helpers
+    methods
+
+        function ps = getDefaultPixelSize(this)
+            ps = model.units.PixelSize(this.PixelSizeValue, this.PixelSizeUnit);
+        end
+        
+    end
+
+
+end
