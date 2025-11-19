@@ -64,7 +64,7 @@ classdef ImageAxesTool < handle
 
     % special properties for development/debugging purposes
     properties (Access=protected)
-        PrintStatusUpdates (1,1) logical = true
+        PrintStatusUpdates (1,1) logical = false
     end
 
     methods
@@ -236,7 +236,7 @@ classdef ImageAxesTool < handle
 
     %% private helper methods
 
-    methods(Access=private)
+    methods(Access=protected)
 
         function printStatus(obj,status)
             % PrintStatusUpdates is true

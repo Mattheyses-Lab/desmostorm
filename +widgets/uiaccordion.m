@@ -265,12 +265,7 @@ classdef uiaccordion < matlab.ui.componentcontainer.ComponentContainer
             end
         end
 
-
-
-
     end
-
-
 
     %% Teardown
     methods
@@ -289,9 +284,5 @@ classdef uiaccordion < matlab.ui.componentcontainer.ComponentContainer
         end
 
     end
-
-
-
-
 
 end

@@ -57,7 +57,6 @@ properties(AbortSet,SetObservable=true)
     Hover (1,1) logical = false
 end
 
-
 properties(Dependent=true,SetAccess=private)
     nodeSize (1,1) double
     nodeSizeWithBorders (1,1) double
@@ -351,45 +350,6 @@ methods
     function paneIsEmpty = get.paneIsEmpty(obj)
         paneIsEmpty = isempty(obj.Pane.Children);
     end
-
-end
-
-%% Event handlers (parent uiaccordion calls these)
-methods(Access=?widgets.uiaccordion)
-
-    % function onDown(obj,evt,tgt)
-    %     fprintf('widgets.uiaccordionitem.onDown()\n');
-    %     fprintf('Item title: %s\n',obj.Title);
-    % end
-    % 
-    % function onMove(obj, evt, tgt)
-    %     fprintf('widgets.uiaccordionitem.onMove()\n');
-    %     fprintf('Item title: %s\n',obj.Title);
-    % end
-    % 
-    % function onUp(obj, evt, tgt)
-    %     fprintf('widgets.uiaccordionitem.onUp()\n');
-    %     fprintf('Item title: %s\n',obj.Title);
-    % end
-    % 
-    % function onScroll(obj, evt, tgt)
-    %     fprintf('widgets.uiaccordionitem.onScroll()\n');
-    %     fprintf('Item title: %s\n',obj.Title);
-    % end
-    % 
-    % function onEnter(obj,~,~)
-    %     fprintf('widgets.uiaccordionitem.onEnter()\n');
-    %     fprintf('Item title: %s\n',obj.Title);
-    %     % obj.TitleBackgroundColor = [1 1 1];
-    %     obj.Hover = true;
-    % end
-    % 
-    % function onLeave(obj,~,~)
-    %     fprintf('widgets.uiaccordionitem.onLeave()\n');
-    %     fprintf('Item title: %s\n',obj.Title);
-    %     % obj.TitleBackgroundColor = [0.95 0.95 0.95];
-    %     obj.Hover = false;
-    % end
 
 end
 

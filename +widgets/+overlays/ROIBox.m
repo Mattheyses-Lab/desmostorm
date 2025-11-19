@@ -26,10 +26,6 @@ classdef ROIBox < handle & matlab.mixin.SetGetExactNames
     properties (SetObservable, AbortSet)
         FaceColor = [1 1 1]
 
-
-
-
-
         LineWidth = 0.5
         HoverLineWidth = 2
         SelectionLineWidth = 1
@@ -108,6 +104,7 @@ classdef ROIBox < handle & matlab.mixin.SetGetExactNames
     end
 
     methods (Access=private)
+        
         function queueGeometryUpdate(obj)
             if obj.pendingUpdate
                 return
@@ -134,7 +131,6 @@ classdef ROIBox < handle & matlab.mixin.SetGetExactNames
             end
         end
 
-
         function updateAppearance(obj)
 
             obj.BoxPatch.FaceColor = obj.FaceColor;
@@ -152,9 +148,6 @@ classdef ROIBox < handle & matlab.mixin.SetGetExactNames
             end
 
         end
-
-
-
 
     end
 

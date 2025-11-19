@@ -124,7 +124,7 @@ classdef Pick < widgets.ImageAxesTool
         function tf = onDistractDown(obj,~,tgt)
             % tf = onDistractDown(obj,evt,tgt)
 
-            fprintf('%s.onDistractDown()\n',obj.Name);
+            obj.printStatus(sprintf('%s.onDistractDown()\n',obj.Name));
 
             % ROIBox clicks handled by patch (drag/delete)
             if isa(tgt,'matlab.graphics.primitive.Patch') && strcmp(get(tgt,'Tag'),'ROIBox')

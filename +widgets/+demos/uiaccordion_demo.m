@@ -24,7 +24,6 @@ function accordion = uiaccordion_demo()
         'Padding',3,...
         'BackgroundColor',[1 1 1]);
 
-
     ActiveItem = 1:5;
 
     %% ACCORDION ITEM 1

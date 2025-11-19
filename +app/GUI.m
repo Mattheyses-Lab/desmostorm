@@ -976,7 +976,6 @@ classdef GUI < handle
         function onBoxActivated(obj, data)
             % return if no active image
             img = obj.Project.ActiveImage; if isempty(img), return; end
-
             % get region id from box id
             regionID = data.UUID;
             % if region exists in active image
@@ -996,54 +995,34 @@ classdef GUI < handle
     methods (Access=private)
 
         function onROIPreviewMoved(obj,data)
-
-            fprintf('ROI moving\n')
-
             obj.onROIMoveCommitted(data);
-
         end
 
-
         function onROIMoveCommitted(obj,data)
-
-            fprintf('ROI moved\n')
-
             % get the ActiveImage, exit if empty
             img = obj.Project.ActiveImage; if isempty(img), return; end
-
             % get the ActiveRegion, exit if empty
             reg = img.ActiveRegion; if isempty(reg), return; end
-
             % update region linescan properties
             reg.updateLinescan(data);
-
             % process the linescan for this region
             img.processRegionLinescan(reg,app.config.RunConfig.fromSettings(obj.Settings));
-
             % update the region linescan plot
             obj.refreshRegionLinescanPlot();
-
             % update RegionSummaryTable
             obj.RegionSummaryTable.Data = reg.SummaryTable;
-
         end
 
         function onROIDeleted(obj)
-            fprintf('ROI deleted\n')
-
             % get the ActiveImage, exit if empty
             img = obj.Project.ActiveImage; if isempty(img), return; end
-
             % get the ActiveRegion, exit if empty
             reg = img.ActiveRegion; if isempty(reg), return; end
-
             % reset linescan ROI for the active region (also resets linescan results)
             img.resetRegionLinescan(reg);
-
             % update linescan
             obj.refreshRegionLinescanROI();
             obj.refreshRegionLinescanPlot();
-
             % update RegionSummaryTable
             obj.RegionSummaryTable.Data = reg.SummaryTable;
         end

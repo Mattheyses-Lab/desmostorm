@@ -40,11 +40,6 @@ for i = 1:nBorders
     borderLineXY(2,lineIdx:lineIdx+2) = [0,borderY(i),NaN];
 end
 
-% % testing below
-% borders = islocalmin(y,...
-%     'FlatSelection','first');
-
-
 % Calculate FWHM coordinates for each peak
 for i = 1:length(locs)
     halfHeight = pks(i)/2;
@@ -66,15 +61,10 @@ for i = 1:length(locs)
         xL(i) = interp1(y(idxL:idxL+1), x(idxL:idxL+1), halfHeight, 'linear');
     end
 
-    % % find first sample to right of peak below half height
-    % idxR = find(y(locs(i):end) <= halfHeight, 1, 'first');
-    % idxR = idxR + locs(i) - 1; % Adjust index to original array
-    % idxR = min(idxR,rightBorder); % clamp to border
     % find first sample to right of peak below half height
     idxR = find(y(locs(i):rightBorder) <= halfHeight, 1, 'first');
     idxR = idxR + locs(i) - 1; % Adjust index to original array
     idxR = min(idxR,rightBorder); % clamp to border
-
 
     % interpolate with next point to find intersection x location
     if isempty(idxR) || idxR == rightBorder 
@@ -85,8 +75,6 @@ for i = 1:length(locs)
         xR(i) = interp1(y(idxR-1:idxR), x(idxR-1:idxR), halfHeight, 'linear');
     end
 
-
 end
-
 
 end

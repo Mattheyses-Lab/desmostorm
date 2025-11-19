@@ -59,14 +59,14 @@ classdef Zoom < widgets.ImageAxesTool
             obj.Host.addMode('Zoom');
             obj.Host.addMode('Pan');
             obj.Host.setMode('Pan', true); % Pan Mode is On by default
-            %fprintf('"%s" tool installed\n',obj.Name)
+            %obj.printStatus(sprintf('"%s" tool installed\n',obj.Name)
         end
 
         % Called AFTER uninstalled from Host, use for any extra required cleanup actions
         function onUninstall(obj)
             obj.Host.removeMode('Zoom');
             obj.Host.removeMode('Pan');
-            % fprintf('"%s" tool uninstalled\n',obj.Name)
+            % obj.printStatus(sprintf('"%s" tool uninstalled\n',obj.Name)
         end
 
     end
@@ -76,7 +76,7 @@ classdef Zoom < widgets.ImageAxesTool
 
         function onDown(obj, ~, ~)
 
-            fprintf('%s.onDown()\n',obj.Name);
+            obj.printStatus(sprintf('%s.onDown()\n',obj.Name));
 
             H = obj.Host;
             if isempty(H.cursorPositionStatic)
@@ -105,7 +105,7 @@ classdef Zoom < widgets.ImageAxesTool
             % persistent callCount
             persistent callCount
 
-            fprintf('%s.onScroll()\n',obj.Name);
+            obj.printStatus(sprintf('%s.onScroll()\n',obj.Name));
 
             H = obj.Host;
             if isempty(H.cursorPositionStatic)
@@ -132,7 +132,7 @@ classdef Zoom < widgets.ImageAxesTool
         end
 
         function onMove(obj, ~, ~)
-            fprintf('%s.onMove()\n',obj.Name);
+            obj.printStatus(sprintf('%s.onMove()\n',obj.Name));
 
             if ~obj.Host.Mode.Pan
                 return
@@ -151,12 +151,12 @@ classdef Zoom < widgets.ImageAxesTool
     methods
 
         function tf = onDistractDown(obj,~,~)
-            fprintf('%s.onDistractDown()\n',obj.Name);
+            obj.printStatus(sprintf('%s.onDistractDown()\n',obj.Name));
             tf = false;
         end
 
         % function tf = onDistractMove(obj,evt,tgt)
-        %     fprintf('%s.onDistractMove()\n',obj.Name);
+        %     obj.printStatus(sprintf('%s.onDistractMove()\n',obj.Name);
         %     tf = false;
         % end
 
@@ -243,7 +243,7 @@ classdef Zoom < widgets.ImageAxesTool
             % set new limits using new cursor position
             obj.updateLimits([newX,newY]);
             
-            fprintf('Host CData changed\n')
+            obj.printStatus(sprintf('Host CData changed\n'))
         end
 
     end

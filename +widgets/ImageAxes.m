@@ -215,10 +215,7 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
         end
 
         function update(obj)
-            fprintf('widgets.ImageAxes.update()\n')
-
-            % Update axes colormap
-            %obj.mainAxes.Colormap = obj.Colormap;
+            %fprintf('widgets.ImageAxes.update()\n')
 
             % Update image & axes
             obj.hImage.CData = obj.CData;
@@ -243,11 +240,8 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
         function updateLabelText(obj)
             px = obj.activePixel;
             if ~isempty(px) && ~isempty(obj.CData)
-                txt = sprintf(' (X,Y)=(%0.f,%0.f) | Val: %0.2f', ...
+                txt = sprintf(' (X, Y)=(%0.f, %0.f) | Val: %0.2f', ...
                     px(1),px(2),obj.CData(px(2),px(1)));
-
-                % txt = sprintf(' (X,Y)=(%0.f,%0.f) | Val: %0.2f | Zoom: %gX', ...
-                %     px(1),px(2),obj.CData(px(2),px(1)),obj.ZoomFactor);
             else
                 txt = 'Hover over image to interact';
             end
@@ -282,16 +276,6 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
                         return
                 end
 
-                % % if tool returns 'default', do nothing (let the pointer be set normally)
-                % if strcmp(pointer,'default')
-                %     return
-                % end
-                % 
-                % % otherwise, if a valid pointer is returned, set it and exit
-                % if ~isempty(pointer)
-                %     obj.ParentFig.Pointer = pointer;
-                %     return
-                % end
             end
 
             % no valid pointer was returned, set pointer to 'arrow'
@@ -893,7 +877,7 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
     methods (Access=private)
 
         function onCDataChanged(obj)
-            fprintf('CData changed\n');
+            %fprintf('CData changed\n');
 
             % do not allow empty CData
             if isempty(obj.CData)
