@@ -80,6 +80,7 @@ classdef uiaccordion < matlab.ui.componentcontainer.ComponentContainer
         end
     
         function update(obj)
+            fprintf('uiaccordion.update()\n')
             obj.Items = obj.Items(isvalid(obj.Items));
     
             if obj.nItems==0

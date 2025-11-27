@@ -61,6 +61,9 @@ classdef GUI < handle
         ExampleColormapAxes matlab.ui.control.UIAxes
         ExampleColormapImage matlab.graphics.primitive.Image
         ColormapTree matlab.ui.container.Tree
+
+        IntensitySlider widgets.uirangeslidereditfield
+
     end
 
     % Derived properties for specific component groups to reduce clutter
@@ -104,7 +107,8 @@ classdef GUI < handle
                 'Color',[0 0 0],...
                 'Position',s(1,:),...
                 'WindowStyle','normal',...
-                'Visible','off');
+                'Visible','off',...
+                'Theme','dark');
 
             % --- Menubar ---
             mFile = uimenu(obj.Fig,'Text','File');
@@ -124,7 +128,7 @@ classdef GUI < handle
             % --- Left Pane Grid (ListBoxes and settings) ---
             obj.LeftPane = uigridlayout(obj.Grid,[1 1],...
                 "RowHeight",{'fit'},...
-                "ColumnWidth",220,...
+                "ColumnWidth",300,...
                 "Padding",[0 0 0 0],...
                 "BackgroundColor",[.12 .12 .12],...
                 "Scrollable","on");
@@ -321,6 +325,45 @@ classdef GUI < handle
                 "ValueChangedFcn",@(o,~) obj.AnalysisSettingsChanged(o,"PixelSizeUnit"),...
                 "Value",obj.Settings.Analysis.PixelSizeUnit);
 
+
+
+            % add Image Display accordion item
+            obj.SettingsAccordion.addItem("Title","Image Display",...
+                "BorderColor",[0.49 0.49 0.49],...
+                "TitleBackgroundColor",[.12 .12 .12],...
+                "HoverTitleBackgroundColor",[.3 .3 .3],...
+                "PaneBackgroundColor",[.18 .18 .18],...
+                "FontColor",[0.85 0.85 0.85],...
+                "BorderWidth",1,...
+                "ExpandedBorderWidth",1,...
+                "TitlePadding",1);
+            % set size and spacing of pane grid
+            set(obj.SettingsAccordion.Items(5).Pane,...
+                "RowHeight",{'fit'},...
+                "ColumnWidth",{'1x'},...
+                "RowSpacing",5,...
+                "ColumnSpacing",5);
+
+
+            % obj.IntensitySlider = widgets.uirangeslidereditfield(obj.SettingsAccordion.Items(5).Pane,...
+            %     "Title",'Adjust display limits',...
+            %     "FontColor",[1 1 1],...
+            %     "Limits",[0 1],...
+            %     "Value",[0 1],...
+            %     "Colormap",obj.Settings.Display.Colormap,...
+            %     "ValueChangedFcn",@(~,evt) obj.onIntensitySliderChanged(evt));
+
+
+            obj.IntensitySlider = widgets.uirangeslidereditfield(obj.SettingsAccordion.Items(5).Pane,...
+                "Title",'Adjust display limits',...
+                "FontColor",[1 1 1],...
+                "BackgroundColor",[.18 .18 .18],...
+                "Limits",[0 1],...
+                "Value",[0 1],...
+                "RoundValues","on",...
+                "RoundDigits",0,...
+                "ValueChangingFcn",@(~,evt) obj.onIntensitySliderChanging(evt),...
+                "ValueChangedFcn",@(~,evt) obj.onIntensitySliderChanged(evt));
 
 
 
@@ -640,6 +683,10 @@ classdef GUI < handle
             % refresh RegionListBox
             obj.refreshRegionList();
             obj.syncActiveRegionToView();
+
+            % update IntensitySlider
+            obj.IntensitySlider.Limits = img.RawIntensityRange;
+            obj.IntensitySlider.Value = img.DisplayCLim;
         end
 
     end
@@ -830,8 +877,10 @@ classdef GUI < handle
         function onAnalysisChanged(obj,e)
             switch e.Name
                 case {"MinPeakDistance","MinPeakHeight","PeakSmoothing"}
-                    % cheap update: re-run peaks on current ROI only
-                    obj.processActiveRegion();
+                    % % cheap update: re-run peaks on current ROI only
+                    % obj.processActiveRegion();
+
+                    obj.processAllRegions();
                 case "BoxSize"
                     % delete all existing Regions
                     obj.Project.removeAllRegions();
@@ -871,6 +920,12 @@ classdef GUI < handle
         function AnalysisSettingsChanged(obj,src,stgName)
             % for certain settings, prompt for confirmation before updating
             switch stgName
+                case {"MinPeakDistance","MinPeakHeight","PeakSmoothing"}
+                    msg1 = sprintf('New %s value will be applied to all regions. Continue?',stgName);
+                    msg2 = sprintf('Confirm %s Change',stgName);
+                    selection = uiconfirm(obj.Fig, ...
+                        msg1, ...
+                        msg2, "Icon","warning", "Options", {'OK', 'Cancel'});
                 case 'BoxSize'
                     selection = uiconfirm(obj.Fig, ...
                         "Changing the BoxSize will delete any existing regions. Continue?",...
@@ -897,6 +952,56 @@ classdef GUI < handle
 
     end
 
+    %% Per-image settings
+    methods (Access=private)
+
+        function onIntensitySliderChanging(obj,~)
+            % onIntensitySliderChanged(obj,evt)
+
+            % get the active image
+            img = obj.Project.ActiveImage;
+            if isempty(img), return; end
+
+
+            % oldVal = double(obj.Ax.CLim);
+            oldVal = double(img.DisplayCLim);
+
+            % newVal = round(obj.IntensitySlider.Value);
+            newVal = obj.IntensitySlider.Value;
+
+            change = max(abs(oldVal-newVal));
+
+            if change >= (diff(img.RawIntensityLimits)+1)/(32)
+                % obj.Ax.CLim = newVal;
+                % obj.RegionViewer.CLim = newVal;
+                set([obj.Ax,obj.RegionViewer],'CLim',newVal);
+                %drawnow limitrate nocallbacks
+            end
+
+        end
+
+        function onIntensitySliderChanged(obj,~)
+            % onIntensitySliderChanged(obj,evt)
+
+            % get the active image
+            img = obj.Project.ActiveImage;
+            if isempty(img), return; end
+
+
+
+            % newVal = evt.Source.Value;
+            newVal = obj.IntensitySlider.Value;
+
+            img.DisplayCLim = newVal;
+
+            obj.Ax.CLim = newVal;
+            obj.RegionViewer.CLim = newVal;
+
+        end
+
+    end
+
+
     %% Processing hooks
     methods (Access=private)
 
@@ -915,6 +1020,28 @@ classdef GUI < handle
             % update RegionSummaryTable
             obj.RegionSummaryTable.Data = reg.SummaryTable;
         end
+
+
+        function processAllRegions(obj)
+            % create progress dialog
+            h = uiprogressdlg(obj.Fig,"Message",'Please wait...','Indeterminate','on');
+            % re-process everything
+            obj.Project.processAll(app.config.RunConfig.fromSettings(obj.Settings))
+            % close the progress dialog
+            close(h);
+
+            % get the ActiveImage, exit if empty
+            img = obj.Project.ActiveImage; if isempty(img), return; end
+            % get the ActiveRegion, exit if empty
+            reg = img.ActiveRegion; if isempty(reg), return; end
+            % update the region linescan plot
+            obj.refreshRegionLinescanPlot();
+            % update RegionSummaryTable
+            obj.RegionSummaryTable.Data = reg.SummaryTable;
+        end
+
+
+
 
     end
 

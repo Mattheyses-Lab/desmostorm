@@ -48,8 +48,11 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
         % mainAxes matlab.ui.control.UIAxes
         staticAxes matlab.ui.control.UIAxes
         hImage matlab.graphics.primitive.Image
-        Label (1,1) matlab.ui.control.Label
+        %Label (1,1) matlab.ui.control.Label
         L event.listener
+
+        % testLabel (1,1) matlab.graphics.primitive.Text
+        Label (1,1) matlab.graphics.primitive.Text
     end
 
     % tool-accessible
@@ -201,16 +204,25 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
             obj.mainAxes.PlotBoxAspectRatio = [1 1 1];
             obj.mainAxes.DataAspectRatio    = [1 1 1];
 
-            % Label
-            obj.Label = uilabel(obj.Panel,...
-                'Text','',...
-                'Position',[1 1 obj.Panel.Position(3) 20],...
-                'BackgroundColor',[0 0 0],...
-                'FontColor',[1 1 1],...
-                'Visible',"on");
+            % % Label
+            % obj.Label = uilabel(obj.Panel,...
+            %     'Text','',...
+            %     'Position',[1 1 obj.Panel.Position(3) 20],...
+            %     'BackgroundColor',[0 0 0],...
+            %     'FontColor',[1 1 1],...
+            %     'Visible',"on");
 
             % set SizeChangedFcn so we can force visual update upon resizing (AutoResizeChildren of parent must be Off)
             obj.SizeChangedFcn = @(~,~) obj.updateOnResize();
+
+            obj.Label = text('Parent',obj.mainAxes,...
+                'Units','normalized',...
+                'Position',[0 0],...
+                'Color',[1 1 1],...
+                'String','This is a test',...
+                'HorizontalAlignment','left',...
+                'VerticalAlignment','bottom');
+
 
         end
 
@@ -218,12 +230,12 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
             %fprintf('widgets.ImageAxes.update()\n')
 
             % Update image & axes
-            obj.hImage.CData = obj.CData;
+            %obj.hImage.CData = obj.CData;
 
             if isempty(obj.CData), return; end
 
             % Label stretches to fill panel width
-            obj.Label.Position = [1 1 obj.Panel.Position(3) 20];
+            %obj.Label.Position = [1 1 obj.Panel.Position(3) 20];
         end
 
     end
@@ -245,7 +257,8 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
             else
                 txt = 'Hover over image to interact';
             end
-            obj.Label.Text = txt;
+            % obj.Label.Text = txt;
+            obj.Label.String = txt;
         end
 
         function updatePointer(obj)
@@ -877,34 +890,40 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
     methods (Access=private)
 
         function onCDataChanged(obj)
-            %fprintf('CData changed\n');
 
-            % do not allow empty CData
-            if isempty(obj.CData)
-                obj.CData = obj.placeholderImage;
-                obj.restoreDefaultLimits();
-                obj.mainAxes.CLim = [0 1];
-                return
-            end
+            % % do not allow empty CData
+            % if isempty(obj.CData)
+            %     obj.CData = obj.placeholderImage;
+            %     obj.restoreDefaultLimits();
+            %     obj.mainAxes.CLim = [0 1];
+            %     return
+            % end
 
             % get old CData from image object
             oldCData = obj.hImage.CData;
-            % new CData is already in obj.CData
-            newCData = obj.CData;
-            % create event data payload before firing event
-            evtData = widgets.events.CDataChangedEventData(oldCData,newCData);
+            % % new CData is already in obj.CData
+            % newCData = obj.CData;
+
+
+            if isempty(obj.CData)
+                obj.CData = obj.placeholderImage;
+                newCLim = [0 1];
+            else
+                newCLim = [min(min(obj.CData)) max(max(obj.CData))];
+            end
 
             % set the new CData
             obj.hImage.CData = obj.CData;
 
-            % TESTING BELOW
-
-            obj.mainAxes.CLim = [min(min(obj.CData)) max(max(obj.CData))];
-
-            % END TESTING
+            % % TESTING BELOW
+            obj.mainAxes.CLim = newCLim;
+            % % END TESTING
 
             % update axes limits
             obj.restoreDefaultLimits();
+
+            % create event data payload before firing event
+            evtData = widgets.events.CDataChangedEventData(oldCData,obj.CData);
 
             % fire event, send payload
             notify(obj,'CDataChanged',evtData);
@@ -964,6 +983,29 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
             end
 
         end
+
+
+        function ax = demo()
+
+
+            fig = uifigure("WindowStyle","alwaysontop",...
+                "Position",[0 0 500 500],...
+                "Visible","off");
+
+            ax = widgets.ImageAxes(fig,...
+                "ToolBox",{'Zoom'},...
+                "ToolBelt",{'Zoom'},...
+                "Units","normalized",...
+                "Position",[0 0 1 1],...
+                "CData",imread("rice.png"));
+
+            movegui(fig,"center")
+
+            fig.Visible = "on";
+
+        end
+
+
 
     end
 

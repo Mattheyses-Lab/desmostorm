@@ -1,29 +1,34 @@
 classdef sliderthumb < handle
 %%  SLIDERTHUMB draggable thumb used by uislidereditfield
 
-    properties(Dependent=true)
-        Value
-        FaceColor
-        EdgeColor
-        EdgeWidth
-        YPosition
-        ButtonDownFcn
+    properties
         ID
-        Size1
-        Size2
     end
 
-    properties(SetAccess=private)
+    properties(Dependent)
+        YPosition
+        Value
+    end
+
+    properties(SetObservable,AbortSet)
+        % Value = 1
+        % YPosition = 25.5
+        FaceColor = [0.5 0.5 0.5]
+        EdgeColor = 1
+        EdgeWidth = 1
+        ButtonDownFcn = ''
+        Size1 = 10
+        Size2 = 12
+
         isSelected (1,1) logical = false
-    end
-
-    properties(Access=private)
-        user_Size1
-        user_Size2
     end
 
     properties(Access=private,Transient,NonCopyable)
         thumb matlab.graphics.primitive.Line
+
+        pendingUpdate logical = false
+
+        L event.listener
     end
 
     %% constructor and destructor
@@ -57,8 +62,25 @@ classdef sliderthumb < handle
                 'LineWidth',Options.EdgeWidth);
             addprop(obj.thumb,'ID');
             obj.thumb.ID = Options.ID;
-            obj.user_Size1 = Options.Size1;
-            obj.user_Size2 = Options.Size2;
+
+            % apply inputs
+            obj.Value       = Options.Value;
+            obj.YPosition   = Options.YPosition;
+
+            obj.FaceColor   = Options.FaceColor;
+            obj.EdgeColor   = Options.FaceColor;
+            obj.EdgeWidth   = Options.EdgeWidth;
+            obj.Size1       = Options.Size1;
+            obj.Size2       = Options.Size2;
+            obj.ID          = Options.ID;
+
+            % obj.L = addlistener(obj, {'Value','YPosition'}, ...
+            %     'PostSet', @(~,~) obj.updatePosition());
+
+
+            obj.L = addlistener(obj, {'FaceColor','EdgeColor','EdgeWidth','Size1','Size2','isSelected'}, ...
+                'PostSet', @(~,~) obj.updateAppearance());
+
         end
 
         % destructor
@@ -80,97 +102,88 @@ classdef sliderthumb < handle
 
     end
 
-    %% dependent Set and Get methods
+    methods (Access=private)
 
+        % function queuePositionUpdate(obj)
+        %     if obj.pendingUpdate
+        %         return
+        %     end
+        %     obj.pendingUpdate = true;
+        %     % coalesce updates
+        %     drawnow limitrate nocallbacks
+        %     obj.updatePosition();
+        %     obj.pendingUpdate = false;
+        % end
+
+        % function updatePosition(obj)
+        %     % position
+        %     X = obj.Value;
+        %     Y = obj.YPosition;
+        %     set(obj.thumb,'XData',X,'YData',Y);
+        % end
+
+
+        function updateAppearance(obj)
+
+            set(obj.thumb,...
+                'MarkerFaceColor',obj.FaceColor,...
+                'MarkerEdgeColor',obj.EdgeColor,...
+                'LineWidth',obj.EdgeWidth);
+            
+            if obj.isSelected
+                obj.thumb.MarkerSize = obj.Size2; % Increase size when selected
+            else
+                obj.thumb.MarkerSize = obj.Size1; % Reset size when not selected
+            end
+
+        end
+
+    end
+
+
+    %% Dependent Set/Get
     methods
 
-        function Value = get.Value(obj)
-            Value = obj.thumb.XData;
+        function val = get.Value(obj)
+            val = obj.thumb.XData;
         end
 
         function set.Value(obj,val)
+            if val==obj.thumb.XData
+                return
+            end
             obj.thumb.XData = val;
         end
 
-        function YPosition = get.YPosition(obj)
-            YPosition = obj.thumb.YData;
+        function val = get.YPosition(obj)
+            val = obj.thumb.YData;
         end
 
         function set.YPosition(obj,val)
             obj.thumb.YData = val;
         end
 
-        function set.ButtonDownFcn(obj,val)
-            obj.thumb.ButtonDownFcn = val;
-        end
-
-        function ButtonDownFcn = get.ButtonDownFcn(obj)
-            ButtonDownFcn = obj.thumb.ButtonDownFcn;
-        end
-
-        function Color = get.FaceColor(obj)
-            Color = obj.thumb.MarkerFaceColor;
-        end
-        
-        function set.FaceColor(obj,val)
-            obj.thumb.MarkerFaceColor = val;
-        end
-        
-        function EdgeColor = get.EdgeColor(obj)
-            EdgeColor = obj.thumb.MarkerEdgeColor;
-        end
-        
-        function set.EdgeColor(obj,val)
-            obj.thumb.MarkerEdgeColor = val;
-        end
-
-        function EdgeWidth = get.EdgeWidth(obj)
-            EdgeWidth = obj.thumb.LineWidth;
-        end
-        
-        function set.EdgeWidth(obj,val)
-            obj.thumb.LineWidth = val;
-        end
-
-        function ID = get.ID(obj)
-            ID = obj.thumb.ID;
-        end
-
-        function set.ID(obj,val)
-            obj.thumb.ID = val;
-        end
-
-        function Size1 = get.Size1(obj)
-            Size1 = obj.user_Size1;
-        end
-
-        function set.Size1(obj,val)
-            obj.user_Size1 = val;
-            obj.thumb.MarkerSize = val;
-        end
-
-        function Size2 = get.Size2(obj)
-            Size2 = obj.user_Size2;
-        end
-
-        function set.Size2(obj,val)
-            obj.user_Size2 = val;
-            obj.thumb.MarkerSize = val;
-        end
-
     end
+
+
 
     % select and deselect thumbs
     methods
 
         function select(obj)
+            if obj.isSelected
+                return
+            end
+
             obj.isSelected = true;
-            obj.thumb.MarkerSize = obj.Size2;
         end
 
         function deselect(obj)
+            if ~obj.isSelected
+                return
+            end
+
             obj.isSelected = false;
-            obj.thumb.MarkerSize = obj.Size1;
         end
 
     end

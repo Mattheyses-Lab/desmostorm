@@ -2,7 +2,6 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
 % model.STORMProject - project container for images
 
     %% Identity/metadata
-
     properties
         ID (1,1) string = model.STORMProject.newID()
         Name (1,1) string = "Untitled Project"
@@ -11,7 +10,6 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
     end
 
     %% Images (dictionary + order) and active selection
-
     properties (Access=private)
         ImagesDict = dictionary   % string ID -> model.STORMImage
 
@@ -29,7 +27,6 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
     end
 
     %% ergonomic array view, public, editor-friendly
-
     properties (Dependent, GetAccess=public, SetAccess=private)
         ImageArray   % [1×N model.STORMImage] in ImageOrder
         ActiveImage  % model.STORMImage or []
@@ -59,7 +56,6 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
 
 
     %% Dependent getters
-
     methods
 
         function arr = get.ImageArray(obj)
@@ -89,6 +85,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
 
     end
 
+    %% Constructor, image management
     methods
 
         function obj = STORMProject(name)
@@ -194,6 +191,21 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
 
     end
 
+    %% Processing hooks
+    methods
+
+        function processAll(obj, config)
+            % get Image array
+            arr = obj.ImageArray;
+            % return if empty
+            if isempty(arr), return; end
+            % otherwise, process each image
+            for i = 1:numel(arr)
+                arr(i).processAll(config);
+            end
+        end
+
+    end
 
     %% Listener callbacks
     methods

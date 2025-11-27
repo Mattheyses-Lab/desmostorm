@@ -46,11 +46,23 @@ classdef STORMImage < handle
     end
 
 
-    %% Image data (simple for now)
+    %% Image data (simple for now, can move later towards a per-image ViewState class)
     properties
         CData = []                     % numeric image array
-        CLim (1,2) double = [0 1]
+        CLim (1,2) double
+        RawIntensityRange (1,2)
+        RawIntensityClass (1,:) char
+        RawIntensityLimits (1,2)
     end
+
+    properties (Access = private)
+        DisplayCLim_ (1,2) double = [NaN NaN];  % backing store
+    end
+
+    properties (Dependent)
+        DisplayCLim
+    end
+
 
     %% (Optional) events for UI sync
     events
@@ -77,6 +89,10 @@ classdef STORMImage < handle
             %obj.RegionsDict     = dictionary;
             obj.RegionsDict = dictionary(string.empty(1,0), model.STORMRegion.empty(1,0));
             obj.RegionOrder = string.empty(1,0);
+
+            obj.RawIntensityRange = [min(min(obj.CData)) max(max(obj.CData))]; % actual value range of intensity values
+            obj.RawIntensityClass = class(obj.CData); % data type of intensity image 
+            obj.RawIntensityLimits = getrangefromclass(obj.CData); % full range of possible intensity values, given its class
         end
 
         function i = get.SelfIdx(obj)
@@ -193,6 +209,17 @@ classdef STORMImage < handle
     %% Region processing
     methods
 
+        function processAll(obj, config)
+            % get Region array
+            arr = obj.RegionArray;
+            % return if empty
+            if isempty(arr), return; end
+            % otherwise, process each region
+            for i = 1:numel(arr)
+                obj.processRegionLinescan(arr(i),config);
+            end
+        end
+
         function processRegionLinescan(obj, reg, config)
             arguments
                 obj model.STORMImage
@@ -269,7 +296,31 @@ classdef STORMImage < handle
             obj.PixelSizeOverride = ps;
         end
 
+        function clim = get.DisplayCLim(obj)
+            % If user has never set it, fall back to raw range:
+            if any(isnan(obj.DisplayCLim_))
+                clim = obj.RawIntensityRange;
+            else
+                clim = obj.DisplayCLim_;
+            end
+        end
+
+        function set.DisplayCLim(obj, clim)
+            arguments
+                obj
+                clim (1,2) double
+            end
+
+            % optional: clamp & sort
+            clim = sort(clim);
+            clim(1) = max(clim(1), obj.RawIntensityRange(1));
+            clim(2) = min(clim(2), obj.RawIntensityRange(2));
+
+            obj.DisplayCLim_ = clim;
+        end
+
     end
+
 
 
 
