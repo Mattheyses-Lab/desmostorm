@@ -8,6 +8,7 @@
 
 - MATLAB (R2025a or later)
 - Image Processing Toolbox
+- Curve Fitting Toolbox
 
 ---
 
