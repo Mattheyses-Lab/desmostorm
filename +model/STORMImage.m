@@ -4,7 +4,7 @@ classdef STORMImage < handle
     %% Identity/ownership
     properties
         ID (1,1) string
-        Parent (1,1) model.STORMProject
+        Parent (:,1) model.STORMProject
     end
 
     %% Metadata
@@ -50,7 +50,7 @@ classdef STORMImage < handle
     properties
         CData = []                     % numeric image array
         CLim (1,2) double
-        RawIntensityRange (1,2)
+        RawIntensityRange (1,2) = [NaN NaN]
         RawIntensityClass (1,:) char
         RawIntensityLimits (1,2)
     end
@@ -75,24 +75,56 @@ classdef STORMImage < handle
     methods
 
         function obj = STORMImage(parent, name, sourcePath, cdata)
+            % obj.ID = model.STORMImage.newID();
+            % if nargin >= 1 && ~isempty(parent),     obj.Parent = parent; end
+            % if nargin >= 2 && ~isempty(name),       obj.Name = string(name); end
+            % if nargin >= 3 && ~isempty(sourcePath), obj.SourcePath = string(sourcePath); end
+            % if nargin >= 4 && ~isempty(cdata),      obj.CData = cdata; end
+            % 
+            % if strlength(obj.FileType)==0 && strlength(obj.SourcePath)>0
+            %     [~,~,ext] = fileparts(char(obj.SourcePath));
+            %     obj.FileType = string(lower(strip(ext,'.')));
+            % end
+            % 
+            % %obj.RegionsDict     = dictionary;
+            % obj.RegionsDict = dictionary(string.empty(1,0), model.STORMRegion.empty(1,0));
+            % obj.RegionOrder = string.empty(1,0);
+            % 
+            % obj.RawIntensityRange = [min(min(obj.CData)) max(max(obj.CData))]; % actual value range of intensity values
+            % obj.RawIntensityClass = class(obj.CData); % data type of intensity image 
+            % obj.RawIntensityLimits = getrangefromclass(obj.CData); % full range of possible intensity values, given its class
+            arguments
+                parent (:,1) model.STORMProject = model.STORMProject.empty()
+                name (1,1) string = ""
+                sourcePath (1,1) string = ""
+                cdata = []
+            end
+
             obj.ID = model.STORMImage.newID();
-            if nargin >= 1 && ~isempty(parent),     obj.Parent = parent; end
-            if nargin >= 2 && ~isempty(name),       obj.Name = string(name); end
-            if nargin >= 3 && ~isempty(sourcePath), obj.SourcePath = string(sourcePath); end
-            if nargin >= 4 && ~isempty(cdata),      obj.CData = cdata; end
+            obj.Parent = parent;
+            obj.Name = name;
+            obj.SourcePath = sourcePath;
+            obj.CData = cdata;
 
             if strlength(obj.FileType)==0 && strlength(obj.SourcePath)>0
                 [~,~,ext] = fileparts(char(obj.SourcePath));
                 obj.FileType = string(lower(strip(ext,'.')));
             end
 
-            %obj.RegionsDict     = dictionary;
             obj.RegionsDict = dictionary(string.empty(1,0), model.STORMRegion.empty(1,0));
             obj.RegionOrder = string.empty(1,0);
 
-            obj.RawIntensityRange = [min(min(obj.CData)) max(max(obj.CData))]; % actual value range of intensity values
-            obj.RawIntensityClass = class(obj.CData); % data type of intensity image 
-            obj.RawIntensityLimits = getrangefromclass(obj.CData); % full range of possible intensity values, given its class
+            if isempty(obj.CData)
+                obj.RawIntensityRange = [NaN NaN];
+                obj.RawIntensityClass = '';
+                obj.RawIntensityLimits = [NaN NaN];
+            else
+                obj.RawIntensityRange = [min(min(obj.CData)) max(max(obj.CData))]; % actual value range of intensity values
+                obj.RawIntensityClass = class(obj.CData); % data type of intensity image
+                obj.RawIntensityLimits = getrangefromclass(obj.CData); % full range of possible intensity values, given its class
+            end
+
+
         end
 
         function i = get.SelfIdx(obj)
@@ -221,6 +253,30 @@ classdef STORMImage < handle
         end
 
         function processRegionLinescan(obj, reg, config)
+            % arguments
+            %     obj model.STORMImage
+            %     reg model.STORMRegion
+            %     config app.config.RunConfig
+            % end
+            % 
+            % if isempty(reg), return; end
+            % 
+            % % get region CData
+            % I = obj.regionSubimage(reg);
+            % 
+            % % get linescan info
+            % data = reg.Linescan;
+            % 
+            % LinescanResults = model.analysis.Analyzer.run(I,data,config);
+            % 
+            % if isempty(LinescanResults)
+            %     return
+            % end
+            % 
+            % reg.updateLinescanResults(LinescanResults);
+
+
+
             arguments
                 obj model.STORMImage
                 reg model.STORMRegion
@@ -242,6 +298,7 @@ classdef STORMImage < handle
             end
 
             reg.updateLinescanResults(LinescanResults);
+
 
         end
 
