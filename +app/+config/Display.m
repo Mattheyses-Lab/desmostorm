@@ -1,24 +1,21 @@
 classdef Display < handle
 % Display options with directory-based colormap selection
 
+    % --- Colormaps ---
     properties (Access=private)
         ColormapName_     string = "Gray"    % selection name
         ColormapCategory_ string = "Colors"   % selection category
-        BoxFaceColor_     (1,3) double {mustBeGreaterThanOrEqual(BoxFaceColor_,0), mustBeLessThanOrEqual(BoxFaceColor_,1)} = [0 0 0]
-        BoxEdgeColor_     (1,3) double {mustBeGreaterThanOrEqual(BoxEdgeColor_,0), mustBeLessThanOrEqual(BoxEdgeColor_,1)} = [1 1 1]
-    end
-
-    events
-        Changed           % generic
-        DisplayChanged    % domain-specific
     end
 
     properties (Dependent)
         Colormap          % Nx3 double (loaded on demand)
         ColormapName
         ColormapCategory
-        BoxFaceColor
-        BoxEdgeColor
+    end
+
+    events
+        Changed           % generic
+        DisplayChanged    % domain-specific
     end
 
     methods
@@ -31,9 +28,6 @@ classdef Display < handle
 
         function s = get.ColormapName(this),     s = this.ColormapName_;     end
         function s = get.ColormapCategory(this), s = this.ColormapCategory_; end
-        function v = get.BoxFaceColor(this),     v = this.BoxFaceColor_;     end
-        function v = get.BoxEdgeColor(this),     v = this.BoxEdgeColor_;     end
-
 
         % ---------- Setters ----------
         function setColormap(this, name, category)
@@ -57,29 +51,11 @@ classdef Display < handle
             notify(this,'Changed',ev);
         end
 
-        function set.BoxFaceColor(this,v)
-            old = this.BoxFaceColor_;
-            this.BoxFaceColor_ = v;
-            ev = app.config.ChangeEvent("Display","BoxFaceColor",old,v);
-            notify(this,'DisplayChanged',ev);
-            notify(this,'Changed',ev);
-        end
-
-        function set.BoxEdgeColor(this,v)
-            old = this.BoxEdgeColor_;
-            this.BoxEdgeColor_ = v;
-            ev = app.config.ChangeEvent("Display","BoxEdgeColor",old,v);
-            notify(this,'DisplayChanged',ev);
-            notify(this,'Changed',ev);
-        end
-
         % ---------- Serialization ----------
         function S = toStruct(this)
             S = struct( ...
                 'ColormapName',     this.ColormapName, ...
-                'ColormapCategory', this.ColormapCategory, ...
-                'BoxFaceColor',     this.BoxFaceColor, ...
-                'BoxEdgeColor',     this.BoxEdgeColor);
+                'ColormapCategory', this.ColormapCategory);
         end
 
         function fromStruct(this,S)

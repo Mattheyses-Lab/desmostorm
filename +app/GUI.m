@@ -38,21 +38,9 @@ classdef GUI < handle
 
         RegionLinescanPanel matlab.ui.container.Panel
         RegionLinescanPanelGrid matlab.ui.container.GridLayout
-        RegionLinescanAxes matlab.ui.control.UIAxes
+        RegionLinescanPlot widgets.PeaksPlotContainer % custom plot
 
-        RegionLinescanPlotRaw matlab.graphics.primitive.Line
-        RegionLinescanPlotSmooth matlab.graphics.primitive.Line
-
-        RegionLinescanPeakVerticalLines matlab.graphics.primitive.Line % one line() object, two lines
-        RegionLinescanPeakToPeakLine matlab.graphics.primitive.Line % one line() object, one line
-        RegionLinescanPeakWidthLines matlab.graphics.primitive.Line % one line() object, two lines
-        RegionLinescanPeakBorderLines matlab.graphics.primitive.Line % one line() object, n lines
-
-        RegionLinescanPeakDistanceLabel matlab.graphics.primitive.Text
-        RegionLinescanPeakWidthLabel1 matlab.graphics.primitive.Text
-        RegionLinescanPeakWidthLabel2 matlab.graphics.primitive.Text
-
-        L event.listener
+        L event.listener    % array of all event listeners - make sure to detach on destruct
     end
 
     % More components for settings, separated from above to reduce clutter
@@ -81,10 +69,10 @@ classdef GUI < handle
 
     % Display settings
     properties
-        LinescanRawLineColor = [1 0 0]
-        LinescanRawLineWidth = 1
-        LinescanSmoothLineColor = [0 0 1]
-        LinescanSmoothLineWidth = 2
+        % LinescanRawLineColor = [1 0 0]
+        % LinescanRawLineWidth = 1
+        % LinescanSmoothLineColor = [0 0 1]
+        % LinescanSmoothLineWidth = 2
     end
 
     %% Constructor/Destructor
@@ -106,7 +94,7 @@ classdef GUI < handle
             obj.Fig  = uifigure('Name','dSTORM Analyzer',...
                 'Color',[0 0 0],...
                 'Position',s(1,:),...
-                'WindowStyle','normal',...
+                'WindowStyle','alwaysontop',...
                 'Visible','off',...
                 'Theme','dark');
 
@@ -114,7 +102,8 @@ classdef GUI < handle
             mFile = uimenu(obj.Fig,'Text','File');
             uimenu(mFile,'Text','Load Images...','MenuSelectedFcn',@(~,~) obj.onLoadImages());
             uimenu(mFile,'Text','Save Current Settings','MenuSelectedFcn',@(~,~) obj.onSaveSettings());
-            uimenu(mFile,'Text','Export Measurements','MenuSelectedFcn',@(~,~) obj.onExportMeasurements());
+            uimenu(mFile,'Text','Export Measurements...','MenuSelectedFcn',@(~,~) obj.onExportMeasurements());
+            uimenu(mFile,'Text','Export Peak Plots...','MenuSelectedFcn',@(~,~) obj.onExportPeakPlots());
 
             % --- Layout ---
             obj.Grid = uigridlayout(obj.Fig,[2 3], ...
@@ -344,16 +333,6 @@ classdef GUI < handle
                 "RowSpacing",5,...
                 "ColumnSpacing",5);
 
-
-            % obj.IntensitySlider = widgets.uirangeslidereditfield(obj.SettingsAccordion.Items(5).Pane,...
-            %     "Title",'Adjust display limits',...
-            %     "FontColor",[1 1 1],...
-            %     "Limits",[0 1],...
-            %     "Value",[0 1],...
-            %     "Colormap",obj.Settings.Display.Colormap,...
-            %     "ValueChangedFcn",@(~,evt) obj.onIntensitySliderChanged(evt));
-
-
             obj.IntensitySlider = widgets.uirangeslidereditfield(obj.SettingsAccordion.Items(5).Pane,...
                 "Title",'Adjust display limits',...
                 "FontColor",[1 1 1],...
@@ -364,6 +343,64 @@ classdef GUI < handle
                 "RoundDigits",0,...
                 "ValueChangingFcn",@(~,evt) obj.onIntensitySliderChanging(evt),...
                 "ValueChangedFcn",@(~,evt) obj.onIntensitySliderChanged(evt));
+
+
+            % add Peaks Plot accordion item
+            obj.SettingsAccordion.addItem("Title","Peaks Plot",...
+                "BorderColor",[0.49 0.49 0.49],...
+                "TitleBackgroundColor",[.12 .12 .12],...
+                "HoverTitleBackgroundColor",[.3 .3 .3],...
+                "PaneBackgroundColor",[.18 .18 .18],...
+                "FontColor",[0.85 0.85 0.85],...
+                "BorderWidth",1,...
+                "ExpandedBorderWidth",1,...
+                "TitlePadding",1);
+            % set size and spacing of pane grid
+            set(obj.SettingsAccordion.Items(6).Pane,...
+                "RowHeight",repmat({'fit'},1,6),...
+                "ColumnWidth",{'fit','1x'},...
+                "RowSpacing",5,...
+                "ColumnSpacing",5);
+
+            uilabel(obj.SettingsAccordion.Items(6).Pane,"Text","Raw Line Color","FontColor",[0.85 0.85 0.85]);
+            uicolorpicker(...
+                'Parent',obj.SettingsAccordion.Items(6).Pane,...
+                'Value',obj.Settings.PeaksPlot.RawLineColor,...
+                'ValueChangedFcn',@(o,~) obj.PeaksPlotSettingsChanged(o,"RawLineColor"));
+
+            uilabel(obj.SettingsAccordion.Items(6).Pane,"Text","Raw Line Width","FontColor",[0.85 0.85 0.85]);
+            uieditfield(...
+                obj.SettingsAccordion.Items(6).Pane,...
+                "numeric",...
+                "ValueChangedFcn",@(o,~) obj.PeaksPlotSettingsChanged(o,"RawLineWidth"),...
+                "Value",obj.Settings.PeaksPlot.RawLineWidth);
+
+            uilabel(obj.SettingsAccordion.Items(6).Pane,"Text","Smooth Line Color","FontColor",[0.85 0.85 0.85]);
+            uicolorpicker(...
+                'Parent',obj.SettingsAccordion.Items(6).Pane,...
+                'Value',obj.Settings.PeaksPlot.SmoothLineColor,...
+                'ValueChangedFcn',@(o,~) obj.PeaksPlotSettingsChanged(o,"SmoothLineColor"));
+
+            uilabel(obj.SettingsAccordion.Items(6).Pane,"Text","Smooth Line Width","FontColor",[0.85 0.85 0.85]);
+            uieditfield(...
+                obj.SettingsAccordion.Items(6).Pane,...
+                "numeric",...
+                "ValueChangedFcn",@(o,~) obj.PeaksPlotSettingsChanged(o,"SmoothLineWidth"),...
+                "Value",obj.Settings.PeaksPlot.SmoothLineWidth);
+
+            uilabel(obj.SettingsAccordion.Items(6).Pane,"Text","Background Color","FontColor",[0.85 0.85 0.85]);
+            uicolorpicker(...
+                'Parent',obj.SettingsAccordion.Items(6).Pane,...
+                'Value',obj.Settings.PeaksPlot.BackgroundColor,...
+                'ValueChangedFcn',@(o,~) obj.PeaksPlotSettingsChanged(o,"BackgroundColor"));
+
+            uilabel(obj.SettingsAccordion.Items(6).Pane,"Text","Foreground Color","FontColor",[0.85 0.85 0.85]);
+            uicolorpicker(...
+                'Parent',obj.SettingsAccordion.Items(6).Pane,...
+                'Value',obj.Settings.PeaksPlot.ForegroundColor,...
+                'ValueChangedFcn',@(o,~) obj.PeaksPlotSettingsChanged(o,"ForegroundColor"));
+
+
 
 
 
@@ -452,7 +489,7 @@ classdef GUI < handle
             obj.RegionSummaryTable.Layout.Row = 1;
             obj.RegionSummaryTable.Layout.Column = 1;
 
-            % --- RegionLinescanAxes ---
+
             obj.RegionLinescanPanel = uipanel(obj.RegionGrid,...
                 'Title','Region Linescan',...
                 'BackgroundColor',[.12 .12 .12]);
@@ -462,68 +499,17 @@ classdef GUI < handle
             obj.RegionLinescanPanelGrid = uigridlayout(obj.RegionLinescanPanel,[1,1],...
                 "ColumnWidth",{'1x'},...
                 "RowHeight",{'1x'},...
-                "Padding",[0 0 0 0]);
+                "Padding",[5 5 5 5]);
 
-            obj.RegionLinescanAxes = uiaxes(obj.RegionLinescanPanelGrid,...
-                "XLim",[0 1],...
-                "XLimMode","auto",...
-                "YLim",[0 1],...
-                "YLimMode","auto");
-            obj.RegionLinescanAxes.Layout.Row = 1;
-            obj.RegionLinescanAxes.Layout.Column = 1;
-            obj.RegionLinescanAxes.XLabel.String = 'Distance';
-            obj.RegionLinescanAxes.YLabel.String = 'Intensity';
-            legend(obj.RegionLinescanAxes); % add legend
-
-            % Create empty line plots to show the linescan data
-            obj.RegionLinescanPlotRaw = line(obj.RegionLinescanAxes,...
-                NaN,NaN,...
-                'LineWidth',obj.LinescanRawLineWidth,...
-                'Color',obj.LinescanRawLineColor,...
-                'DisplayName','Raw');
-            obj.RegionLinescanPlotSmooth = line(obj.RegionLinescanAxes,...
-                NaN,NaN,...
-                'LineWidth',obj.LinescanSmoothLineWidth,...
-                'Color',obj.LinescanSmoothLineColor,...
-                'DisplayName','Smoothed');
-
-            obj.RegionLinescanPeakVerticalLines = line(obj.RegionLinescanAxes,...
-                NaN,NaN,'LineWidth',0.5,'Color',[1 1 1],'LineStyle','--');
-            obj.RegionLinescanPeakVerticalLines.Annotation.LegendInformation.IconDisplayStyle = "off";
-
-            obj.RegionLinescanPeakToPeakLine = line(obj.RegionLinescanAxes,...
-                NaN,NaN,'LineWidth',0.5,'Color',[1 1 1],'LineStyle','-');
-            obj.RegionLinescanPeakToPeakLine.Annotation.LegendInformation.IconDisplayStyle = "off";
-
-            obj.RegionLinescanPeakWidthLines = line(obj.RegionLinescanAxes,...
-                NaN,NaN,'LineWidth',0.5,'Color',[1 1 1],'LineStyle','-');
-            obj.RegionLinescanPeakWidthLines.Annotation.LegendInformation.IconDisplayStyle = "off";
-
-            obj.RegionLinescanPeakBorderLines = line(obj.RegionLinescanAxes,...
-                NaN,NaN,'LineWidth',0.5,'Color',[1 1 1],'LineStyle','-');
-            obj.RegionLinescanPeakBorderLines.Annotation.LegendInformation.IconDisplayStyle = "off";
-
-
-            obj.RegionLinescanPeakDistanceLabel = text(obj.RegionLinescanAxes,...
-                'Position',[0 0.9],...
-                'Color',[1 1 1],...
-                'String','',...
-                'VerticalAlignment','bottom',...
-                'HorizontalAlignment','center');
-
-            obj.RegionLinescanPeakWidthLabel1 = text(obj.RegionLinescanAxes,...
-                'Position',[0.25 0.5],...
-                'Color',[1 1 1],...
-                'String','',...
-                'VerticalAlignment','bottom',...
-                'HorizontalAlignment','center');
-
-            obj.RegionLinescanPeakWidthLabel2 = text(obj.RegionLinescanAxes,...
-                'Position',[0.75 0.5],...
-                'Color',[1 1 1],...
-                'String','',...
-                'VerticalAlignment','bottom',...
-                'HorizontalAlignment','center');
+            obj.RegionLinescanPlot = widgets.PeaksPlotContainer(obj.RegionLinescanPanelGrid,...
+                "RawLineWidth",obj.Settings.PeaksPlot.RawLineWidth, ...
+                "RawLineColor",obj.Settings.PeaksPlot.RawLineColor, ...
+                "SmoothLineWidth",obj.Settings.PeaksPlot.SmoothLineWidth, ...
+                "SmoothLineColor",obj.Settings.PeaksPlot.SmoothLineColor, ...
+                "BackgroundColor",obj.Settings.PeaksPlot.BackgroundColor, ...
+                "ForegroundColor",obj.Settings.PeaksPlot.ForegroundColor, ...
+                "XLabel",sprintf("Distance (%s)",obj.Settings.Analysis.PixelSizeUnit), ...
+                "YLabel","Normalized Intensity");
 
             % center the GUI after defining all graphics components and ImageAxesTool settings
             movegui(obj.Fig,"center");
@@ -542,6 +528,10 @@ classdef GUI < handle
             obj.L(7) = addlistener(obj.Settings,'DisplayChanged', @(~,e) obj.onDisplayChanged(e));
             obj.L(8) = addlistener(obj.Settings,'AnalysisChanged',@(~,e) obj.onAnalysisChanged(e));
             obj.L(9) = addlistener(obj.Settings,'IOChanged',      @(~,e) obj.onIOChanged(e));
+
+            obj.L(10) = addlistener(obj.Settings,'PeaksPlotChanged',@(~,e) obj.onPeaksPlotChanged(e));
+            obj.L(11) = addlistener(obj.Settings,'BoxChanged',      @(~,e) obj.onBoxChanged(e));
+
 
             % Expand Image and Region listbox accordion items
             obj.SettingsAccordion.Items(1).expand();
@@ -569,17 +559,7 @@ classdef GUI < handle
     %% Derived getters
     methods
 
-        function h = get.RegionLinescanPlotAnnotations(obj)
-            h = [...
-                obj.RegionLinescanPeakVerticalLines,...
-                obj.RegionLinescanPeakToPeakLine,...
-                obj.RegionLinescanPeakWidthLines,...
-                obj.RegionLinescanPeakBorderLines,...
-                obj.RegionLinescanPeakDistanceLabel,...
-                obj.RegionLinescanPeakWidthLabel1,...
-                obj.RegionLinescanPeakWidthLabel2...
-                ];
-        end
+
 
     end
 
@@ -764,77 +744,14 @@ classdef GUI < handle
             % get the ActiveRegion, exit if empty
             reg = img.ActiveRegion; 
             if isempty(reg)
-                set([obj.RegionLinescanPlotRaw,...
-                    obj.RegionLinescanPlotSmooth,...
-                    obj.RegionLinescanPlotAnnotations],'Visible','off');
+                obj.RegionLinescanPlot.Data = model.analysis.PeaksData.empty();
+                obj.RegionLinescanPlot.Title = '';
                 return
             end
 
-            data = reg.LinescanResultsPhys;
-            PixelSizeUnit = reg.PixelSize.Unit;
-
-            % update X axis label
-            obj.RegionLinescanAxes.XLabel.String = sprintf('Distance (%s)',PixelSizeUnit);
-
-
-            % update linescan plot
-            set(obj.RegionLinescanPlotRaw,...
-                'XData',data.Dist,...
-                'YData',data.ProfileNorm,...
-                'Visible','on');
-            set(obj.RegionLinescanPlotSmooth,...
-                'XData',data.Dist,...
-                'YData',data.ProfileSmooth,...
-                'Visible','on');
-
-            % if linescan results are invalid, hide annotations and return
-            if ~data.Valid
-                set(obj.RegionLinescanPlotAnnotations,'Visible','off');
-                return
-            else % otherwise, make annotations visible
-                set(obj.RegionLinescanPlotAnnotations,'Visible','on');
-            end
-
-            % update linescan annotations
-            X1 = data.PeakX1; X2 = data.PeakX2; % peak locations (X)
-            Y1 = data.PeakY1; Y2 = data.PeakY2; % peak heights (Y)
-            % W1 = data.PeakWidth1; W2 = data.PeakWidth2; % peak widths (W)
-
-            xL1 = data.PeakWidthxL1; xR1 = data.PeakWidthxR1;
-            xL2 = data.PeakWidthxL2; xR2 = data.PeakWidthxR2;
-
-            set(obj.RegionLinescanPeakVerticalLines,...
-                'XData',[X1,X1,NaN,X2,X2],...
-                'YData',[0,1,NaN,0,1]);
-            set(obj.RegionLinescanPeakToPeakLine,...
-                'XData',[X1,X2],...
-                'YData',[0.9,0.9]);
-            set(obj.RegionLinescanPeakWidthLines,...
-                'XData',[xL1,xR1,NaN,xL2,xR2],...
-                'YData',[Y1/2,Y1/2,NaN,Y2/2,Y2/2]);
-
-
-            BorderLineXY = data.BorderLineXY;
-
-            if all(isnan(BorderLineXY))
-                XData=NaN; YData=NaN;
-            else
-                XData=BorderLineXY(1,:); YData=BorderLineXY(2,:);
-            end
-
-            set(obj.RegionLinescanPeakBorderLines,...
-                'XData',XData,...
-                'YData',YData);
-
-            set(obj.RegionLinescanPeakDistanceLabel,...
-                'String',sprintf('%.1f %s',data.PeakDistance,PixelSizeUnit),...
-                'Position',[mean([X1,X2]),0.9]);
-            set(obj.RegionLinescanPeakWidthLabel1,...
-                'String',sprintf('%.1f %s',data.PeakWidth1,PixelSizeUnit),...
-                'Position',[X1,Y1/2]);
-            set(obj.RegionLinescanPeakWidthLabel2,...
-                'String',sprintf('%.1f %s',data.PeakWidth2,PixelSizeUnit),...
-                'Position',[X2,Y2/2]);
+            obj.RegionLinescanPlot.XLabel = sprintf("Distance (%s)",img.PixelSize.Unit);
+            obj.RegionLinescanPlot.Data = reg.LinescanResults;
+            obj.RegionLinescanPlot.Title = utils.texFriendly(img.Name) + " | " + reg.Name;
 
         end
 
@@ -872,6 +789,16 @@ classdef GUI < handle
                 case "BoxEdgeColor"
                     %set(obj.ROI, 'EdgeColor', obj.Settings.Display.BoxEdgeColor);
             end
+        end
+
+
+        function onPeaksPlotChanged(obj,e)
+            obj.RegionLinescanPlot.(e.Name) = obj.Settings.PeaksPlot.(e.Name);
+        end
+
+
+        function onBoxChanged(obj,e)
+            % do something
         end
 
         function onAnalysisChanged(obj,e)
@@ -945,6 +872,16 @@ classdef GUI < handle
             end
         end
 
+
+        function PeaksPlotSettingsChanged(obj,src,stgName)
+            % apply the specified setting
+            obj.Settings.PeaksPlot.(stgName) = src.Value;
+        end
+
+
+
+
+
         function onSaveSettings(obj)
             % save currently selected settings to default file
             obj.Settings.save();
@@ -981,8 +918,6 @@ classdef GUI < handle
         end
 
         function onIntensitySliderChanged(obj,~)
-            % onIntensitySliderChanged(obj,evt)
-
             % get the active image
             img = obj.Project.ActiveImage;
             if isempty(img), return; end
@@ -1089,6 +1024,13 @@ classdef GUI < handle
                 r.Center = data.CenterPx;
                 obj.syncActiveRegionToView();
             end
+            % testing below
+            % process the linescan for this region
+            img.processRegionLinescan(r,app.config.RunConfig.fromSettings(obj.Settings));
+            % update the region linescan plot
+            obj.refreshRegionLinescanPlot();
+            % update RegionSummaryTable
+            obj.RegionSummaryTable.Data = r.SummaryTable;
         end
 
         function onBoxDeleted(obj, data)
@@ -1160,9 +1102,14 @@ classdef GUI < handle
     methods
 
         function onExportMeasurements(app, ~, ~)
+
+            app.Fig.Visible = 'off';
+
             defaultName = fullfile(app.Settings.IO.DefaultFolder, 'region_measurements.xlsx');
             [file, path] = uiputfile('*.xlsx', ...
                 'Export region measurements', defaultName);
+
+            app.Fig.Visible = 'on';
 
             if isequal(file,0)
                 return;  % user cancelled
@@ -1171,6 +1118,83 @@ classdef GUI < handle
             fname = fullfile(path, file);
             app.Project.exportRegionTableToXlsx(fname);
         end
+
+
+        function onExportPeakPlots(app, ~, ~)
+
+            app.Fig.Visible = 'off';
+
+            defaultName = fullfile(app.Settings.IO.DefaultFolder, 'peak_plots.xlsx');
+            [file, path] = uiputfile('*.pdf', ...
+                'Export peak plots', defaultName);
+
+            app.Fig.Visible = 'on';
+
+            if isequal(file,0)
+                return;  % user cancelled
+            end
+
+            fname = fullfile(path, file);
+
+            f = uifigure("WindowStyle","normal",...
+                "Visible","off",...
+                "Position",[0 0 750 500]);
+
+            g = uigridlayout(f,[1,1],...
+                "RowHeight",{'fit'},...
+                "ColumnWidth",{'fit'});
+
+            p = widgets.PeaksPlotContainer(g,...
+                "RawLineWidth",app.Settings.PeaksPlot.RawLineWidth, ...
+                "RawLineColor",app.Settings.PeaksPlot.RawLineColor, ...
+                "SmoothLineWidth",app.Settings.PeaksPlot.SmoothLineWidth, ...
+                "SmoothLineColor",app.Settings.PeaksPlot.SmoothLineColor, ...
+                "BackgroundColor",app.Settings.PeaksPlot.BackgroundColor, ...
+                "ForegroundColor",app.Settings.PeaksPlot.ForegroundColor, ...
+                "XLabel",sprintf("Distance (%s)",app.Settings.Analysis.PixelSizeUnit), ...
+                "YLabel","Normalized Intensity");
+            
+
+            % create progress dialog
+            h = uiprogressdlg(app.Fig,"Message",'Exporting peak plots. Please wait...','Indeterminate','on');
+
+            imgs = app.Project.ImageArray;
+
+            if isempty(imgs)
+                return
+            end
+
+            for i = 1:numel(imgs)
+                regs = imgs(i).RegionArray;
+
+                if isempty(regs)
+                    continue
+                end
+
+                for j = 1:numel(regs)
+
+                    p.Data = regs(j).LinescanResults;
+                    p.Title = utils.texFriendly(imgs(i).Name) + " | " + regs(j).Name;
+
+                    if i==1 && j==1 % overwrite file on first pass
+                        drawnow
+                        pause(1)
+                        p.export(fname,'BackgroundColor',app.Settings.PeaksPlot.BackgroundColor,'Append',false);
+                    else % append otherwise
+                        p.export(fname,'BackgroundColor',app.Settings.PeaksPlot.BackgroundColor,'Append',true);
+                    end
+
+                end
+
+            end
+
+            delete(f); % delete the figure
+
+            % close the progress dialog
+            close(h);
+
+        end
+
 
     end
 

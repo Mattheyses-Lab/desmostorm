@@ -33,35 +33,41 @@ classdef Analyzer
                 'Interp','linear');
 
 
-            % % Get intensity profile and distance axes (centered at 0) from left edge to right edge
-            % Dist = linescanData.WidthDist; % distance values along ROI width (measured from center)
-            % Profile = linescanData.WidthProfile; % raw profile
+            % % % Get intensity profile and distance axes (centered at 0) from left edge to right edge
+            % % Dist = linescanData.WidthDist; % distance values along ROI width (measured from center)
+            % % Profile = linescanData.WidthProfile; % raw profile
+            % % ProfileNorm = rescale(Profile); % rescale to range [0 1] (maybe put this in utils?)
+            % 
+            % % Get intensity profile and distance axes (centered at 0) from top edge to bottom edge
+            % Dist = linescanData.HeightDist; % distance values along ROI width (measured from center)
+            % Profile = linescanData.HeightProfile; % raw profile
             % ProfileNorm = rescale(Profile); % rescale to range [0 1] (maybe put this in utils?)
+            % 
+            % 
+            % % smooth with moving average filter
+            % ProfileSmooth = model.analysis.profile.smooth(ProfileNorm,rc.PeakSmoothing);
+            % 
+            % % find peaks along the 'Width' direction of the ROI
+            % peaksData = model.analysis.peaks.detect(ProfileSmooth,Dist,rc.MinPeakDistance,rc.MinPeakHeight);
+            % 
+            % % get measurements
+            % out = model.analysis.peaks.measure(...
+            %     Dist,...
+            %     ProfileSmooth,...
+            %     peaksData.PeakValues,...
+            %     peaksData.PeakLocations,...
+            %     peaksData.PeakWidths);
+            % 
+            % out.Dist = Dist;
+            % out.Profile = Profile;
+            % out.ProfileNorm = ProfileNorm;
+            % out.ProfileSmooth = ProfileSmooth;
 
-            % Get intensity profile and distance axes (centered at 0) from top edge to bottom edge
-            Dist = linescanData.HeightDist; % distance values along ROI width (measured from center)
-            Profile = linescanData.HeightProfile; % raw profile
-            ProfileNorm = rescale(Profile); % rescale to range [0 1] (maybe put this in utils?)
+            out = model.analysis.PeaksData(linescanData.HeightProfile,linescanData.HeightDist,...
+                "MinPeakDistance",rc.MinPeakDistance, ...
+                "MinPeakHeight",rc.MinPeakHeight, ...
+                "PeakSmoothing",rc.PeakSmoothing);
 
-
-            % smooth with moving average filter
-            ProfileSmooth = model.analysis.profile.smooth(ProfileNorm,rc.PeakSmoothing);
-
-            % find peaks along the 'Width' direction of the ROI
-            peaksData = model.analysis.peaks.detect(ProfileSmooth,Dist,rc.MinPeakDistance,rc.MinPeakHeight);
-
-            % get measurements
-            out = model.analysis.peaks.measure(...
-                Dist,...
-                ProfileSmooth,...
-                peaksData.PeakValues,...
-                peaksData.PeakLocations,...
-                peaksData.PeakWidths);
-
-            out.Dist = Dist;
-            out.Profile = Profile;
-            out.ProfileNorm = ProfileNorm;
-            out.ProfileSmooth = ProfileSmooth;
 
         end
 
