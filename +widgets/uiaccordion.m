@@ -80,7 +80,6 @@ classdef uiaccordion < matlab.ui.componentcontainer.ComponentContainer
         end
     
         function update(obj)
-            fprintf('uiaccordion.update()\n')
             obj.Items = obj.Items(isvalid(obj.Items));
     
             if obj.nItems==0
@@ -278,6 +277,7 @@ classdef uiaccordion < matlab.ui.componentcontainer.ComponentContainer
                     obj.Hub.unregister(obj.RouterId);
                 end
             catch
+                warning('Failed to unregister from FigureEventHub...')
             end
 
             % delete the individual accordion items
