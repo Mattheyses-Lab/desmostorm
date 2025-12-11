@@ -3,8 +3,8 @@ classdef Display < handle
 
     % --- Colormaps ---
     properties (Access=private)
-        ColormapName_     string = "Gray"    % selection name
-        ColormapCategory_ string = "Colors"   % selection category
+        ColormapName_     string = "turbo"    % selection name
+        ColormapCategory_ string = "MATLAB"   % selection category
     end
 
     properties (Dependent)

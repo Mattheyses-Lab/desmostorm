@@ -2,12 +2,12 @@ classdef PeaksPlot < handle
 % PeaksPlot options with directory-based colormap selection
 
     properties (Access=private)
-        RawLineColor_       (1,3) double {mustBeInRange(RawLineColor_,0,1)} = [1 0 0]
-        RawLineWidth_       (1,1) double = 1
-        SmoothLineColor_    (1,3) double {mustBeInRange(SmoothLineColor_,0,1)} = [0 0 1]
-        SmoothLineWidth_    (1,1) double = 2
-        BackgroundColor_    (1,3) double {mustBeInRange(BackgroundColor_,0,1)} = [0 0 0]
-        ForegroundColor_    (1,3) double {mustBeInRange(ForegroundColor_,0,1)} = [1 1 1]
+        RawLineColor_       (1,3) double {mustBeInRange(RawLineColor_,0,1)} = [0.15 0.15 0.15]
+        RawLineWidth_       (1,1) double = 0.5
+        SmoothLineColor_    (1,3) double {mustBeInRange(SmoothLineColor_,0,1)} = [0 0 0]
+        SmoothLineWidth_    (1,1) double = 1
+        BackgroundColor_    (1,3) double {mustBeInRange(BackgroundColor_,0,1)} = [1 1 1]
+        ForegroundColor_    (1,3) double {mustBeInRange(ForegroundColor_,0,1)} = [0 0 0]
     end
 
     properties (Dependent)

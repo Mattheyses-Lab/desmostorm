@@ -1,11 +1,10 @@
 classdef Analysis < handle
 
-
     % Group analysis parameters; validate on set; raise Changed.
     properties (Access=private)
         MinPeakDistance_ (1,1) double {mustBeNonnegative} = 15
         MinPeakHeight_   (1,1) double {mustBeNonnegative} = 0.4
-        BoxSize_         (1,1) double {mustBePositive}    = 200
+        BoxSize_         (1,1) double {mustBePositive}    = 300
         PeakSmoothing_   (1,1) double {mustBeNonnegative} = 15
         PixelSizeValue_ (1,1) double {mustBePositive} = 1
         PixelSizeUnit_  (1,:) char = 'px'
@@ -106,6 +105,5 @@ classdef Analysis < handle
         end
         
     end
-
 
 end
