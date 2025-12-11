@@ -26,13 +26,29 @@ addpath(genpath('path/to/DesmoSTORM'))
 
 ## Running the Application
 
-From the MATLAB command window, run:
+From the MATLAB Command Window, run:
 
 ```matlab
 app.GUI
 ```
 
 This will launch the main DesmoSTORM graphical interface.
+
+---
+
+## Changing Settings
+
+Inside the app, settings can be changed using the expandable panels along the left side of the window.
+
+Any changes made will apply to the current run only, unless you click **File**&rarr;**Save settings** in the Menubar.
+
+If you want to reset the settings, close the app and from the MATLAB Command Window, run:
+
+```matlab
+app.config.Settings.restore()
+```
+
+This will restore ALL settings to their default values.
 
 ---
 
