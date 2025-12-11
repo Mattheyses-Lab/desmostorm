@@ -18,7 +18,6 @@ classdef STORMRegion < handle
         % Geometry in image pixel center coords (x right, y down)
         Center (1,2) double = [NaN NaN]
         BoxSize (1,1) double = NaN
-
         % Linescan input parameters
         Linescan struct = struct(...
             'CenterX',NaN,...           % rectangle center in pixel edge coordinates
@@ -26,26 +25,6 @@ classdef STORMRegion < handle
             'Width',NaN,...             % width of the rectangle (px)
             'Height',NaN,...            % height of the rectangle (px)
             'RotationAngle',NaN)        % CCW rotation angle of the rectangle (deg)
-
-        % % Linescan output parameters
-        % LinescanResults struct = struct(...
-        %     'Dist',NaN,...
-        %     'Profile',NaN,...
-        %     'ProfileNorm',NaN,...
-        %     'ProfileSmooth',NaN,...
-        %     'PeakX1',NaN,...
-        %     'PeakY1',NaN,...
-        %     'PeakX2',NaN,...
-        %     'PeakY2',NaN,...
-        %     'PeakDistance',NaN,...
-        %     'PeakWidth1',NaN,...
-        %     'PeakWidth2',NaN,...
-        %     'PeakWidthxL1',NaN,...
-        %     'PeakWidthxR1',NaN,...
-        %     'PeakWidthxL2',NaN,...
-        %     'PeakWidthxR2',NaN,...
-        %     'BorderLineXY',NaN,...
-        %     'Valid',false);
     end
 
     %% Outputs
@@ -54,26 +33,17 @@ classdef STORMRegion < handle
         PlaqueLength (1,1) double
         Orientation (1,1) double
         SummaryTable (:,:) table
-
         LinescanPhys struct
         LinescanResultsPhys struct
-
     end
-
 
     %% Outputs (development)
     properties
-
         LinescanResults (:,1) model.analysis.PeaksData = model.analysis.PeaksData.empty()
-
-
-
     end
-
 
     %% Lifecycle
     methods
-
         % Constructor
         function obj = STORMRegion(Parent, ID, Center, BoxSize)
             arguments
@@ -87,7 +57,6 @@ classdef STORMRegion < handle
             obj.Parent = Parent;
             obj.Center = Center;
         end
-
     end
 
     %% Public helpers (update results)
@@ -103,27 +72,10 @@ classdef STORMRegion < handle
         end
 
         function updateLinescanResults(obj,data)
-            % % Update the region linescan results with the values in data
-            % obj.LinescanResults.Dist = data.Dist;
-            % obj.LinescanResults.Profile = data.Profile;
-            % obj.LinescanResults.ProfileNorm = data.ProfileNorm;
-            % obj.LinescanResults.ProfileSmooth = data.ProfileSmooth;
-            % obj.LinescanResults.PeakX1 = data.PeakX1;
-            % obj.LinescanResults.PeakY1 = data.PeakY1;
-            % obj.LinescanResults.PeakX2 = data.PeakX2;
-            % obj.LinescanResults.PeakY2 = data.PeakY2;
-            % obj.LinescanResults.PeakDistance = data.PeakDistance;
-            % obj.LinescanResults.PeakWidth1 = data.PeakWidth1;
-            % obj.LinescanResults.PeakWidth2 = data.PeakWidth2;
-            % obj.LinescanResults.PeakWidthxL1 = data.PeakWidthxL1;
-            % obj.LinescanResults.PeakWidthxR1 = data.PeakWidthxR1;
-            % obj.LinescanResults.PeakWidthxL2 = data.PeakWidthxL2;
-            % obj.LinescanResults.PeakWidthxR2 = data.PeakWidthxR2;
-            % obj.LinescanResults.BorderLineXY = data.BorderLineXY;
-            % obj.LinescanResults.Valid = data.Valid;
-
+            % add pixel scale and unit info to linescan results
             data.DistanceScale = obj.PixelSize.Value;
             data.DistanceUnit = obj.PixelSize.Unit;
+            % Update the region linescan results with the values in data
             obj.LinescanResults = data;
         end
 
@@ -135,9 +87,6 @@ classdef STORMRegion < handle
         end
 
         function resetLinescanResults(obj)
-            % obj.LinescanResults = model.STORMRegion.LinescanResultsTemplate();
-
-
             obj.LinescanResults = model.analysis.PeaksData.empty();
         end
 
@@ -177,65 +126,11 @@ classdef STORMRegion < handle
             out.Height = obj.px2phys(out.Height);
         end
 
-
         function out = get.LinescanResultsPhys(obj)
-            % out = obj.LinescanResults;
-            % % Convert length measurements according to pixel size
-            % out.Dist = obj.px2phys(out.Dist);
-            % out.PeakX1 = obj.px2phys(out.PeakX1);
-            % out.PeakX2 = obj.px2phys(out.PeakX2);
-            % out.PeakDistance = obj.px2phys(out.PeakDistance);
-            % out.PeakWidth1 = obj.px2phys(out.PeakWidth1);
-            % out.PeakWidth2 = obj.px2phys(out.PeakWidth2);
-            % 
-            % % below are used for plotting only, don't round
-            % out.PeakWidthxL1 = obj.px2phys(out.PeakWidthxL1); 
-            % out.PeakWidthxR1 = obj.px2phys(out.PeakWidthxR1);
-            % out.PeakWidthxL2 = obj.px2phys(out.PeakWidthxL2);
-            % out.PeakWidthxR2 = obj.px2phys(out.PeakWidthxR2);
-            % out.BorderLineXY(1,:) = obj.px2phys(out.BorderLineXY(1,:));
-
-
             out = obj.LinescanResults.OutputScaled;
-
-
         end
 
         function T = get.SummaryTable(obj)
-            % % get summary table for use in app uitable
-            % % variable names to act as row names when the table is rotated
-            % VariableNames = {...
-            %     'Name';...
-            %     'Region center (x,y)';...
-            %     'Region width';...
-            %     'Region height';...
-            %     'ROI center';...
-            %     'ROI width';...
-            %     'ROI height';...
-            %     'ROI rotation angle';...
-            %     'Peak distance';...
-            %     'Peak 1 width (FWHM)';...
-            %     'Peak 2 width (FWHM)';...
-            %     };
-            % % the actual table data (with distance measurements formatted according to PixelSize)
-            % T = table(...
-            %     {obj.Name},...
-            %     {sprintf('(%.1f, %.1f)',obj.Center(1),obj.Center(2))},...
-            %     {sprintf('%i px',obj.BoxSize)},...
-            %     {sprintf('%i px',obj.BoxSize)},...
-            %     {sprintf('(%.1f, %.1f)',obj.Linescan.CenterX,obj.Linescan.CenterY)},...
-            %     {obj.formatLength(obj.Linescan.Width)},...
-            %     {obj.formatLength(obj.Linescan.Height)},...
-            %     {obj.formatAngle(obj.Linescan.RotationAngle)},...
-            %     {obj.formatLength(obj.LinescanResults.PeakDistance)},...
-            %     {obj.formatLength(obj.LinescanResults.PeakWidth1)},...
-            %     {obj.formatLength(obj.LinescanResults.PeakWidth2)},...
-            %     'VariableNames',VariableNames);
-            % % rotate the table before returning
-            % T = utils.rotateTable(T);
-
-
-
             % get summary table for use in app uitable
             % variable names to act as row names when the table is rotated
             VariableNames = {...
@@ -261,8 +156,6 @@ classdef STORMRegion < handle
                 PeakWidth1 = obj.LinescanResults.PeakWidths(1);
                 PeakWidth2 = obj.LinescanResults.PeakWidths(2);
             end
-
-
             % the actual table data (with distance measurements formatted according to PixelSize)
             T = table(...
                 {obj.Name},...
@@ -279,8 +172,6 @@ classdef STORMRegion < handle
                 'VariableNames',VariableNames);
             % rotate the table before returning
             T = utils.rotateTable(T);
-
-
         end
 
         function val = get.PlaqueToPlaqueDistance(obj)
@@ -303,47 +194,7 @@ classdef STORMRegion < handle
 
     %% Export data
     methods
-
         function row = exportRow(obj)
-
-            % ps = obj.PixelSize;
-            % % linescan ROI properties
-            % S = obj.Linescan;
-            % % linescan profile/peak measurements
-            % L  = obj.LinescanResults;
-            % 
-            % row = struct();
-            % 
-            % % ID/meta
-            % row.ProjectName   = string(obj.Parent.Parent.Name);  % if Project has Name
-            % row.ImageName     = string(obj.Parent.Name);
-            % row.RegionID      = string(obj.ID);
-            % row.PixelSize     = ps.stringDisplay;
-            % 
-            % % Region position/geometry
-            % row.RegionCenter        = string(sprintf('(%.1f, %.1f)',obj.Center(1),obj.Center(2)));
-            % row.RegionWidth_px      = obj.BoxSize;
-            % row.RegionHeight_px     = obj.BoxSize;
-            % row.RegionWidth_phys    = obj.px2phys(obj.BoxSize);
-            % row.RegionHeight_phys   = obj.px2phys(obj.BoxSize);
-            % 
-            % % Linescan ROI position/geometry
-            % row.ROICenter           = string(sprintf('(%.1f, %.1f)',S.CenterX,S.CenterY));
-            % row.ROIWidth_px         = S.Width;
-            % row.ROIHeight_px        = S.Height;
-            % row.ROIWidth_phys       = obj.px2phys(S.Width);
-            % row.ROIHeight_phys      = obj.px2phys(S.Height);
-            % row.ROIRotationAngle    = round(S.RotationAngle,2);
-            % 
-            % % Peak distance/width measurements
-            % row.PeakDistance_px     = round(L.PeakDistance,2);
-            % row.PeakWidth1_px       = round(L.PeakWidth1,2);
-            % row.PeakWidth2_px       = round(L.PeakWidth2,2);
-            % row.PeakDistance_phys   = obj.px2phys(row.PeakDistance_px);
-            % row.PeakWidth1_phys     = obj.px2phys(row.PeakWidth1_px);
-            % row.PeakWidth2_phys     = obj.px2phys(row.PeakWidth2_px);
-
-
 
             ps = obj.PixelSize;
             % linescan ROI properties
@@ -354,16 +205,10 @@ classdef STORMRegion < handle
             row = struct();
 
             % ID/meta
-            % row.ProjectName   = string(obj.Parent.Parent.Name);  % if Project has Name
-            % row.ImageName     = string(obj.Parent.Name);
-            % row.RegionID      = string(obj.ID);
-            % row.PixelSize     = ps.stringDisplay;
-
             row.ProjectName   = string(obj.Parent.Parent.Name);  % if Project has Name
             row.ImageName     = string(obj.Parent.Name);
             row.RegionName    = string(obj.Name);
             row.PixelSize     = ps.stringDisplay;
-
 
             % Region position/geometry
             row.RegionCenter        = string(sprintf('(%.1f, %.1f)',obj.Center(1),obj.Center(2)));
@@ -399,19 +244,11 @@ classdef STORMRegion < handle
             row.PeakWidth2_phys     = obj.px2phys(row.PeakWidth2_px);
 
         end
-
-
-
-
     end
 
     %% Static methods
 
     methods (Static)
-
-        % function ID = newID()
-        %     ID = string(char(java.util.UUID.randomUUID()));
-        % end
 
         function T = SummaryTableTemplate()
             VariableNames = {...
@@ -458,6 +295,6 @@ classdef STORMRegion < handle
         end
 
     end
-
+    
 end
 
