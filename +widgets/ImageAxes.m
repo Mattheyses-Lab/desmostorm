@@ -219,7 +219,7 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
                 'Units','normalized',...
                 'Position',[0 0],...
                 'Color',[1 1 1],...
-                'String','This is a test',...
+                'String','',...
                 'HorizontalAlignment','left',...
                 'VerticalAlignment','bottom');
 
@@ -227,6 +227,11 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
         end
 
         function update(obj)
+
+            % testing below
+            obj.mainAxes.Tag = obj.Name;
+
+
             %fprintf('widgets.ImageAxes.update()\n')
 
             % Update image & axes
@@ -427,18 +432,49 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
     methods
 
         % determine whether this instance should claim event from FigureEventHub
-        function tf = matches(obj, tgt, ~, ~)
+        function tf = matches(obj, tgt, kind, ~)
             % tf = matches(obj, tgt, kind, evt)
             % obj: this component
             % tgt: hittest result from FigureEventHub that we are checking for a match to this component
             % kind: the specific kind of mouse event (i.e. 'move', 'down', 'up', or 'scroll')
             % evt: event data associated with the event
 
+            % % skip toolbar buttons
+            % if ~isempty(ancestor(tgt,'matlab.ui.container.Toolbar')) || isa(tgt,'matlab.graphics.shape.internal.Button')
+            %     tf = false;
+            %     return
+            % end
+
+
+            % get the ancestor axes
+            ancestorAx = ancestor(tgt,'matlab.ui.control.UIAxes');
+
+            if isempty(ancestorAx)
+                tf = false; return
+            end
+
+            % make sure ancestor axes Tag matches Name of this ImageAxes, if not -> return false
+            if ~strcmp(ancestorAx.Tag,obj.Name)
+                tf = false; return
+            end
+
+
             % skip toolbar buttons
-            if ~isempty(ancestor(tgt,'matlab.ui.container.Toolbar')) || isa(tgt,'matlab.graphics.shape.internal.Button')
-                tf = false;
+            if ~isempty(ancestor(tgt,'matlab.ui.controls.AxesToolbar')) % if event hits the toolbar
+                % get the corresponding button
+                btn = ancestor(tgt,'matlab.ui.controls.ToolbarStateButton');
+                % % set the info label string to the Tooltip of the button under cursor
+                % obj.Label.String = btn.Tooltip;
+
+                if ~isempty(btn) && strcmp(kind,'move')
+                    tf = true;
+                else
+                    tf = false;
+                end
+
                 return
             end
+
 
             % accept anything else that belongs to *this* ImageAxes instance
             ia = ancestor(tgt,'widgets.ImageAxes');
@@ -457,6 +493,13 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
         end
 
         function onMove(obj, evt, tgt)
+            % get the ancestor toolbar button clicked, if it exists
+            btn = ancestor(tgt,'matlab.ui.controls.ToolbarStateButton');
+            if ~isempty(btn) % if it exists
+                % set image info label to display button tooltip, return
+                obj.Label.String = sprintf(' %s',btn.Tooltip); return
+            end
+
             skipInterceptor = obj.routeToDistractors(evt,tgt,'Move');
             if skipInterceptor, return; end
 
