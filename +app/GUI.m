@@ -49,9 +49,7 @@ classdef GUI < handle
         ExampleColormapAxes matlab.ui.control.UIAxes
         ExampleColormapImage matlab.graphics.primitive.Image
         ColormapTree matlab.ui.container.Tree
-
         IntensitySlider widgets.uirangeslidereditfield
-
     end
 
     % Derived properties for specific component groups to reduce clutter
@@ -65,14 +63,6 @@ classdef GUI < handle
     properties
         Project model.STORMProject
         Settings app.config.Settings
-    end
-
-    % Display settings
-    properties
-        % LinescanRawLineColor = [1 0 0]
-        % LinescanRawLineWidth = 1
-        % LinescanSmoothLineColor = [0 0 1]
-        % LinescanSmoothLineWidth = 2
     end
 
     %% Constructor/Destructor
@@ -219,7 +209,7 @@ classdef GUI < handle
             obj.ExampleColormapImage = image(obj.ExampleColormapAxes,...
                 'CData',repmat(1:256,50,1),...
                 'CDataMapping','direct');
-            % set axes limits to show so that colorbar image fills axes area
+            % set axes limits so that colorbar image fills axes area
             set(obj.ExampleColormapAxes,"YLim",[0.5 50.5],"XLim",[0.5 256.5]);
 
 
@@ -343,7 +333,6 @@ classdef GUI < handle
                 "RoundDigits",0,...
                 "ValueChangingFcn",@(~,evt) obj.onIntensitySliderChanging(evt),...
                 "ValueChangedFcn",@(~,evt) obj.onIntensitySliderChanged(evt));
-
 
             % add Peaks Plot accordion item
             obj.SettingsAccordion.addItem("Title","Peaks Plot",...
@@ -839,7 +828,7 @@ classdef GUI < handle
             colormapName = node.NodeData;
             % if empty -> user selected a category node, reset previous selection
             if isempty(colormapName)
-                evt.Source.SelectedNodes = evt.PreviousSelectedNodes;
+                %evt.Source.SelectedNodes = evt.PreviousSelectedNodes;
                 return
             end
             % get category from Text property of Parent node
@@ -1134,8 +1123,10 @@ classdef GUI < handle
             fname = fullfile(path, file);
 
             f = uifigure("WindowStyle","normal",...
-                "Visible","off",...
+                "Visible","on",...
                 "Position",[0 0 750 500]);
+
+            movegui(f,'center')
 
             g = uigridlayout(f,[1,1],...
                 "RowHeight",{'fit'},...
@@ -1151,6 +1142,7 @@ classdef GUI < handle
                 "XLabel",sprintf("Distance (%s)",app.Settings.Analysis.PixelSizeUnit), ...
                 "YLabel","Normalized Intensity");
             
+            f.Visible = 'off';
 
             % create progress dialog
             h = uiprogressdlg(app.Fig,"Message",'Exporting peak plots. Please wait...','Indeterminate','on');
