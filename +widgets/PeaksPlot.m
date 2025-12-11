@@ -28,7 +28,6 @@ classdef PeaksPlot < handle
         SmoothLineColor (1,3) double = [0 0 1]
     end
 
-
     %% public properties with private backing
     properties(Dependent)
         Parent (1,1) matlab.ui.control.UIAxes
