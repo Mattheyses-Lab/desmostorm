@@ -640,6 +640,9 @@ classdef GUI < handle
             % get the CData for this image
             % obj.Ax.CData = im2double(img.CData);
             obj.Ax.CData = img.CData;
+            obj.Ax.CLim = img.DisplayCLim;
+
+
             % clear overlays & bindings, then replay from model
             obj.Ax.Tools.Pick.clearBoxes();
             % obj.UIToRegion = dictionary;
@@ -721,6 +724,9 @@ classdef GUI < handle
 
             % update RegionViewer CData with ActiveRegion CData
             obj.RegionViewer.CData = obj.Project.ActiveImage.regionSubimage(reg);
+            obj.RegionViewer.CLim = obj.Project.ActiveImage.DisplayCLim;
+
+
 
             % update RegionListBox selection
             obj.RegionListBox.Value = reg.ID;
@@ -804,9 +810,7 @@ classdef GUI < handle
         function onAnalysisChanged(obj,e)
             switch e.Name
                 case {"MinPeakDistance","MinPeakHeight","PeakSmoothing"}
-                    % % cheap update: re-run peaks on current ROI only
-                    % obj.processActiveRegion();
-
+                    % immediately re-process all existing regions when analysis settings change
                     obj.processAllRegions();
                 case "BoxSize"
                     % delete all existing Regions
@@ -878,10 +882,6 @@ classdef GUI < handle
             obj.Settings.PeaksPlot.(stgName) = src.Value;
         end
 
-
-
-
-
         function onSaveSettings(obj)
             % save currently selected settings to default file
             obj.Settings.save();
@@ -922,13 +922,10 @@ classdef GUI < handle
             img = obj.Project.ActiveImage;
             if isempty(img), return; end
 
-
-
             % newVal = evt.Source.Value;
             newVal = obj.IntensitySlider.Value;
 
             img.DisplayCLim = newVal;
-
             obj.Ax.CLim = newVal;
             obj.RegionViewer.CLim = newVal;
 
