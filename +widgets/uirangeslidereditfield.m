@@ -286,10 +286,10 @@ classdef uirangeslidereditfield < matlab.ui.componentcontainer.ComponentContaine
             obj.L(end+1) = addlistener(obj,'Limits','PostSet',@(~,~)obj.onLimitsChanged());
 
 
-            % listener for Value to enable the ValueChanged callback
-            obj.sliderValueListener = addlistener(...
-                obj,'Value',...
-                'PostSet',@obj.onValueChanging);
+            % % listener for Value to enable the ValueChanged callback
+            % obj.sliderValueListener = addlistener(...
+            %     obj,'Value',...
+            %     'PostSet',@obj.onValueChanging);
 
         end
 
@@ -370,15 +370,6 @@ classdef uirangeslidereditfield < matlab.ui.componentcontainer.ComponentContaine
                 "Faces",    [1,2,3,4], ...
                 "FaceVertexCData", obj.TrackColor);
         end
-
-        % function updateTrackPatchVx(obj)
-        %     sliderLimits = obj.Limits;
-        %     % x values
-        %     loLim  = sliderLimits(1);
-        %     hiLim = sliderLimits(2);
-        %     % update of Vertex X coordinates only
-        %     obj.trackPatch.Vertices(:,1) = [loLim; hiLim; hiLim; loLim];
-        % end
 
         function updateTrackPatchColors(obj)
 
@@ -511,18 +502,11 @@ classdef uirangeslidereditfield < matlab.ui.componentcontainer.ComponentContaine
 
             obj.Value(obj.activeThumbIdx) = clip(obj.sliderThumbAxes.CurrentPoint(1,1),thumbLims(1),thumbLims(2));
 
+            % TESTING BELOW
+            % emit ValueChanging
+            obj.onValueChanged();
+            % END TESTING
 
-            % oldVal = obj.LastValueSet(obj.activeThumbIdx);
-            % newVal = clip(obj.sliderThumbAxes.CurrentPoint(1,1),thumbLims(1),thumbLims(2));
-            % 
-            % StepPct = 0.01;
-            % Step = StepPct*abs(diff(obj.Limits));
-            % 
-            % if abs(diff([oldVal,newVal])) < Step
-            %     obj.sliderThumb(obj.activeThumbIdx).Value = newVal;
-            % else
-            %     obj.Value(obj.activeThumbIdx) = newVal;
-            % end
         end
 
     end
@@ -539,8 +523,6 @@ classdef uirangeslidereditfield < matlab.ui.componentcontainer.ComponentContaine
             % if isequal(val,[obj.sliderThumb(1).Value, obj.sliderThumb(2).Value])
             %     warning('redudnant set')
             % end
-
-
             if obj.inCallback
                 warning('callback overlap')
             end
@@ -549,17 +531,6 @@ classdef uirangeslidereditfield < matlab.ui.componentcontainer.ComponentContaine
             if obj.RoundValues
                 val = round(val,obj.RoundDigits);
             end
-
-            % lims = obj.Limits;
-            % lo = lims(1);
-            % hi = lims(2);
-            % 
-            % % val = clip(sort(val),lo,hi);
-            % val = clip(val,lo,hi);
-            % 
-            % % update thumbs
-            % obj.sliderThumb(1).Value = val(1);
-            % obj.sliderThumb(2).Value = val(2);
 
             lims1 = obj.sliderValueEditField(1).Limits;
             lims2 = obj.sliderValueEditField(2).Limits;
@@ -570,9 +541,6 @@ classdef uirangeslidereditfield < matlab.ui.componentcontainer.ComponentContaine
             % update thumbs
             obj.sliderThumb(1).Value = val(1);
             obj.sliderThumb(2).Value = val(2);
-
-
-
 
             % update editfield values
             obj.sliderValueEditField(1).Value  = val(1);
@@ -593,7 +561,6 @@ classdef uirangeslidereditfield < matlab.ui.componentcontainer.ComponentContaine
             H = obj.Height*2 + 10 + 1;
         end
 
-
         function val = get.ValueDisplayFormat(obj)
             val = obj.ValueDisplayFormat_;
         end
@@ -611,7 +578,6 @@ classdef uirangeslidereditfield < matlab.ui.componentcontainer.ComponentContaine
             obj.Title_ = val;
         end
 
-
         function val = get.FontSize(obj)
             val = obj.FontSize_;
         end
@@ -621,7 +587,6 @@ classdef uirangeslidereditfield < matlab.ui.componentcontainer.ComponentContaine
                 "FontSize",val);
             obj.FontSize_ = val;
         end
-
 
         function val = get.FontColor(obj)
             val = obj.FontColor_;
@@ -641,6 +606,9 @@ classdef uirangeslidereditfield < matlab.ui.componentcontainer.ComponentContaine
 
         function sliderEditfieldValueChanged(obj, source, ~)
             obj.Value(source.UserData) = source.Value;
+            % TESTING BELOW
+            obj.onValueChanged();
+            % END TESTING
         end
 
         function onValueChanging(obj, ~, ~)
@@ -740,6 +708,9 @@ classdef uirangeslidereditfield < matlab.ui.componentcontainer.ComponentContaine
                 "FontColor",[1 1 1],...
                 "Limits",[0 1],...
                 "Value",[0 1],...
+                "RoundValues",true,...
+                "RoundDigits",2,...
+                "ValueDisplayFormat",'%.2f',...
                 "TrackColor",[0 0 0],...
                 "FontSize",12);
 
@@ -867,14 +838,52 @@ classdef uirangeslidereditfield < matlab.ui.componentcontainer.ComponentContaine
                 set(ax,'CLim',src.Value)
             end
 
-
         end
 
 
+        function [s,ax] = demo4()
 
+            fig = uifigure(...
+                "WindowStyle","alwaysontop",...
+                "InnerPosition",[100,100,510,615],...
+                "Color",[0 0 0]);
 
+            g = uigridlayout(fig,[2,1],...
+                "BackgroundColor",[0 0 0],...
+                "ColumnWidth",{500},...
+                "RowHeight",{500,'fit'},...
+                "Padding",[5 5 5 5],...
+                "RowSpacing",5);
 
+            I = im2double(imread("rice.png"));
 
+            I = imresize(I,5);
+
+            ax = widgets.ImageAxes(g,"CData",I);
+
+            s = widgets.uirangeslidereditfield(g,...
+                "Title",'Adjust CLim',...
+                "FontColor",[1 1 1],...
+                "Limits",[0 1],...
+                "Value",[min(I(:)) max(I(:))],...
+                "RoundValues","on",...
+                "RoundDigits",2,...
+                "ValueDisplayFormat",'%.2f',...
+                "TrackColor",[0 0 0],...
+                "ValueChangingFcn",@(o,~) setCDataDuringSlide(o),...
+                "ValueChangedFcn",@(o,~) setCData(o));
+
+            ax.CLim = [0 1];
+
+            function setCDataDuringSlide(src)
+                ax.CData = imadjust(I,src.Value,[0 1]);
+            end
+
+            function setCData(src)
+                ax.CData = imadjust(I,src.Value,[0 1]);
+            end
+
+        end
 
     end
     
