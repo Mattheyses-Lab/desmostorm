@@ -1287,10 +1287,13 @@ classdef GUI < handle
                     % create a temporary unique name for each PDF
                     tempName = fullfile(path,[char(java.util.UUID.randomUUID()),'.pdf']);
 
+                    drawnow
                     if i==1 && j==1
                         pause(1)
-                        drawnow
+                    else
+                        pause(0.1)
                     end
+
 
                     % export the figure content to PDF
                     exportapp(f,tempName);
