@@ -409,7 +409,8 @@ classdef GUI < handle
                 'ToolBox',{'Zoom','Pick'},...
                 'ToolBelt',{'Zoom','Pick'},...
                 'Colormap',obj.Settings.Display.Colormap,...
-                'CLim',[0 1]);
+                'CLim',[0 1],...
+                'CData',[]);
 
             % wire the optimistic callbacks for ImageViewer Pick tool
             obj.Ax.Tools.Pick.BoxCreatedFcn       = @(~,d) obj.onBoxCreated(d);
@@ -452,7 +453,8 @@ classdef GUI < handle
                 'ToolBox',{'Zoom','DrawRectangle'},...
                 'ToolBelt',{'Zoom','DrawRectangle'},...
                 'Colormap',obj.Settings.Display.Colormap,...
-                'CLim',[0 1]);
+                'CLim',[0 1],...
+                'CData',[]);
 
             % wire the callbacks for RegionViewer DrawRectangle tool
             obj.RegionViewer.Tools.DrawRectangle.ROIPreviewMovedFcn    = @(~,d) obj.onROIPreviewMoved(d);
@@ -548,8 +550,6 @@ classdef GUI < handle
     %% Derived getters
     methods
 
-
-
     end
 
     %% Callbacks / UI sync (Images)
@@ -621,21 +621,15 @@ classdef GUI < handle
             if isempty(img)
                 obj.Ax.CData = [];
                 obj.Ax.Tools.Pick.clearBoxes();
-                % obj.UIToRegion = dictionary;
-                % obj.RegionToUI = dictionary;
                 return
             end
 
             % get the CData for this image
-            % obj.Ax.CData = im2double(img.CData);
             obj.Ax.CData = img.CData;
             obj.Ax.CLim = img.DisplayCLim;
 
-
             % clear overlays & bindings, then replay from model
             obj.Ax.Tools.Pick.clearBoxes();
-            % obj.UIToRegion = dictionary;
-            % obj.RegionToUI = dictionary;
 
             regs = img.RegionArray;
             if ~isempty(regs)
@@ -646,9 +640,6 @@ classdef GUI < handle
                         bs = obj.Settings.Analysis.BoxSize;
                     end
                     obj.Ax.Tools.Pick.addBox(r.ID, r.Center, bs);
-                    % % trivial binding (overlay id == regionID for replayed boxes)
-                    % obj.UIToRegion(r.ID) = r.ID;
-                    % obj.RegionToUI(r.ID) = r.ID;
                 end
             end
 
@@ -714,8 +705,6 @@ classdef GUI < handle
             % update RegionViewer CData with ActiveRegion CData
             obj.RegionViewer.CData = obj.Project.ActiveImage.regionSubimage(reg);
             obj.RegionViewer.CLim = obj.Project.ActiveImage.DisplayCLim;
-
-
 
             % update RegionListBox selection
             obj.RegionListBox.Value = reg.ID;
@@ -882,26 +871,26 @@ classdef GUI < handle
     methods (Access=private)
 
         function onIntensitySliderChanging(obj,~)
-            % onIntensitySliderChanged(obj,evt)
-
             % get the active image
             img = obj.Project.ActiveImage;
             if isempty(img), return; end
 
+            % % oldVal = double(obj.Ax.CLim);
+            % oldVal = double(img.DisplayCLim);
+            % 
+            % % newVal = round(obj.IntensitySlider.Value);
+            % newVal = obj.IntensitySlider.Value;
+            % 
+            % change = max(abs(oldVal-newVal));
+            %
+            % if change >= (diff(img.RawIntensityLimits)+1)/(32)
+            %     set([obj.Ax,obj.RegionViewer],'CLim',newVal);
+            % end
 
-            % oldVal = double(obj.Ax.CLim);
-            oldVal = double(img.DisplayCLim);
+            change = max(abs(obj.Ax.CLim-obj.IntensitySlider.Value));
 
-            % newVal = round(obj.IntensitySlider.Value);
-            newVal = obj.IntensitySlider.Value;
-
-            change = max(abs(oldVal-newVal));
-
-            if change >= (diff(img.RawIntensityLimits)+1)/(32)
-                % obj.Ax.CLim = newVal;
-                % obj.RegionViewer.CLim = newVal;
-                set([obj.Ax,obj.RegionViewer],'CLim',newVal);
-                %drawnow limitrate nocallbacks
+            if change > img.RawIntensityLimits(2)*0.01
+                set([obj.Ax,obj.RegionViewer],'CLim',obj.IntensitySlider.Value);
             end
 
         end
