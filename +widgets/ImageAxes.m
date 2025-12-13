@@ -30,13 +30,32 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
     end
 
     %% Public Parameters
-    properties (SetObservable,AbortSet)
-        CData = widgets.ImageAxes.placeholderImage;
+    properties (AbortSet)
+        Name (1,1) string = ""
     end
 
-    properties (AbortSet)
-        % Colormap (256,3) double = turbo
-        Name (1,1) string = ""
+    % Passthroughs
+    properties (Dependent)
+        ImageVisible
+        AxesVisible
+        Colormap (256,3) double = turbo
+    end
+
+    %% Public props with private backing
+    properties (Dependent,AbortSet)
+        CLim (1,2) double
+        CData (:,:)
+        CLimMode (1,:) char
+    end
+
+    properties (Access=private)
+        CLim_ (1,2) double = [0 1]
+        CData_ (:,:) = widgets.ImageAxes.placeholderImage;
+        CLimMode_ (1,:) char {mustBeMember(CLimMode_,{'auto','manual'})} = 'auto'
+    end
+
+    properties (Dependent)
+        DisplayCData
     end
 
     %% UI/Graphics
@@ -45,13 +64,9 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
     properties (Access = private, Transient, NonCopyable)
         Grid matlab.ui.container.GridLayout
         Panel matlab.ui.container.Panel
-        % mainAxes matlab.ui.control.UIAxes
         staticAxes matlab.ui.control.UIAxes
         hImage matlab.graphics.primitive.Image
-        %Label (1,1) matlab.ui.control.Label
         L event.listener
-
-        % testLabel (1,1) matlab.graphics.primitive.Text
         Label (1,1) matlab.graphics.primitive.Text
     end
 
@@ -59,7 +74,6 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
     properties (Access = ?widgets.ImageAxesTool)
         mainAxes matlab.ui.control.UIAxes
     end
-
 
     %% Derived properties (accessible to tools)
     properties (Access = ?widgets.ImageAxesTool, Dependent)
@@ -69,9 +83,7 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
         ImageHeight
         defaultXLim
         defaultYLim
-        % cursorInAxes
         cursorPosition
-        % cursorInStaticAxes
         cursorPositionStatic
         activePixel
     end
@@ -89,34 +101,20 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
         Mode struct = struct()
     end
 
-    %% Passthroughs
-    properties (Dependent)
-        CLim = [0 1]
-        ImageVisible
-        AxesVisible
-        Colormap (256,3) double = turbo
-    end
-
     %% Hub registration
     properties (Access=private)
         Hub app.FigureEventHub
         RouterId double = NaN
     end
 
-
     %% Events
     events (NotifyAccess = protected)
         CDataChanged
     end
 
-
     %% ComponentContainer lifecycle
     methods (Access=protected)
         function setup(obj)
-
-            % add listeners first
-            obj.L(1) = addlistener(obj,'CData','PostSet',@(~,~) obj.onCDataChanged());
-
 
             obj.Interruptible = 'off';
             obj.BusyAction = 'cancel';
@@ -200,17 +198,10 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
                 'HitTest','off',...
                 'PickableParts','none');
 
-            % Update PlotBox and DataAspect ratios *after* creating image object
+            % Update CLim, PlotBoxAspectRatio, and DataAspectRatio *after* creating image object
+            obj.mainAxes.CLim               = [0 1];
             obj.mainAxes.PlotBoxAspectRatio = [1 1 1];
             obj.mainAxes.DataAspectRatio    = [1 1 1];
-
-            % % Label
-            % obj.Label = uilabel(obj.Panel,...
-            %     'Text','',...
-            %     'Position',[1 1 obj.Panel.Position(3) 20],...
-            %     'BackgroundColor',[0 0 0],...
-            %     'FontColor',[1 1 1],...
-            %     'Visible',"on");
 
             % set SizeChangedFcn so we can force visual update upon resizing (AutoResizeChildren of parent must be Off)
             obj.SizeChangedFcn = @(~,~) obj.updateOnResize();
@@ -223,24 +214,11 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
                 'HorizontalAlignment','left',...
                 'VerticalAlignment','bottom');
 
-
         end
 
         function update(obj)
-
             % testing below
             obj.mainAxes.Tag = obj.Name;
-
-
-            %fprintf('widgets.ImageAxes.update()\n')
-
-            % Update image & axes
-            %obj.hImage.CData = obj.CData;
-
-            if isempty(obj.CData), return; end
-
-            % Label stretches to fill panel width
-            %obj.Label.Position = [1 1 obj.Panel.Position(3) 20];
         end
 
     end
@@ -301,6 +279,10 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
 
         end
 
+        function updateImageCData(obj)
+            obj.hImage.CData = obj.DisplayCData;
+        end
+
     end
 
     % Tool-accessible helpers
@@ -345,11 +327,6 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
         end
 
         function restoreDefaultLimits(obj)
-
-            % if isempty(obj.CData)
-            %     return
-            % end
-
             obj.staticAxes.XLim = obj.defaultXLim;  
             obj.staticAxes.YLim = obj.defaultYLim;
             obj.mainAxes.XLim = obj.defaultXLim;  
@@ -358,7 +335,7 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
 
     end
 
-    %% Derived getters
+    %% Derived getters and setters
     methods
         function cursorPosition = get.cursorPosition(obj)
             cursorPosition = obj.mainAxes.CurrentPoint(1,[1,2]);
@@ -390,40 +367,27 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
 
         end
 
-        function s = get.ImageSize(obj),  s = size(obj.CData); end
-        function h = get.ImageHeight(obj), h = size(obj.CData,1); end
-        function w = get.ImageWidth(obj),  w = size(obj.CData,2); end
-        function f = get.ParentFig(obj),   f = ancestor(obj,'Figure'); end
+        function s = get.ImageSize(obj),    s = size(obj.CData); end
+        function h = get.ImageHeight(obj),  h = size(obj.CData,1); end
+        function w = get.ImageWidth(obj),   w = size(obj.CData,2); end
+        function f = get.ParentFig(obj),    f = ancestor(obj,'Figure'); end
         
-        function x = get.defaultXLim(obj)
-            x = [0 obj.ImageWidth] + 0.5;
-        end
-
-        function y = get.defaultYLim(obj)
-            y = [0 obj.ImageHeight] + 0.5;
-        end
+        function x = get.defaultXLim(obj),  x = [0 obj.ImageWidth] + 0.5; end
+        function y = get.defaultYLim(obj),  y = [0 obj.ImageHeight] + 0.5; end
 
         % passthroughs
 
         % Colormap
         function v = get.Colormap(obj),        v = obj.mainAxes.Colormap; end
         function set.Colormap(obj,val),        obj.mainAxes.Colormap = val; end
-
-        % CLim
-        function v = get.CLim(obj),        v = obj.mainAxes.CLim; end
-        function set.CLim(obj,val),        obj.mainAxes.CLim = val; end
-
         % ImageVisible
         function v = get.ImageVisible(obj),v = obj.hImage.Visible; end
         function set.ImageVisible(obj,val),obj.hImage.Visible = val; end
-
         % AxesVisible
         function v = get.AxesVisible(obj), v = obj.mainAxes.Visible; end
         function set.AxesVisible(obj,val), obj.mainAxes.Visible = val; end
 
-
-
-
+        % axes handle
         function ax = getAxes(obj), ax = obj.mainAxes; end
 
     end
@@ -927,54 +891,70 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
 
     end
 
+    %% CData/CLim
+    methods
 
-    %% Listener callbacks
+        % CLim
+        function v = get.CLim(obj)
+            v = obj.CLim_;
+        end
 
-    methods (Access=private)
+        function set.CLim(obj,val)
+            % update private backing
+            obj.CLim_ = val;
+            % setting the CLim switches CLim mode to manual
+            obj.CLimMode_ = 'manual';
+            % update the CData on the actual image object (do not emit CDataChanged)
+            obj.updateImageCData();
+        end
 
-        function onCDataChanged(obj)
+        % CData
+        function v = get.CData(obj)
+            v = obj.CData_;
+        end
 
-            % % do not allow empty CData
-            % if isempty(obj.CData)
-            %     obj.CData = obj.placeholderImage;
-            %     obj.restoreDefaultLimits();
-            %     obj.mainAxes.CLim = [0 1];
-            %     return
-            % end
+        function set.CData(obj,val)
 
-            % get old CData from image object
-            oldCData = obj.hImage.CData;
-            % % new CData is already in obj.CData
-            % newCData = obj.CData;
-
-
-            if isempty(obj.CData)
-                obj.CData = obj.placeholderImage;
-                newCLim = [0 1];
-            else
-                newCLim = [min(min(obj.CData)) max(max(obj.CData))];
+            if isempty(val)
+                val = widgets.ImageAxes.placeholderImage();
             end
 
-            % set the new CData
-            obj.hImage.CData = obj.CData;
+            % create event data payload before setting new CData and emitting CDataChanged event
+            evtData = widgets.events.CDataChangedEventData(obj.CData_,val);
+            % update private backing
+            obj.CData_ = val;
 
-            % % TESTING BELOW
-            obj.mainAxes.CLim = newCLim;
-            % % END TESTING
-
+            % if CLimMode set to 'auto'
+            if strcmp(obj.CLimMode_,'auto')
+                % set private CLim backing to match min/max of CData
+                obj.CLim_ = [min(min(obj.CData_)) max(max(obj.CData_))];
+            end
+            % update the CData on the actual image object
+            obj.updateImageCData();
             % update axes limits
             obj.restoreDefaultLimits();
-
-            % create event data payload before firing event
-            evtData = widgets.events.CDataChangedEventData(oldCData,obj.CData);
-
-            % fire event, send payload
+            % emit event, send payload
             notify(obj,'CDataChanged',evtData);
         end
 
+        % CLimMode
+        function v = get.CLimMode(obj)
+            v = obj.CLimMode_;
+        end
+
+        function set.CLimMode(obj,val)
+            % update private backing
+            obj.CLimMode_ = val;
+            % update the CData on the actual image object
+            obj.updateImageCData();
+        end
+
+        % DisplayCData
+        function v = get.DisplayCData(obj)
+            v = utils.rescaleLinear(obj.CData,obj.CLim);
+        end
 
     end
-
 
     %% Utils
     methods (Static, Access=private)
@@ -1027,9 +1007,7 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
 
         end
 
-
         function ax = demo()
-
 
             fig = uifigure("WindowStyle","alwaysontop",...
                 "Position",[0 0 500 500],...
@@ -1047,8 +1025,6 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
             fig.Visible = "on";
 
         end
-
-
 
     end
 

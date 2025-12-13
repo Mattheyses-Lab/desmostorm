@@ -502,10 +502,10 @@ classdef uirangeslidereditfield < matlab.ui.componentcontainer.ComponentContaine
 
             obj.Value(obj.activeThumbIdx) = clip(obj.sliderThumbAxes.CurrentPoint(1,1),thumbLims(1),thumbLims(2));
 
-            % TESTING BELOW
-            % emit ValueChanging
-            obj.onValueChanged();
-            % END TESTING
+            % % TESTING BELOW
+            % % emit ValueChanged
+            % obj.onValueChanged();
+            % % END TESTING
 
         end
 
@@ -647,6 +647,10 @@ classdef uirangeslidereditfield < matlab.ui.componentcontainer.ComponentContaine
         function onMove(obj, ~, tgt)
             if obj.isSliding
                 obj.moveActiveThumbToCursor();
+                % TESTING BELOW
+                % emit ValueChanging
+                obj.onValueChanging();
+                % END TESTING
             else
                 obj.handleHover(tgt);
             end
