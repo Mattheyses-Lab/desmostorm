@@ -158,7 +158,7 @@ classdef STORMRegion < handle
             end
             % the actual table data (with distance measurements formatted according to PixelSize)
             T = table(...
-                {obj.Name},...
+                {char(obj.Name)},...
                 {sprintf('(%.1f, %.1f)',obj.Center(1),obj.Center(2))},...
                 {sprintf('%i px',obj.BoxSize)},...
                 {sprintf('%i px',obj.BoxSize)},...
@@ -171,7 +171,7 @@ classdef STORMRegion < handle
                 {obj.formatLength(PeakWidth2)},...
                 'VariableNames',VariableNames);
             % rotate the table before returning
-            T = utils.rotateTable(T);
+            T = utils.rotateTable(T,'ColumnNames',{'Values'});
         end
 
         function val = get.PlaqueToPlaqueDistance(obj)
@@ -191,6 +191,28 @@ classdef STORMRegion < handle
         end
 
     end
+
+
+
+    methods
+
+        % format summary table into monospaced line-based string
+        function out = TextSummaryTable(obj)
+
+            T = obj.SummaryTable;
+
+            names = T.Properties.RowNames;
+            vals = T.Values;
+
+            out = utils.formatKeyValueText(names,vals);
+
+        end
+
+
+
+    end
+
+
 
     %% Export data
     methods
