@@ -33,6 +33,15 @@ classdef DrawRectangle < widgets.ImageAxesTool
         AnnotationLineWidth (1,1) double = 0.5
     end
 
+
+    properties (Dependent)
+        FontSize (1,1) double
+    end
+
+    properties (Access=private)
+        FontSize_ (1,1) double = 12
+    end
+
     %% Behavior
     properties
         % RotationAngleMode - controls how RotationAngle output values and annotations behave
@@ -134,7 +143,7 @@ classdef DrawRectangle < widgets.ImageAxesTool
             set(obj.XRay,"XData",XRayXY(1,:),"YData",XRayXY(2,:));
             set(obj.ArcPolyline,"XData",ArcPolylineXY(1,:),"YData",ArcPolylineXY(2,:));
             % set Position and String of annotation labels
-            set(obj.AngleLabel,"Position",LabelXY,"String",obj.RotationAngleDisplay)
+            set(obj.AngleLabel,"Position",LabelXY,"String",obj.RotationAngleDisplay,"FontSize",obj.FontSize_);
             
         end
 
@@ -307,7 +316,8 @@ classdef DrawRectangle < widgets.ImageAxesTool
                     "VerticalAlignment","middle",...
                     "HorizontalAlignment","center",...
                     "HitTest","off",...
-                    "PickableParts","none");
+                    "PickableParts","none",...
+                    "FontSize",obj.FontSize_);
 
                 % attach listeners
                 obj.ROIListeners(1) = addlistener(obj.RectROI, 'MovingROI', @(~, ~) obj.onROIMoving(obj.RectROI));
@@ -397,7 +407,7 @@ classdef DrawRectangle < widgets.ImageAxesTool
                 % Now solve for t on the ray: cx + t = x_int  ->  t = x_int - cx
                 t = x_int - cx;
                 if t >= 0
-                    hitPts(end+1,:) = [x_int, y_int]; %#ok<AGROW>
+                    hitPts(end+1,:) = [x_int, y_int];
                 end
             end
 
@@ -473,7 +483,21 @@ classdef DrawRectangle < widgets.ImageAxesTool
 
     end
 
+    %% Set/Get for public props with private backing
+    methods
 
+        function val = get.FontSize(obj)
+            val = obj.FontSize_;
+        end
+
+        function set.FontSize(obj,val)
+            obj.FontSize_ = val;
+            if ~isempty(obj.AngleLabel)
+                obj.AngleLabel.FontSize = val;
+            end
+        end
+
+    end
 
     %% Helpers
     methods
