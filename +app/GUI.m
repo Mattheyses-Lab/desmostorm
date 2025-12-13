@@ -8,8 +8,8 @@ classdef GUI < handle
 
         LeftPane matlab.ui.container.GridLayout
 
-        SettingsAccordionPanel matlab.ui.container.Panel
-        SettingsAccordionPanelGrid matlab.ui.container.GridLayout
+        % SettingsAccordionPanel matlab.ui.container.Panel
+        % SettingsAccordionPanelGrid matlab.ui.container.GridLayout
         SettingsAccordion widgets.uiaccordion
 
         ImageListBoxPanel matlab.ui.container.Panel
@@ -1095,11 +1095,91 @@ classdef GUI < handle
         end
 
 
+        % function onExportPeakPlots(app, ~, ~)
+        % 
+        %     app.Fig.Visible = 'off';
+        % 
+        %     defaultName = fullfile(app.Settings.IO.DefaultFolder, 'peak_plots.pdf');
+        %     [file, path] = uiputfile('*.pdf', ...
+        %         'Export peak plots', defaultName);
+        % 
+        %     app.Fig.Visible = 'on';
+        % 
+        %     if isequal(file,0)
+        %         return;  % user cancelled
+        %     end
+        % 
+        %     fname = fullfile(path, file);
+        % 
+        %     f = uifigure("WindowStyle","normal",...
+        %         "Visible","on",...
+        %         "Position",[0 0 750 500]);
+        % 
+        %     movegui(f,'center')
+        % 
+        %     g = uigridlayout(f,[1,1],...
+        %         "RowHeight",{'fit'},...
+        %         "ColumnWidth",{'fit'});
+        % 
+        %     p = widgets.PeaksPlotContainer(g,...
+        %         "RawLineWidth",app.Settings.PeaksPlot.RawLineWidth, ...
+        %         "RawLineColor",app.Settings.PeaksPlot.RawLineColor, ...
+        %         "SmoothLineWidth",app.Settings.PeaksPlot.SmoothLineWidth, ...
+        %         "SmoothLineColor",app.Settings.PeaksPlot.SmoothLineColor, ...
+        %         "BackgroundColor",app.Settings.PeaksPlot.BackgroundColor, ...
+        %         "ForegroundColor",app.Settings.PeaksPlot.ForegroundColor, ...
+        %         "XLabel",sprintf("Distance (%s)",app.Settings.Analysis.PixelSizeUnit), ...
+        %         "YLabel","Normalized Intensity");
+        % 
+        %     f.Visible = 'off';
+        % 
+        %     % create progress dialog
+        %     h = uiprogressdlg(app.Fig,"Message",'Exporting peak plots. Please wait...','Indeterminate','on');
+        % 
+        %     imgs = app.Project.ImageArray;
+        % 
+        %     if isempty(imgs)
+        %         return
+        %     end
+        % 
+        %     for i = 1:numel(imgs)
+        %         regs = imgs(i).RegionArray;
+        % 
+        %         if isempty(regs)
+        %             continue
+        %         end
+        % 
+        %         for j = 1:numel(regs)
+        % 
+        %             p.Data = regs(j).LinescanResults;
+        %             p.Title = utils.texFriendly(imgs(i).Name) + " | " + regs(j).Name;
+        % 
+        %             if i==1 && j==1 % overwrite file on first pass
+        %                 drawnow
+        %                 pause(1)
+        %                 p.export(fname,'BackgroundColor',app.Settings.PeaksPlot.BackgroundColor,'Append',false);
+        %             else % append otherwise
+        %                 p.export(fname,'BackgroundColor',app.Settings.PeaksPlot.BackgroundColor,'Append',true);
+        %             end
+        % 
+        %         end
+        % 
+        %     end
+        % 
+        %     delete(f); % delete the figure
+        % 
+        %     % close the progress dialog
+        %     close(h);
+        % 
+        % end
+
+
+
         function onExportPeakPlots(app, ~, ~)
 
             app.Fig.Visible = 'off';
 
-            defaultName = fullfile(app.Settings.IO.DefaultFolder, 'peak_plots.xlsx');
+            defaultName = fullfile(app.Settings.IO.DefaultFolder, 'peak_plots.pdf');
             [file, path] = uiputfile('*.pdf', ...
                 'Export peak plots', defaultName);
 
@@ -1109,17 +1189,23 @@ classdef GUI < handle
                 return;  % user cancelled
             end
 
-            fname = fullfile(path, file);
+            outputFile = fullfile(path,file);
+
+            fNames = {};
 
             f = uifigure("WindowStyle","normal",...
                 "Visible","on",...
-                "Position",[0 0 750 500]);
+                "Position",[0 0 1065 400]);
 
             movegui(f,'center')
 
-            g = uigridlayout(f,[1,1],...
-                "RowHeight",{'fit'},...
-                "ColumnWidth",{'fit'});
+            g = uigridlayout(f,[2,2],...
+                "RowHeight",{250,140},...
+                "RowSpacing",5,...
+                "ColumnWidth",{800,250},...
+                "ColumnSpacing",5,...
+                "Padding",[5 5 5 5],...
+                "BackgroundColor",[1 1 1]);
 
             p = widgets.PeaksPlotContainer(g,...
                 "RawLineWidth",app.Settings.PeaksPlot.RawLineWidth, ...
@@ -1129,8 +1215,41 @@ classdef GUI < handle
                 "BackgroundColor",app.Settings.PeaksPlot.BackgroundColor, ...
                 "ForegroundColor",app.Settings.PeaksPlot.ForegroundColor, ...
                 "XLabel",sprintf("Distance (%s)",app.Settings.Analysis.PixelSizeUnit), ...
-                "YLabel","Normalized Intensity");
-            
+                "YLabel","Normalized Intensity",...
+                "FontSize",10);
+            p.Layout.Row = [1 2];
+            p.Layout.Column = 1;
+
+            % ImageAxes to show region CData and ROI position
+            ax = widgets.ImageAxes(g,...
+                'Name','RegionViewer',...
+                'ToolBox',{'DrawRectangle'},...
+                'ToolBelt',{'DrawRectangle'},...
+                'Colormap',app.Settings.Display.Colormap,...
+                'CLim',[0 1],...
+                'CData',[]);
+            ax.Layout.Row = 1;
+            ax.Layout.Column = 2;
+            % set options for RegionViewer DrawRectangle tool
+            ax.Tools.DrawRectangle.RotationAngleMode = 'half-circle';
+            % enable the DrawRectangle tool
+            ax.Tools.DrawRectangle.enable();
+            % set the FontSize on the DrawRectangle tool
+            ax.Tools.DrawRectangle.FontSize = 10;
+
+            % uilabel to show region measurements
+            l = uilabel(g,...
+                "Text",'',...
+                "BackgroundColor",[1 1 1],...
+                "FontColor",[0 0 0],...
+                "HorizontalAlignment","left",...
+                "VerticalAlignment","top",...
+                "FontName","courier",...
+                "FontSize",10);
+            l.Layout.Column = 2;
+            l.Layout.Row = 2;
+
+            % hide the figure after adding all components
             f.Visible = 'off';
 
             % create progress dialog
@@ -1151,16 +1270,33 @@ classdef GUI < handle
 
                 for j = 1:numel(regs)
 
+                    % update region linescan plot and title
                     p.Data = regs(j).LinescanResults;
                     p.Title = utils.texFriendly(imgs(i).Name) + " | " + regs(j).Name;
 
-                    if i==1 && j==1 % overwrite file on first pass
-                        drawnow
+                    % update region CData and CLim
+                    ax.CData = imgs(i).regionSubimage(regs(j));
+                    ax.CLim = imgs(i).DisplayCLim;
+
+                    % update linescan ROI position
+                    ax.Tools.DrawRectangle.setROIPosition(regs(j).Linescan);
+
+                    % update uilabel Text
+                    l.Text = regs(j).TextSummaryTable;
+
+                    % create a temporary unique name for each PDF
+                    tempName = fullfile(path,[char(java.util.UUID.randomUUID()),'.pdf']);
+
+                    if i==1 && j==1
                         pause(1)
-                        p.export(fname,'BackgroundColor',app.Settings.PeaksPlot.BackgroundColor,'Append',false);
-                    else % append otherwise
-                        p.export(fname,'BackgroundColor',app.Settings.PeaksPlot.BackgroundColor,'Append',true);
+                        drawnow
                     end
+
+                    % export the figure content to PDF
+                    exportapp(f,tempName);
+
+                    % store the temporary name so we can merge the PDFs at the end
+                    fNames{end+1} = tempName;
 
                 end
 
@@ -1168,10 +1304,23 @@ classdef GUI < handle
 
             delete(f); % delete the figure
 
+            % merge the PDFs
+            memSet = org.apache.pdfbox.io.MemoryUsageSetting.setupMainMemoryOnly();
+            merger = org.apache.pdfbox.multipdf.PDFMergerUtility;
+            cellfun(@(fN) merger.addSource(fN), fNames)
+            merger.setDestinationFileName(outputFile)
+            merger.mergeDocuments(memSet)
+
+            % delete the temporary PDFs
+            cellfun(@(fN) delete(fN),fNames);
+
             % close the progress dialog
             close(h);
 
         end
+
+
+
 
 
     end
