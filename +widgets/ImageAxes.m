@@ -217,8 +217,14 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
         end
 
         function update(obj)
-            % testing below
+            % set the Tag property of the mainAxes
             obj.mainAxes.Tag = obj.Name;
+
+            % set BackgroundColor
+            obj.Grid.BackgroundColor = obj.BackgroundColor;
+            obj.Panel.BackgroundColor = obj.BackgroundColor;
+
+
         end
 
     end
