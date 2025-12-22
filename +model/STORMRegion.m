@@ -1,5 +1,5 @@
 classdef STORMRegion < handle
-% model.STORMRegion - geometry + per-region results
+%STORMRegion Geometry and per-region results
 
     %% ID/metadata
     properties
