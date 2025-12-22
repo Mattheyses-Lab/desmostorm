@@ -1,5 +1,5 @@
 classdef RunConfig
-    %% RUNCONFIG Value class with immutable snapshot of current Analysis settings for processing runs
+    %% RUNCONFIG  Value class with immutable snapshot of current Analysis settings for processing runs
 
     properties
         MinPeakDistance (1,1) double
