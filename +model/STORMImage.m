@@ -1,5 +1,5 @@
-classdef STORMImage < handle
-% model.STORMImage - image data and ROIs
+classdef STORMImage < handle & matlab.mixin.CustomDisplay
+%STORMImage Stores image data, stores and manages regions
 
     %% Identity/ownership
     properties
@@ -13,15 +13,18 @@ classdef STORMImage < handle
         SourcePath (1,1) string = ""
         FileType (1,1) string = ""    % 'tif','png',...
         CreatedAt datetime = datetime('now')
-        % PixelSize (1,1) double = NaN  % typically um/px
-        % PixelSizeUnit (1,:) char = 'px'
         PixelSizeOverride model.units.PixelSize = model.units.PixelSize.empty
+
+        RawIntensityRange (1,2) = [NaN NaN]
+        RawIntensityClass (1,:) char = ''
+        RawIntensityLimits (1,2) = [NaN NaN]
     end
 
     properties (Dependent=true)
         PixelSize model.units.PixelSize
+        Height (1,1) double
+        Width (1,1) double
     end
-
 
     %% Regions (dictionary + order) and active selection
     properties (Access=private)
@@ -46,13 +49,13 @@ classdef STORMImage < handle
     end
 
 
-    %% Image data (simple for now, can move later towards a per-image ViewState class)
+    %% Image data and display settings
     properties
         CData = []                     % numeric image array
         CLim (1,2) double
-        RawIntensityRange (1,2) = [NaN NaN]
-        RawIntensityClass (1,:) char
-        RawIntensityLimits (1,2)
+        % RawIntensityRange (1,2) = [NaN NaN]
+        % RawIntensityClass (1,:) char
+        % RawIntensityLimits (1,2)
     end
 
     properties (Access = private)
@@ -75,24 +78,6 @@ classdef STORMImage < handle
     methods
 
         function obj = STORMImage(parent, name, sourcePath, cdata)
-            % obj.ID = model.STORMImage.newID();
-            % if nargin >= 1 && ~isempty(parent),     obj.Parent = parent; end
-            % if nargin >= 2 && ~isempty(name),       obj.Name = string(name); end
-            % if nargin >= 3 && ~isempty(sourcePath), obj.SourcePath = string(sourcePath); end
-            % if nargin >= 4 && ~isempty(cdata),      obj.CData = cdata; end
-            % 
-            % if strlength(obj.FileType)==0 && strlength(obj.SourcePath)>0
-            %     [~,~,ext] = fileparts(char(obj.SourcePath));
-            %     obj.FileType = string(lower(strip(ext,'.')));
-            % end
-            % 
-            % %obj.RegionsDict     = dictionary;
-            % obj.RegionsDict = dictionary(string.empty(1,0), model.STORMRegion.empty(1,0));
-            % obj.RegionOrder = string.empty(1,0);
-            % 
-            % obj.RawIntensityRange = [min(min(obj.CData)) max(max(obj.CData))]; % actual value range of intensity values
-            % obj.RawIntensityClass = class(obj.CData); % data type of intensity image 
-            % obj.RawIntensityLimits = getrangefromclass(obj.CData); % full range of possible intensity values, given its class
             arguments
                 parent (:,1) model.STORMProject = model.STORMProject.empty()
                 name (1,1) string = ""
@@ -150,22 +135,6 @@ classdef STORMImage < handle
             arr = obj.RegionsDict(obj.RegionOrder);
         end
 
-        % function addRegion(obj, regionObj)
-        %     regionID = regionObj.ID;
-        %     if ~isKey(obj.RegionsDict, regionID)
-        %         obj.RegionsDict(regionID) = regionObj;
-        %         obj.RegionOrder(end+1) = regionID;
-        % 
-        %         % set unique name using NextRegionOrdinal
-        %         obj.RegionsDict(regionID).Name = sprintf('REGION-%03d',obj.NextRegionOrdinal);
-        %         % increment the counter
-        %         obj.NextRegionOrdinal = obj.NextRegionOrdinal + 1;
-        %         % notify self -> RegionAdded
-        %         notify(obj,'RegionAdded');
-        %     end
-        % end
-
-
         function addRegion(obj, ID, Center, BoxSize)
             if ~isKey(obj.RegionsDict, ID)
                 % create new STORMRegion
@@ -182,6 +151,23 @@ classdef STORMImage < handle
                 notify(obj,'RegionAdded');
             end
         end
+
+        function addRegionSilent(obj, ID, Center, BoxSize)
+            if ~isKey(obj.RegionsDict, ID)
+                % create new STORMRegion
+                reg = model.STORMRegion(obj,ID,Center,BoxSize);
+                % add it to the Regions dictionary
+                obj.RegionsDict(ID) = reg;
+                % add its ID to RegionOrder array
+                obj.RegionOrder(end+1) = ID;
+                % set unique name using NextRegionOrdinal
+                obj.RegionsDict(ID).Name = sprintf('REGION-%03d',obj.NextRegionOrdinal);
+                % increment the counter
+                obj.NextRegionOrdinal = obj.NextRegionOrdinal + 1;
+            end
+        end
+
+
 
 
         function removeRegion(obj, regionID)
@@ -238,7 +224,7 @@ classdef STORMImage < handle
 
     end
 
-    %% Region processing
+    %% Region-level processing
     methods
 
         function processAll(obj, config)
@@ -253,30 +239,6 @@ classdef STORMImage < handle
         end
 
         function processRegionLinescan(obj, reg, config)
-            % arguments
-            %     obj model.STORMImage
-            %     reg model.STORMRegion
-            %     config app.config.RunConfig
-            % end
-            % 
-            % if isempty(reg), return; end
-            % 
-            % % get region CData
-            % I = obj.regionSubimage(reg);
-            % 
-            % % get linescan info
-            % data = reg.Linescan;
-            % 
-            % LinescanResults = model.analysis.Analyzer.run(I,data,config);
-            % 
-            % if isempty(LinescanResults)
-            %     return
-            % end
-            % 
-            % reg.updateLinescanResults(LinescanResults);
-
-
-
             arguments
                 obj model.STORMImage
                 reg model.STORMRegion
@@ -287,10 +249,10 @@ classdef STORMImage < handle
 
             % get region CData
             I = obj.regionSubimage(reg);
-
             % get linescan info
             data = reg.Linescan;
 
+            % run region analyzer
             LinescanResults = model.analysis.Analyzer.run(I,data,config);
 
             if isempty(LinescanResults)
@@ -298,8 +260,6 @@ classdef STORMImage < handle
             end
 
             reg.updateLinescanResults(LinescanResults);
-
-
         end
 
         function resetRegionLinescan(~,reg)
@@ -309,6 +269,38 @@ classdef STORMImage < handle
 
     end
 
+    % image-level processing
+    methods
+
+        function detectRegions(obj,config)
+            arguments
+                obj model.STORMImage
+                config app.config.RunConfig
+            end
+
+            % remove any existing regions first
+            obj.removeAllRegions();
+
+            % detect new region locations
+            ctrs = model.analysis.image.detectRegions(obj.CData,"BoxSize",config.BoxSize);
+
+            % return if none found
+            if isempty(ctrs)
+                return
+            end
+
+            % add a new region for each location
+            for i = 1:size(ctrs,1)
+                ctr = ctrs(i,:);
+                obj.addRegionSilent(string(char(java.util.UUID.randomUUID())), ctr, config.BoxSize);
+            end
+
+            % notify self -> RegionAdded
+            notify(obj,'RegionAdded');
+
+        end
+
+    end
 
     %% Dependent getters/setters
     methods
@@ -376,31 +368,40 @@ classdef STORMImage < handle
             obj.DisplayCLim_ = clim;
         end
 
+        function val = get.Height(obj)
+            if isempty(obj.CData)
+                val = NaN;
+            else
+                val = size(obj.CData,1);
+            end
+        end
+
+        function val = get.Width(obj)
+            if isempty(obj.CData)
+                val = NaN;
+            else
+                val = size(obj.CData,2);
+            end
+        end
+
     end
-
-
-
-
 
     %% Region processing
 
     methods
 
         function I = regionSubimage(obj,reg)
-            I = [];
+            if isempty(reg), I = []; return; end
 
-            if isempty(reg), return; end
-
-            s = reg.BoxSize;
-            XY = reg.Center;
-
-            I = zeros(s);
-
+            % region box size and center coordinates
+            s = reg.BoxSize; XY = reg.Center;
+            % preallocate array of zeros, type matched to raw intensity class
+            I = zeros(s,obj.RawIntensityClass);
             % columns
             c1 = ceil(XY(1)-s/2); c2 = floor(XY(1) + s/2);
             % rows
             r1 = ceil(XY(2)-s/2); r2 = floor(XY(2) + s/2);
-
+            % extract region roi
             I(:,:) = obj.CData(r1:r2,c1:c2);
         end
 
@@ -408,22 +409,6 @@ classdef STORMImage < handle
 
     %% Export data
     methods
-
-        % function T = exportRegionTable(obj)
-        %     regs = obj.RegionArray;
-        %     rows = repmat(struct(), 0, 1);
-        % 
-        %     for k = 1:numel(regs)
-        %         rows(end+1,1) = regs(k).exportRow(); %#ok<AGROW>
-        %     end
-        % 
-        %     if isempty(rows)
-        %         T = table();  % empty if no regions
-        %     else
-        %         T = struct2table(rows);
-        %     end
-        % end
-
 
         function T = exportRegionTable(obj)
             regs = obj.RegionArray;
@@ -435,11 +420,19 @@ classdef STORMImage < handle
             T = cell2mat(arrayfun(@(r) struct2table(r.exportRow()),regs','UniformOutput',false));
         end
 
-
     end
 
 
-    %% Friendly display
+    % Display helpers
+    methods
+
+        function str = ImageInfoDisplayString(obj)
+            str = sprintf('%s (%ix%i %s)',char(obj.Name),obj.Height,obj.Width,obj.RawIntensityClass);
+        end
+
+    end
+
+    %% Friendlier Command Window / Variable Editor display
     methods (Access=protected)
 
         function groups = getPropertyGroups(obj)
