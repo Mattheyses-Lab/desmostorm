@@ -10,6 +10,7 @@
 - Image Processing Toolbox
 - Curve Fitting Toolbox
 - Signal Processing Toolbox
+- Parallel Computing Toolbox
 
 ---
 
