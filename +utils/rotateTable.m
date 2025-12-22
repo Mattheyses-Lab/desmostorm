@@ -1,5 +1,5 @@
 function T = rotateTable(T,opts)
-%% ROTATETABLE  rotates a table such that variables and rows are swapped
+%ROTATETABLE  rotates a table such that variables and rows are swapped
     
     arguments
         T (:,:) table
