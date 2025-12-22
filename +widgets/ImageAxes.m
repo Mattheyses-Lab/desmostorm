@@ -38,6 +38,7 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
     properties (Dependent)
         ImageVisible
         AxesVisible
+        ColorbarVisible
         Colormap (256,3) double = turbo
     end
 
@@ -56,6 +57,7 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
 
     properties (Dependent)
         DisplayCData
+        CDataClass
     end
 
     %% UI/Graphics
@@ -68,6 +70,8 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
         hImage matlab.graphics.primitive.Image
         L event.listener
         Label (1,1) matlab.graphics.primitive.Text
+
+        Colorbar matlab.graphics.illustration.ColorBar
     end
 
     % tool-accessible
@@ -177,6 +181,9 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
             obj.mainAxes.Interactions = [];
             disableDefaultInteractivity(obj.mainAxes);
 
+            % setup and store colorbar
+            obj.Colorbar = colorbar(obj.mainAxes,"east","Visible","off");
+
             % initialize registries for loaded and installed tools
             obj.ToolList = containers.Map('KeyType','char','ValueType','any');
             obj.ToolRegistry = containers.Map('KeyType','char','ValueType','any');
@@ -214,6 +221,9 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
                 'HorizontalAlignment','left',...
                 'VerticalAlignment','bottom');
 
+            % set default colormap
+            obj.Colormap = turbo;
+
         end
 
         function update(obj)
@@ -223,8 +233,6 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
             % set BackgroundColor
             obj.Grid.BackgroundColor = obj.BackgroundColor;
             obj.Panel.BackgroundColor = obj.BackgroundColor;
-
-
         end
 
     end
@@ -239,14 +247,34 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
         end
 
         function updateLabelText(obj)
+
             px = obj.activePixel;
-            if ~isempty(px) && ~isempty(obj.CData)
-                txt = sprintf(' (X, Y)=(%0.f, %0.f) | Val: %0.2f', ...
-                    px(1),px(2),obj.CData(px(2),px(1)));
-            else
-                txt = 'Hover over image to interact';
+
+            if isempty(px), obj.Label.String ='Hover over image to interact'; return; end
+
+            posStr = sprintf(' (X, Y)=(%0.f, %0.f)',px(1),px(2));
+            valStr = sprintf('Val: %0.2f',obj.CData(px(2),px(1)));
+
+            % get cell array of installed tools, sorted by priority
+            tools = obj.prioritySortTools(obj.ToolRegistry);
+
+            % preallocate cell of info label char vectors
+            txt = cell(1,numel(tools));
+
+
+            for i = 1:numel(tools)
+                % get info label for each tool
+                txt{i} = tools{i}.getLabelString();
             end
-            % obj.Label.Text = txt;
+
+            txt = [posStr,valStr,txt];
+
+            % remove empty entries
+            txt(ismember(txt,'')) = [];
+
+            % join each fragment with spaced pipe
+            txt = strjoin(txt,' | ');
+
             obj.Label.String = txt;
         end
 
@@ -287,6 +315,26 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
 
         function updateImageCData(obj)
             obj.hImage.CData = obj.DisplayCData;
+
+            % --- testing - update colorbar ---
+            obj.updateColorbar();
+        end
+
+        function updateColorbar(obj)
+            clim = obj.CLim;
+            %tickLabelValues = linspace(clim(1),clim(2),11);
+            %tickLabels = arrayfun(@(v) sprintf('%f',v),linspace(clim(1),clim(2),11));
+
+            % obj.Colorbar.TickLabels = arrayfun(@(v) sprintf('%f',v),linspace(clim(1),clim(2),11),'UniformOutput',false);
+
+            switch obj.CDataClass
+                case 'double'
+                    labels = arrayfun(@(v) sprintf('%.2f',v),linspace(clim(1),clim(2),11),'UniformOutput',false);
+                case {'uint16','uint8'}
+                    labels = arrayfun(@(v) sprintf('%i',v),round(linspace(clim(1),clim(2),11)),'UniformOutput',false);
+            end
+
+            obj.Colorbar.TickLabels = labels;
         end
 
     end
@@ -392,6 +440,11 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
         % AxesVisible
         function v = get.AxesVisible(obj), v = obj.mainAxes.Visible; end
         function set.AxesVisible(obj,val), obj.mainAxes.Visible = val; end
+        % ColorbarVisible
+        function v = get.ColorbarVisible(obj), v = obj.Colorbar.Visible; end
+        function set.ColorbarVisible(obj,val), obj.Colorbar.Visible = val; end
+
+
 
         % axes handle
         function ax = getAxes(obj), ax = obj.mainAxes; end
@@ -843,9 +896,9 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
             % cell array of currently loaded tool names
             oldToolBox = obj.ToolBox;
             % tools in newToolBox that are not in oldToolBox (need to load them)
-            toolsToAdd = setdiff(newToolBox,oldToolBox);
+            toolsToAdd = setdiff(newToolBox,oldToolBox,'stable');
             % tools in oldToolBox that are not in newToolBox (need to unload them)
-            toolsToRemove = setdiff(oldToolBox,newToolBox);
+            toolsToRemove = setdiff(oldToolBox,newToolBox,'stable');
             % load all new tools in newToolBox
             if ~isempty(toolsToAdd)
                 for i = 1:numel(toolsToAdd)
@@ -872,9 +925,9 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
             % cell array of currently installed tool names
             oldToolBelt = obj.ToolBelt;
             % tools in newToolBelt that are not in oldToolBelt (need to install them)
-            toolsToAdd = setdiff(newToolBelt,oldToolBelt);
+            toolsToAdd = setdiff(newToolBelt,oldToolBelt,'stable');
             % tools in oldToolBelt that are not in newToolBelt (need to uninstall them)
-            toolsToRemove = setdiff(oldToolBelt,newToolBelt);
+            toolsToRemove = setdiff(oldToolBelt,newToolBelt,'stable');
             % install all uninstalled tools in newToolBelt (load first if necessary)
             if ~isempty(toolsToAdd)
                 for i = 1:numel(toolsToAdd)
@@ -921,8 +974,11 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
 
         function set.CData(obj,val)
 
+            placeholder = false;
+
             if isempty(val)
                 val = widgets.ImageAxes.placeholderImage();
+                placeholder = true;
             end
 
             % create event data payload before setting new CData and emitting CDataChanged event
@@ -932,8 +988,12 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
 
             % if CLimMode set to 'auto'
             if strcmp(obj.CLimMode_,'auto')
-                % set private CLim backing to match min/max of CData
-                obj.CLim_ = [min(min(obj.CData_)) max(max(obj.CData_))];
+                if placeholder
+                    obj.CLim_ = [0 1];
+                else
+                    % set private CLim backing to match min/max of CData
+                    obj.CLim_ = [min(min(obj.CData_)) max(max(obj.CData_))];
+                end
             end
             % update the CData on the actual image object
             obj.updateImageCData();
@@ -958,6 +1018,11 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
         % DisplayCData
         function v = get.DisplayCData(obj)
             v = utils.rescaleLinear(obj.CData,obj.CLim);
+        end
+
+        % CDataClass
+        function v = get.CDataClass(obj)
+            v = class(obj.CData);
         end
 
     end

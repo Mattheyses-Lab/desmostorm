@@ -214,6 +214,9 @@ classdef ImageAxesTool < handle
         % Adjust pointer shape (override in subclass to set pointer - if empty, Host will set)
         function pointer = getPreferredPointer(~), pointer = ''; end
 
+        % Add to info label (override in subclass to include text in image info label)
+        function str = getLabelString(~), str = ''; end
+
         % Passive hooks (broadcast to enabled tools if the host wants)
         function onHostAxesChanged(~,~),   end   % e.g., XLim/YLim/CLim changed
         function onHostCDataChanged(~,~),  end   % image replaced
