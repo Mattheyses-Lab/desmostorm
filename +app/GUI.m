@@ -95,6 +95,9 @@ classdef GUI < handle
             uimenu(mFile,'Text','Export Measurements...','MenuSelectedFcn',@(~,~) obj.onExportMeasurements());
             uimenu(mFile,'Text','Export Peak Plots...','MenuSelectedFcn',@(~,~) obj.onExportPeakPlots());
 
+            mRun = uimenu(obj.Fig,'Text','Run');
+            uimenu(mRun,'Text','Auto-pick Regions (experimental)...','MenuSelectedFcn',@(~,~) obj.onAutopickRegions());
+
             % --- Layout ---
             obj.Grid = uigridlayout(obj.Fig,[2 3], ...
                 'ColumnWidth',{'fit','1x'}, ...
@@ -406,8 +409,8 @@ classdef GUI < handle
             % ImageAxes to view active image CData, select Regions
             obj.Ax = widgets.ImageAxes(obj.ImageViewerPanelGrid,...
                 'Name','ImageViewer',...
-                'ToolBox',{'Zoom','Pick'},...
-                'ToolBelt',{'Zoom','Pick'},...
+                'ToolBox',{'Zoom','Pick','Colorbar'},...
+                'ToolBelt',{'Zoom','Pick','Colorbar'},...
                 'Colormap',obj.Settings.Display.Colormap,...
                 'CLim',[0 1],...
                 'CData',[]);
@@ -450,8 +453,8 @@ classdef GUI < handle
             % ImageAxes to show active region CData, make region measurements
             obj.RegionViewer = widgets.ImageAxes(obj.RegionViewerPanelGrid,...
                 'Name','RegionViewer',...
-                'ToolBox',{'Zoom','DrawRectangle'},...
-                'ToolBelt',{'Zoom','DrawRectangle'},...
+                'ToolBox',{'DrawRectangle'},...
+                'ToolBelt',{'DrawRectangle'},...
                 'Colormap',obj.Settings.Display.Colormap,...
                 'CLim',[0 1],...
                 'CData',[]);
@@ -512,7 +515,9 @@ classdef GUI < handle
             obj.L(1) = addlistener(obj.Project,'ImageAdded',         @(~,~) obj.refreshImageList());
             obj.L(2) = addlistener(obj.Project,'ImageRemoved',       @(~,~) obj.refreshImageList());
             obj.L(3) = addlistener(obj.Project,'ActiveImageChanged', @(~,~) obj.syncActiveImageToView());
-            obj.L(4) = addlistener(obj.Project,'RegionAdded',         @(~,~) obj.refreshRegionList());
+            % obj.L(4) = addlistener(obj.Project,'RegionAdded',         @(~,~) obj.refreshRegionList());
+            obj.L(4) = addlistener(obj.Project,'RegionAdded',         @(~,~) obj.onRegionAdded());
+
             obj.L(5) = addlistener(obj.Project,'RegionRemoved',       @(~,~) obj.refreshRegionList());
             obj.L(6) = addlistener(obj.Project,'ActiveRegionChanged', @(~,~) obj.syncActiveRegionToView());
 
@@ -624,24 +629,12 @@ classdef GUI < handle
                 return
             end
 
-            % get the CData for this image
+            % set CData and CLim of ImageViewer
             obj.Ax.CData = img.CData;
             obj.Ax.CLim = img.DisplayCLim;
 
-            % clear overlays & bindings, then replay from model
-            obj.Ax.Tools.Pick.clearBoxes();
-
-            regs = img.RegionArray;
-            if ~isempty(regs)
-                for k = 1:numel(regs)
-                    r = regs(k);
-                    bs = r.BoxSize; 
-                    if ~isfinite(bs) || bs<=0
-                        bs = obj.Settings.Analysis.BoxSize;
-                    end
-                    obj.Ax.Tools.Pick.addBox(r.ID, r.Center, bs);
-                end
-            end
+            % refresh region boxes
+            obj.refreshRegionBoxes();
 
             % refresh RegionListBox
             obj.refreshRegionList();
@@ -656,6 +649,17 @@ classdef GUI < handle
 
     %% Callbacks / UI sync (Regions)
     methods (Access=private)
+
+        function onRegionAdded(obj)
+            % refresh region boxes
+            obj.refreshRegionBoxes();
+
+            % refresh region listbox
+            obj.refreshRegionList();
+
+            % sync view to active region
+            %obj.syncActiveRegionToView();
+        end
 
         function refreshRegionList(obj)
             % string array of region IDs
@@ -682,6 +686,33 @@ classdef GUI < handle
 
             % forward value to ValueChangedFcn of RegionListBox
             obj.onSelectRegion(obj.RegionListBox.Value);
+        end
+
+        function refreshRegionBoxes(obj)
+            % clear overlays
+            obj.Ax.Tools.Pick.clearBoxes();
+
+            % get the active image
+            img = obj.Project.ActiveImage;
+            % if empty, return
+            if isempty(img), return; end
+
+            % clear overlays & bindings, then replay from model
+            obj.Ax.Tools.Pick.clearBoxes();
+
+            % replay boxes from model
+            regs = img.RegionArray;
+            if ~isempty(regs)
+                for k = 1:numel(regs)
+                    r = regs(k);
+                    bs = r.BoxSize; 
+                    if ~isfinite(bs) || bs<=0
+                        bs = obj.Settings.Analysis.BoxSize;
+                    end
+                    obj.Ax.Tools.Pick.addBox(r.ID, r.Center, bs);
+                end
+            end
+
         end
 
         function onSelectRegion(obj, regionID)
@@ -950,8 +981,19 @@ classdef GUI < handle
             obj.RegionSummaryTable.Data = reg.SummaryTable;
         end
 
+        function onAutopickRegions(obj)
+            % get the ActiveImage, exit if empty
+            img = obj.Project.ActiveImage; if isempty(img), return; end
 
+            % create progress dialog
+            h = uiprogressdlg(obj.Fig,"Message",'Please wait...','Indeterminate','on');
 
+            % detect regions for the active image
+            img.detectRegions(app.config.RunConfig.fromSettings(obj.Settings));
+
+            % close the progress dialog
+            close(h);
+        end
 
     end
 
