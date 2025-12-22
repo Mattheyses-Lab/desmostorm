@@ -832,6 +832,10 @@ classdef GUI < handle
                     obj.Ax.Tools.Pick.BoxSize = obj.Settings.Analysis.BoxSize;
                 case {"PixelSizeValue","PixelSizeUnit"}
                     obj.Project.setDefaultPixelSize(obj.Settings.Analysis.getDefaultPixelSize);
+                    % re-process all existing regions to reflect new pixel size
+                    obj.processAllRegions();
+                    % refresh the region linescan plot
+                    obj.refreshRegionLinescanPlot();
             end
         end
 
