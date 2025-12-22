@@ -97,7 +97,10 @@ classdef Zoom < widgets.ImageAxesTool
                     obj.Host.setMode('Pan', ~H.Mode.Pan);
             end
 
+            % call onMove() to update limits
             obj.onMove();
+            % request Host update
+            obj.Host.updateFromTool();
         end
 
         function onScroll(obj, evt, ~)
@@ -256,6 +259,16 @@ classdef Zoom < widgets.ImageAxesTool
                 pointer = 'crosshair';
             else
                 pointer = '';
+            end
+        end
+
+        function str = getLabelString(obj)
+            % return char vector with info on zoom level
+            switch obj.Host.Mode.Zoom
+                case true
+                    str = sprintf('Zoom: %iX',obj.ZoomFactor);
+                case false
+                    str = 'Zoom: off';
             end
         end
 
