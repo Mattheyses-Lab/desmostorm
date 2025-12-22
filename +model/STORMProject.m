@@ -1,5 +1,5 @@
 classdef STORMProject < handle & matlab.mixin.CustomDisplay
-% model.STORMProject - project container for images
+%STORMProject - project container for images
 
     %% Identity/metadata
     properties
@@ -292,7 +292,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
 
 
 
-    % Friendlier Command Window / Variable Editor display
+    %% Friendlier Command Window / Variable Editor display
     methods (Access=protected)
         function groups = getPropertyGroups(obj)
             summary = struct( ...
