@@ -22,7 +22,7 @@ function out = detectRegions(I,opts)
         opts.Preprocess (1,1) logical = true
 
         % whether to show SURF detection and cluster results
-        opts.DisplayClusterOutput (1,1) logical = true
+        opts.DisplayClusterOutput (1,1) logical = false
     end
 
     %% fix input
