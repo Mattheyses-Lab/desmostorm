@@ -328,6 +328,8 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
             % obj.Colorbar.TickLabels = arrayfun(@(v) sprintf('%f',v),linspace(clim(1),clim(2),11),'UniformOutput',false);
 
             switch obj.CDataClass
+                case 'logical'
+                    labels = arrayfun(@(v) '',1:11,'UniformOutput',false);
                 case 'double'
                     labels = arrayfun(@(v) sprintf('%.2f',v),linspace(clim(1),clim(2),11),'UniformOutput',false);
                 case {'uint16','uint8'}
