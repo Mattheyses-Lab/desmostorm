@@ -8,8 +8,6 @@ classdef GUI < handle
 
         LeftPane matlab.ui.container.GridLayout
 
-        % SettingsAccordionPanel matlab.ui.container.Panel
-        % SettingsAccordionPanelGrid matlab.ui.container.GridLayout
         SettingsAccordion widgets.uiaccordion
 
         ImageListBoxPanel matlab.ui.container.Panel
@@ -81,7 +79,7 @@ classdef GUI < handle
             % need to add a more elegant way to set window size once app components are finalized
             s = utils.getScreenSize();
             s(4) = 0.45*s(3);
-            obj.Fig  = uifigure('Name','dSTORM Analyzer',...
+            obj.Fig  = uifigure('Name','DesmoSTORM',...
                 'Color',[0 0 0],...
                 'Position',s(1,:),...
                 'WindowStyle','alwaysontop',...
@@ -641,7 +639,7 @@ classdef GUI < handle
             obj.syncActiveRegionToView();
 
             % update IntensitySlider
-            obj.IntensitySlider.Limits = img.RawIntensityRange;
+            obj.IntensitySlider.Limits = img.CDataRange;
             obj.IntensitySlider.Value = img.DisplayCLim;
         end
 
@@ -910,21 +908,9 @@ classdef GUI < handle
             img = obj.Project.ActiveImage;
             if isempty(img), return; end
 
-            % % oldVal = double(obj.Ax.CLim);
-            % oldVal = double(img.DisplayCLim);
-            % 
-            % % newVal = round(obj.IntensitySlider.Value);
-            % newVal = obj.IntensitySlider.Value;
-            % 
-            % change = max(abs(oldVal-newVal));
-            %
-            % if change >= (diff(img.RawIntensityLimits)+1)/(32)
-            %     set([obj.Ax,obj.RegionViewer],'CLim',newVal);
-            % end
-
             change = max(abs(obj.Ax.CLim-obj.IntensitySlider.Value));
 
-            if change > img.RawIntensityLimits(2)*0.01
+            if change > img.CDataLimits(2)*0.01
                 set([obj.Ax,obj.RegionViewer],'CLim',obj.IntensitySlider.Value);
             end
 
@@ -1139,87 +1125,6 @@ classdef GUI < handle
             fname = fullfile(path, file);
             app.Project.exportRegionTableToXlsx(fname);
         end
-
-
-        % function onExportPeakPlots(app, ~, ~)
-        % 
-        %     app.Fig.Visible = 'off';
-        % 
-        %     defaultName = fullfile(app.Settings.IO.DefaultFolder, 'peak_plots.pdf');
-        %     [file, path] = uiputfile('*.pdf', ...
-        %         'Export peak plots', defaultName);
-        % 
-        %     app.Fig.Visible = 'on';
-        % 
-        %     if isequal(file,0)
-        %         return;  % user cancelled
-        %     end
-        % 
-        %     fname = fullfile(path, file);
-        % 
-        %     f = uifigure("WindowStyle","normal",...
-        %         "Visible","on",...
-        %         "Position",[0 0 750 500]);
-        % 
-        %     movegui(f,'center')
-        % 
-        %     g = uigridlayout(f,[1,1],...
-        %         "RowHeight",{'fit'},...
-        %         "ColumnWidth",{'fit'});
-        % 
-        %     p = widgets.PeaksPlotContainer(g,...
-        %         "RawLineWidth",app.Settings.PeaksPlot.RawLineWidth, ...
-        %         "RawLineColor",app.Settings.PeaksPlot.RawLineColor, ...
-        %         "SmoothLineWidth",app.Settings.PeaksPlot.SmoothLineWidth, ...
-        %         "SmoothLineColor",app.Settings.PeaksPlot.SmoothLineColor, ...
-        %         "BackgroundColor",app.Settings.PeaksPlot.BackgroundColor, ...
-        %         "ForegroundColor",app.Settings.PeaksPlot.ForegroundColor, ...
-        %         "XLabel",sprintf("Distance (%s)",app.Settings.Analysis.PixelSizeUnit), ...
-        %         "YLabel","Normalized Intensity");
-        % 
-        %     f.Visible = 'off';
-        % 
-        %     % create progress dialog
-        %     h = uiprogressdlg(app.Fig,"Message",'Exporting peak plots. Please wait...','Indeterminate','on');
-        % 
-        %     imgs = app.Project.ImageArray;
-        % 
-        %     if isempty(imgs)
-        %         return
-        %     end
-        % 
-        %     for i = 1:numel(imgs)
-        %         regs = imgs(i).RegionArray;
-        % 
-        %         if isempty(regs)
-        %             continue
-        %         end
-        % 
-        %         for j = 1:numel(regs)
-        % 
-        %             p.Data = regs(j).LinescanResults;
-        %             p.Title = utils.texFriendly(imgs(i).Name) + " | " + regs(j).Name;
-        % 
-        %             if i==1 && j==1 % overwrite file on first pass
-        %                 drawnow
-        %                 pause(1)
-        %                 p.export(fname,'BackgroundColor',app.Settings.PeaksPlot.BackgroundColor,'Append',false);
-        %             else % append otherwise
-        %                 p.export(fname,'BackgroundColor',app.Settings.PeaksPlot.BackgroundColor,'Append',true);
-        %             end
-        % 
-        %         end
-        % 
-        %     end
-        % 
-        %     delete(f); % delete the figure
-        % 
-        %     % close the progress dialog
-        %     close(h);
-        % 
-        % end
-
-
 
         function onExportPeakPlots(app, ~, ~)
 
