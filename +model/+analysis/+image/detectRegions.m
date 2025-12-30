@@ -1,11 +1,11 @@
-function out = detectRegions(I,opts)
+function [out,clustData] = detectRegions(I,opts)
 %DETECTREGIONS Detects regions of interest for new STORMRegion objects
 
     arguments
         % image to detect regions in
         I
         % maximum numeber of regions to detect
-        opts.MaxNumRegions (1,1) double = 50
+        opts.MaxNumRegions (1,1) double = 25
 
         % strongest feature threshold for SURF point detection | lower values -> more sensitive
         opts.MetricThreshold (1,1) double {mustBePositive(opts.MetricThreshold)} = 50
@@ -17,12 +17,10 @@ function out = detectRegions(I,opts)
 
         % size of the box representing each region (so we can make sure all regions are within image bounds)
         opts.BoxSize (1,1) double = 300
-
         % whether to preprocess input image prior to SURF detection
         opts.Preprocess (1,1) logical = true
-
         % whether to show SURF detection and cluster results
-        opts.DisplayClusterOutput (1,1) logical = false
+        opts.DisplayClusterOutput (1,1) logical = true
     end
 
     %% fix input
@@ -36,6 +34,7 @@ function out = detectRegions(I,opts)
     %% preprocess image for blob detection - TESTING
 
     if opts.Preprocess
+        %I = imlocalbrighten(I);
         I = utils.suppressHotPuncta(I);
     end
 
@@ -45,15 +44,23 @@ function out = detectRegions(I,opts)
         "NumOctaves",opts.NumOctaves,...
         "NumScaleLevels",opts.NumScaleLevels);
 
-    %% use k-means clustering to coalesce SURF point locations into regions
+    %% use DBSCAN to coalesce SURF point locations into clusters
     clustData = model.analysis.cluster.PointClusters(points,...
-        "Replicates",100,...
-        "MaxK",opts.MaxNumRegions,...
-        "MinPointsPerCluster",15,...
+        "MinPointsPerCluster",10,...
         "MaxClusterConvexHullArea",Inf,...
         "MaxEccentricity",0.98,...
-        "RefinePoints",true,...
-        "RefineClusters",true);
+        "RefinePoints",false,...
+        "Recluster",true,...
+        "RefineClusters",false);
+
+    % merge nearby clusters
+    clustData.mergeClustersByDistance(opts.BoxSize/3);
+
+    % filter by property
+    % --- nPoints
+    clustData.filterByProperty('nPoints',[6 Inf]);
+    % --- HullArea
+    clustData.filterByProperty('HullArea',[opts.BoxSize*5 Inf]);
 
     %% display intermediate cluster output if requested
 
@@ -75,6 +82,9 @@ function out = detectRegions(I,opts)
         movegui(fH,"north");
     
         fH.Visible = "on";
+
+        T = clustData.exportClusterMetrics;
+        disp(T);
 
     end
 

@@ -1,5 +1,6 @@
 function out = detectBlobs(I,opts)
 %DETECTBLOBS Detects SURF (Speeded-Up Robust Features) points in an image
+% (basically just a wrapper for detectSURFFeatures)
 
     arguments
         % image to detect blobs in
@@ -11,6 +12,8 @@ function out = detectBlobs(I,opts)
         % number of scale levels per octave to compute | integer >= 3
         % higher values -> detect more blobs at finer scale increments | recommended values between 3 and 6
         opts.NumScaleLevels (1,1) double {mustBeGreaterThanOrEqual(opts.NumScaleLevels,3)} = 3
+        % whether to show SURF detection results
+        opts.DisplayOutput (1,1) logical = true
     end
 
     %% detect blobs using SURF features (SURFPoints object)
@@ -21,5 +24,21 @@ function out = detectBlobs(I,opts)
 
     % return point locations (converted to double)
     out = double(points.Location);
+
+    %% display intermediate output if requested
+    if opts.DisplayOutput
+        fH = uifigure("WindowStyle","alwaysontop",...
+            "Position",[200 200 700 700],...
+            "Visible","off");
+        ax = widgets.ImageAxes(fH,...
+            "Units","normalized",...
+            "Position",[0 0 1 1],...
+            "CData",I,...
+            "ToolBelt",{'Zoom'},...
+            "Colormap",turbo);
+        points.plot(ax.getAxes());
+        movegui(fH,"north");
+        fH.Visible = "on";
+    end
 
 end
