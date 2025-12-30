@@ -2,64 +2,102 @@ classdef PointCluster < handle
 
     properties
         % the group of clusters to which this cluster belongs
-        Master (1,1) model.analysis.cluster.PointClusters
-
-        Points (:,2) double
+        Master (:,1) model.analysis.cluster.PointClusters = model.analysis.cluster.PointClusters.empty()
+        % index of this cluster in the master
+        Index (1,1) = NaN
+        % cluster centroid coordinates (x,y)
         Centroid (1,2) double
+        % point to centroid distances
         Distances (:,1) double
-
         % alpha shape representing convex hull of the cluster points
         Shape (:,1)
     end
 
+    properties (Access=private)
+        % private backing for Points
+        Points_ (:,2) double
+    end
+
     properties (Dependent)
+        % points comprising the cluster (has private backing Points_)
+        Points (:,2) double
+
         % number of points in the cluster
         nPoints (1,1) double
-
         % standard deviation of point to centroid distances
         DistanceSD (1,1) double
-
         % area of the convex hull
         HullArea (1,1) double
-
         % perimeter of the convex hull
         HullPerimeter (1,1) double
-
         % coordinates of the hull boundary
         Hull (:,2) double
 
-        % ---- NEW: PCA / ellipse features ----
+        % ---- PCA / ellipse features ----
         Cov2 (2,2) double              % covariance of centered points
         EigVals (1,2) double           % [lambda1 lambda2], lambda1 >= lambda2
         EigVecs (2,2) double           % eigenvectors corresponding to EigVals
         Anisotropy (1,1) double        % lambda1/lambda2
         Eccentricity (1,1) double      % sqrt(1 - lambda2/lambda1)
 
-        % ---- NEW: distance distribution ----
+        % ---- distance distribution ----
         DistTailRatio (1,1) double     % q90/q50 of point-to-centroid distances
 
-        % ---- NEW: nearest-neighbor dispersion ----
+        % ---- nearest-neighbor dispersion ----
         NearestNeighborDistances (:,1) double % per-point NND within cluster
         NNMedian (1,1) double
         NNDispersion (1,1) double      % mad(NND)/median(NND)
-
-        % ---- NEW: shape compactness ----
         Compactness (1,1) double       % 4*pi*A/P^2 (dimensionless)
 
-        % ---- NEW: density ----
+        % ---- density ----
         PointDensity (1,1) double      % nPoints / HullArea
-
     end
 
 
+    %% constructor, Set/Get for Points, updating
     methods
 
-        function obj = PointCluster(master,points,centroid,distances)
+        function obj = PointCluster(master,points,idx)
             obj.Master = master;
+            obj.Index = idx;
             obj.Points = points;
-            obj.Centroid = centroid;
-            obj.Distances = distances;
+        end
+
+        function pts = get.Points(obj)
+            pts = obj.Points_;
+        end
+
+        function set.Points(obj,pts)
+            obj.Points_ = pts;
+            obj.update();
+        end
+
+        function update(obj)
+            % calculate centroid coordinates
+            if isempty(obj.Points) % no points -> delete cluster
+                obj.delete();
+                return
+            end
+            % update centroid, distances, and shape
+            obj.updateCentroid();
+            obj.updateDistances();
+            obj.updateShape();
+        end
+
+        function updateCentroid(obj)
+            obj.Centroid = mean(obj.Points, 1); % geometric mean of point positions
+        end
+
+        function updateDistances(obj)
+            obj.Distances = sqrt(sum((obj.Points - obj.Centroid).^2, 2));
+        end
+
+        function updateShape(obj)
             obj.Shape = alphaShape(obj.Points,Inf,"HoleThreshold",1);
+        end
+
+        function setIndex(obj,idx)
+            obj.Index = idx;
         end
 
     end
@@ -226,148 +264,96 @@ classdef PointCluster < handle
     %% processing and point refinement
     methods
 
-        function updateCentroid(obj)
-            % calculate centroid coordinates
-            if isempty(obj.Points) % no points -> no centroid -> delete cluster
-                obj.delete();
-                return
-            else % calculate centroid as geometric mean of point positions
-                obj.Centroid = mean(obj.Points, 1);
-            end
-            % Update distances after centroid change
-            obj.updateDistances();
-            % Update shape after centroid change
-            obj.updateShape();
-        end
+        function removeOutliersNNDistance(obj)
+            %REMOVEOUTLIERSNNDISTANCE Remove points whose NN distance
+            % > 2.5 std deviations away from median NN distance
 
-        function updateDistances(obj)
-            obj.Distances = sqrt(sum((obj.Points - obj.Centroid).^2, 2));
-        end
-
-        function updateShape(obj)
-            obj.Shape = alphaShape(obj.Points,Inf,"HoleThreshold",1);
-        end
-
-        function removeOutliers(obj)
-            % % outlier threshold - 1.5x standard deviation
-            % threshold = obj.DistanceSD * 3;
-            % % get outlier idxs
-            % outlierIndices = obj.Distances > threshold;
-            % % Remove outliers
-            % obj.Points(outlierIndices, :) = [];
-            % % Update centroid after removal
-            % obj.updateCentroid();
-
-
-            % --- method 2: point-to-point distances
-
+            % number of points
             n = obj.nPoints;
-
             % pairwise distances (small clusters only; keep simple for now)
             D = pdist2(obj.Points, obj.Points);
             D(1:n+1:end) = NaN; % ignore self-distance
-
-            % mean point-to-point distance for each point
-            Dmean_point = mean(D,2,'omitmissing');
-
-            % mean point-to-point distance across all points
-            Dmean_cluster = mean(Dmean_point,1);
-
+            % distance to NN for each point
+            DNN = min(D, [], 2, "omitmissing");
+            % median NN distance across all points
+            DNN_med = median(DNN, "omitmissing");
             % find outlier indices
-            badIdx = Dmean_point > (Dmean_cluster + 2.5*std(Dmean_point));
-
+            badIdx = DNN > (DNN_med + 2.5*std(DNN));
             % Remove outliers
             obj.Points(badIdx, :) = [];
-            % Update centroid after removal
-            obj.updateCentroid();
-
-
-
-
         end
 
-
-        function removeIsolatedPointsNND(obj, k)
-            %REMOVEISOLATEDPOINTSNND Remove points that are locally isolated based on
-            % nearest-neighbor distance (NND) outliers.
-            %
-            % k: threshold multiplier on MAD (typical 2 to 3). Default = 2.5
+        function removeIsolatedPointsNNSupport(obj, minSupport, rFactor)
+            %REMOVEISOLATEDPOINTSNND Remove points or point groups that are locally isolated 
+            % based on the number of nearby supporting points within defined radius (DBSCAN lite)
             arguments
                 obj
-                k (1,1) double {mustBeGreaterThanOrEqual(k,2)} = 2
+                minSupport (1,1) double {mustBeGreaterThanOrEqual(minSupport,1)} = 4
+                rFactor (1,1) double {mustBeGreaterThanOrEqual(rFactor,1)} = 4
             end
 
-            % 
-            % if nargin < 2 || isempty(k)
-            %     k = 2.5;
-            % end
+            % check inputs
+            if ~isvalid(obj), return; end
 
             n = obj.nPoints;
-            if n < 3
-                return
-            end
+            if n < 3, return; end
 
-            % Pairwise distances
-            dnn = obj.NearestNeighborDistances;
-
-
-            % --- method 1 ---
-            % % Robust threshold: median + k*MAD
-            % d0 = median(dnn, 'omitnan');
-            % s  = mad(dnn, 1);                   % median absolute deviation (robust)
-            % thr = d0 + k*s;
-            % 
-            % % Remove isolated points
-            % badIdx = dnn > thr;
-            % obj.Points(badIdx,:) = [];
-            % obj.updateCentroid();
-            % 
-            % % run again until we stop removing points
-            % if numel(find(badIdx)) > 0
-            %     obj.removeIsolatedPointsNND(k);
-            % end
-
-
-
-            % --- method 2 ---
-
-            minSupport = 4;
-            rFactor = 4;
-
-
+            % all point-to-point distances
             D = pdist2(obj.Points, obj.Points);
-            D(1:n+1:end) = inf;
-        
-            % Use typical within-plaque spacing: median 1-NN distance
-            d1 = min(D, [], 2);
-            r  = rFactor * median(d1, 'omitnan');
-        
-            % Neighbor support count within radius r
+            D(1:n+1:end) = NaN;
+            % distance to NN for each point
+            d1 = min(D, [], 2, "omitmissing");
+            % multiply by rFactor to define support radius, r
+            r  = rFactor * median(d1, "omitmissing");
+            % count neighbor supporting points within radius
             support = sum(D <= r, 2);
-        
+            % idxs to points with too few neighbors
             badIdx = support < minSupport;
+            % delete bad points
             obj.Points(badIdx,:) = [];
-            obj.updateCentroid();
-
         end
 
+        function removeOutliersDBSCAN(obj)
+            % points to cluster
+            pts = obj.Points;
+            % number of points
+            n = obj.nPoints;
+            if n < 3, return; end
 
 
+            fprintf('DBSCAN (cluster %i)\n',obj.Index);
+            fprintf('Number of points: %i\n',obj.nPoints);
 
+            % minimum neighbor points
+            minPts = 3;
 
+            % all point-to-point distances
+            D = pdist2(pts, pts);
+            
+            % find optimal epsilon value
+            epsilon = model.analysis.cluster.chooseDbscanEpsilonKnee(pts,minPts,"SmoothFrac",0.01);
+            fprintf('Optimal epsilon: %f\n',epsilon);
 
+            % cluster with DBSCAN (Density-based spatial clustering of applications with noise)
+            clusterIdxs = dbscan(D,epsilon,5,"Distance","precomputed");
+            % number of noise points rejected (outliers)
+            nOutliers = numel(find(clusterIdxs==-1));
+            % remove outliers
+            obj.Points(clusterIdxs==-1,:) = [];
+
+            fprintf('Removed %i outliers\n',nOutliers);
+        end
 
     end
 
-
+    %% teardown
     methods
-
         function delete(obj)
+            % create event data payload to carry cluster index
+            evt = model.analysis.cluster.ClusterDeletedEvent(obj.Index);
             % notify master we deleted a cluster
-            notify(obj.Master,'ClusterDeleted');
+            notify(obj.Master,'ClusterDeleted',evt);
         end
-
     end
-
 
 end
