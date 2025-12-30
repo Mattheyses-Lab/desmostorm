@@ -2,10 +2,8 @@ classdef PointClusters < handle
 
     % input data
     properties
-
         % (X,Y) coordinates
         OriginalPoints (:,2) double
-
     end
 
     properties (Dependent)
@@ -14,16 +12,12 @@ classdef PointClusters < handle
 
     % clustering input
     properties
-        K (:,1) double
-        MaxK (:,1) double
-        KSelectionMode (1,:) char {mustBeMember(KSelectionMode,{'auto','manual'})} = 'auto'
-        Replicates (1,1) double
-
         % whether to refine the points included in each cluster
-        RefinePoints (1,1) logical = true
-
-        % whether to refine the clusters
-        RefineClusters (1,1) logical = true
+        RefinePoints (1,1) logical = false
+        % whether to recluster after refining points
+        Recluster (1,1) logical = true
+        % whether to refine the clusters after reclustering
+        RefineClusters (1,1) logical = false
 
         MinPointsPerCluster (1,1) = 3
         MaxClusterConvexHullArea (1,1) = Inf
@@ -34,7 +28,7 @@ classdef PointClusters < handle
     %% clustering output
     properties
         % Clusters (:,1) PointCluster = PointCluster.empty()
-        Clusters (:,1)
+        Clusters (:,1) model.analysis.cluster.PointCluster = model.analysis.cluster.PointCluster.empty()
     end
 
     properties (Dependent)
@@ -60,12 +54,10 @@ classdef PointClusters < handle
         function obj = PointClusters(coords,opts)
             arguments
                 coords (:,2) = []
-                opts.K (:,1) double {mustBeGreaterThanOrEqual(opts.K,1)} = []
-                opts.MaxK (:,1) double = []
-                opts.Replicates (1,1) double = 100
 
-                opts.RefinePoints (1,1) logical = true
-                opts.RefineClusters (1,1) logical = true
+                opts.RefinePoints (1,1) logical = false
+                opts.Recluster (1,1) logical = true
+                opts.RefineClusters (1,1) logical = false
                 opts.MinPointsPerCluster (1,1) double = 3
                 opts.MaxClusterConvexHullArea (1,1) double = 100
                 opts.MaxEccentricity (1,1) double = 1
@@ -76,34 +68,25 @@ classdef PointClusters < handle
             end
 
             obj.OriginalPoints = coords;
-            obj.Replicates = opts.Replicates;
             obj.RefinePoints = opts.RefinePoints;
+            obj.Recluster = opts.Recluster;
             obj.RefineClusters = opts.RefineClusters;
             obj.MinPointsPerCluster = opts.MinPointsPerCluster;
             obj.MaxClusterConvexHullArea = opts.MaxClusterConvexHullArea;
             obj.MaxEccentricity = opts.MaxEccentricity;
 
 
-            if isempty(opts.MaxK)
-                obj.MaxK = size(coords, 1); % Initialize MaxK to the number of points
-            else
-                obj.MaxK = min(opts.MaxK,size(coords, 1));
-            end
-
-            if isempty(opts.K)
-                obj.KSelectionMode = 'auto';
-            else
-                obj.KSelectionMode = 'manual';
-                obj.K = opts.K;
-            end
-
-            obj.L = addlistener(obj,'ClusterDeleted',@(~,~) obj.onClusterDeleted());
+            obj.L = addlistener(obj,'ClusterDeleted',@(~,evt) obj.onClusterDeleted(evt));
 
 
             obj.process();
 
             if obj.RefinePoints
                 obj.refinePoints();
+            end
+
+            if obj.Recluster
+                obj.recluster();
             end
 
             if obj.RefineClusters
@@ -122,96 +105,61 @@ classdef PointClusters < handle
     methods
 
         function process(obj)
+            fprintf('Building initial clusters...\n')
+            % cluster points with DBSCAN
+            obj.buildClusters(obj.OriginalPoints);
+        end
 
-            % get auto K value if needed
-            if isempty(obj.K)
-                obj.K = obj.findOptimalK();
+        function buildClusters(obj,pts,minPts)
+            arguments
+                obj (1,1) model.analysis.cluster.PointClusters
+                % points to cluster
+                pts (:,2) double
+                % minimum number of neighbors required to form a core point in DBSCAN
+                minPts (1,1) double {mustBeGreaterThanOrEqual(minPts,3)} = 5
             end
 
-            % Perform k-means clustering with the determined K
-            [clusterIdxs, centroids, sums, distances] = ...
-                kmeans(obj.OriginalPoints,obj.K,'Replicates',obj.Replicates,'Distance','sqeuclidean');
-
+            % number of points
+            n = size(pts,1);
+            % adjust minPts if needed
+            minPts = max(minPts,3);
+            % all point-to-point distances
+            D = pdist2(pts, pts);
+            % find optimal epsilon value
+            epsilon = model.analysis.cluster.chooseDbscanEpsilonKnee(pts,minPts,"SmoothFrac",0.01);
+            fprintf('DBSCAN: Optimal epsilon: %f\n',epsilon);
+            % cluster with DBSCAN (Density-based spatial clustering of applications with noise)
+            clusterIdxs = dbscan(D,epsilon,5,"Distance","precomputed");
+            % number of clusters
+            N = max(clusterIdxs);
+            % number of noise points rejected (outliers)
+            nOutliers = numel(find(clusterIdxs==-1));
+            fprintf('DBSCAN: %i points grouped into %i clusters (%i outliers rejected)\n',n,N,nOutliers);
             % create a PointCluster object to hold the data for each cluster
             obj.Clusters = arrayfun(@(i) ...
                 model.analysis.cluster.PointCluster(...
                     obj,...
-                    obj.OriginalPoints(clusterIdxs==i, :),...
-                    centroids(i,:),...
-                    distances(clusterIdxs==i,i)),...
-                1:obj.K, 'UniformOutput', true);
-
+                    pts(clusterIdxs==i, :),...
+                    i),...
+                    1:N, 'UniformOutput', true);
         end
-
-
-
-        function k = findOptimalK(obj,opts)
-            arguments
-                obj (1,1) model.analysis.cluster.PointClusters
-                opts.DisplayEvaluation (1,1) logical = false
-            end
-
-            % ClusterIdx = zeros(obj.nPoints,obj.MaxK);
-            ClusterIdx = zeros(size(obj.OriginalPoints,1),obj.MaxK);
-
-            pts = obj.OriginalPoints;
-            nReplicates = obj.Replicates;
-
-            % set up for parallel computing
-            rng(1); % For reproducibility
-            stream = RandStream('mlfg6331_64'); % Random number stream
-            options = statset('UseParallel',1,'UseSubstreams',1,'Streams',stream);
-
-            for k=1:obj.MaxK
-                % run kmeans clustering with k clusters
-                [idx,~,~,~] = kmeans(pts,k,...
-                    'replicate',nReplicates,...
-                    'Distance','sqeuclidean',...
-                    'Options',options);
-        
-                % save the cluster indices for the current number of clusters
-                ClusterIdx(:,k) = idx;
-            end
-
-            % evaluate clusters using the silhouette criterion
-            ClusterEvalObj = evalclusters(obj.OriginalPoints,ClusterIdx,'silhouette','Distance','sqeuclidean');
-            k = ClusterEvalObj.OptimalK;
-
-            fprintf("Optimal K: %i\n",k);
-
-            if opts.DisplayEvaluation
-                f = uifigure(...
-                    'Name','Cluster evaluation',...
-                    'HandleVisibility','on',...
-                    'WindowStyle','alwaysontop',...
-                    'Visible','off');
-                ax = uiaxes(f,...
-                    "Units","normalized",...
-                    "OuterPosition",[0 0 1 1]);
-                plot(ax,ClusterEvalObj);
-                movegui(f,"center");
-                f.Visible = 'On';
-            end
-
-        end
-
 
         function refinePoints(obj)
 
-            % % --- remove outlier points in each cluster ---
-            % % call removeOutliers on each cluster
-            % arrayfun(@(C) C.removeOutliers(),obj.Clusters);
+            fprintf('Refining points in each cluster...\n')
+
+            % --- remove outliers based on NN distance ---
+            %arrayfun(@(C) C.removeOutliersNNDistance(),obj.Clusters);
 
             % --- remove isolated points in each cluster ---
-            % call removeIsolatedPointsNND on each cluster
-            arrayfun(@(C) C.removeIsolatedPointsNND(),obj.Clusters);
+            %arrayfun(@(C) C.removeIsolatedPointsNNSupport(),obj.Clusters);
 
-            % --- remove outlier points in each cluster ---
-            % call removeOutliers on each cluster
-            %arrayfun(@(C) C.removeOutliers(),obj.Clusters);
+            % --- remove outliers by running DBSCAN on each cluster ---
+            arrayfun(@(C) C.removeOutliersDBSCAN(),obj.Clusters);
 
-            
-            
+            % reset cluster idxs
+            obj.resetNumbering();
+
         end
 
 
@@ -223,6 +171,8 @@ classdef PointClusters < handle
             badIdx = find([obj.Clusters(:).nPoints]<obj.MinPointsPerCluster);
             % delete bad clusters
             obj.deleteClustersByIdx(badIdx);
+            % output results
+            if any(badIdx), fprintf('Deleted %i clusters: # points < MinPointsPerCluster\n',numel(find(badIdx))); end
 
             % --- remove clusters above hull area threshold ---
             % % idxs to bad clusters
@@ -235,17 +185,94 @@ classdef PointClusters < handle
             badIdx = find([obj.Clusters(:).Eccentricity]>obj.MaxEccentricity);
             % delete bad clusters
             obj.deleteClustersByIdx(badIdx);
-
+            % output results
+            if any(badIdx), fprintf('Deleted %i clusters: Eccentricity < MaxEccentricity\n',numel(find(badIdx))); end
 
             % --- remove clusters below point density threshold ---
             % idxs to bad clusters
             badIdx = find([obj.Clusters(:).PointDensity]<obj.MinPointDensity);
             % delete bad clusters
             obj.deleteClustersByIdx(badIdx);
-
+            % output results
+            if any(badIdx), fprintf('Deleted %i clusters: PointDensity < MinPointDensity\n',numel(find(badIdx))); end
 
         end
 
+
+
+        function recluster(obj)
+            fprintf('Reclustering...\n')
+            % get points
+            pts = obj.Points;
+            % randomly shuffle the points
+            pts = pts(randperm(size(pts,1)),:);
+            % build new clusters
+            obj.buildClusters(pts);
+        end
+
+
+        function mergeClustersByDistance(obj,dist)
+
+            fprintf('Merging clusters with spacing < %d px\n',dist)
+
+            Nclose = 1;
+
+            while Nclose > 0
+                % number of clusters
+                N = obj.nClusters;
+                % centroids for each
+                centroids = obj.Centroids(1:N,:);
+                % all centroid to centroid distances
+                D = pdist2(centroids, centroids);
+                % ignore self-distance
+                D(1:N+1:end) = NaN;
+                % find all less than dist
+                idx = find(D<dist);
+                if isempty(idx)
+                    break
+                end
+                % get the idx to the closest distance
+                [~,minIdx] = min(D(idx));
+                % get actual cluster idxs to merge (subarray idx of D)
+                [r,c] = ind2sub([N N],idx(minIdx));
+                % merge them
+                obj.mergeClustersByIdx([r,c])
+                % number of clusters that are too close (minus the one we just merged)
+                Nclose = numel(idx);
+            end
+
+        end
+
+    end
+
+    %% cluster filtering
+
+    methods
+
+        function filterByProperty(obj,prop,thresh)
+            %FILTERBYPROPERTY remove any clusters for which the value of property, prop, falls outside the range, thresh
+            arguments
+                obj (1,1) model.analysis.cluster.PointClusters
+                % name of property to filter on
+                prop (1,:) char {ismember(prop,{'Eccentricity','nPoints','PointDensity','HullArea'})}
+                % minimum number of neighbors required to form a core point in DBSCAN
+                thresh (1,2) double = [-Inf Inf]
+            end
+
+            % get all vals for each cluster
+            vals = [obj.Clusters(:).(prop)];
+            % idxs to bad clusters (outside thresh range)
+            badIdx = find(vals<thresh(1) | vals>thresh(2));
+            % delete bad clusters
+            obj.deleteClustersByIdx(badIdx);
+            % output results
+            if any(badIdx)
+                fprintf('Deleted %i clusters: %s outside range [%d %d]\n',numel(find(badIdx)),prop,thresh(1),thresh(2));
+            end
+
+            % reset cluster idxs
+            obj.resetNumbering();
+        end
 
 
 
@@ -260,6 +287,27 @@ classdef PointClusters < handle
         function deleteClustersByIdx(obj,idx)
             % delete the cluster(s) specified by indices idx
             delete(obj.Clusters(idx));
+        end
+
+
+        function mergeClustersByIdx(obj,idx)
+            if numel(idx) <= 1
+                return
+            end
+            % sort in ascending order
+            idx = sort(idx);
+            % add points of all clusters to first cluster
+            obj.Clusters(idx(1)).Points = vertcat(obj.Clusters(idx).Points);
+            % delete other clusters
+            delete(obj.Clusters(idx(2:end)))
+
+            % reset cluster idxs
+            obj.resetNumbering();
+        end
+
+        function resetNumbering(obj)
+            fprintf('Resetting cluster numbering...\n')
+            arrayfun(@(i) obj.Clusters(i).setIndex(i),1:obj.nClusters);
         end
 
 
@@ -329,7 +377,11 @@ classdef PointClusters < handle
     %% callbacks
     methods
 
-        function onClusterDeleted(obj)
+        function onClusterDeleted(obj,evt)
+            fprintf('Deleted cluster %i\n',evt.Index);
+            if isempty(obj.Clusters)
+                return
+            end
             % remove invalid handles
             obj.Clusters = obj.Clusters(isvalid(obj.Clusters));
         end
@@ -383,13 +435,6 @@ classdef PointClusters < handle
                     "Marker","o",...
                     "MarkerEdgeColor",[1 1 1],...
                     "MarkerSize",3);
-
-                % % plot the centroid for cluster i
-                % plot(ax,obj.Clusters(i).Centroid(1),obj.Clusters(i).Centroid(2),...
-                %     'MarkerSize',15,...
-                %     'LineWidth',3,...
-                %     'Marker','+',...
-                %     'MarkerEdgeColor',[0 0 0]);
 
                 text("Parent",ax,...
                     "Position",obj.Clusters(i).Centroid,...
