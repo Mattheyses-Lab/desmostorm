@@ -1,29 +1,19 @@
 classdef STORMImage < handle & matlab.mixin.CustomDisplay
 %STORMImage Stores image data, stores and manages regions
 
-    %% Identity/ownership
+    %% Identity/ownership/meta
     properties
-        ID (1,1) string
+        ID (1,1) string = utils.uniqueID()
         Parent (:,1) model.STORMProject
-    end
-
-    %% Metadata
-    properties
         Name (1,1) string = ""
         SourcePath (1,1) string = ""
         FileType (1,1) string = ""    % 'tif','png',...
         CreatedAt datetime = datetime('now')
         PixelSizeOverride model.units.PixelSize = model.units.PixelSize.empty
-
-        RawIntensityRange (1,2) = [NaN NaN]
-        RawIntensityClass (1,:) char = ''
-        RawIntensityLimits (1,2) = [NaN NaN]
     end
 
     properties (Dependent=true)
         PixelSize model.units.PixelSize
-        Height (1,1) double
-        Width (1,1) double
     end
 
     %% Regions (dictionary + order) and active selection
@@ -39,7 +29,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
     end
 
     properties (Dependent, GetAccess=public, SetAccess=private)
-        SelfIdx % index in Parent's order
+        % SelfIdx % index in Parent's order
         RegionArray % [1×M model.STORMRegion] in RegionOrder
         ActiveRegion  % model.STORMRegion or []
     end
@@ -53,9 +43,9 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
     properties
         CData = []                     % numeric image array
         CLim (1,2) double
-        % RawIntensityRange (1,2) = [NaN NaN]
-        % RawIntensityClass (1,:) char
-        % RawIntensityLimits (1,2)
+        CDataRange (1,2) = [NaN NaN]
+        CDataClass (1,:) char = ''
+        CDataLimits (1,2) = [NaN NaN]
     end
 
     properties (Access = private)
@@ -64,17 +54,18 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
 
     properties (Dependent)
         DisplayCLim
+        Height (1,1) double
+        Width (1,1) double
     end
 
-
-    %% (Optional) events for UI sync
+    %% Events for UI sync
     events
         RegionAdded
         RegionRemoved
         ActiveRegionChanged
     end
 
-    %% 
+    %% Constructor
     methods
 
         function obj = STORMImage(parent, name, sourcePath, cdata)
@@ -100,26 +91,16 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
             obj.RegionOrder = string.empty(1,0);
 
             if isempty(obj.CData)
-                obj.RawIntensityRange = [NaN NaN];
-                obj.RawIntensityClass = '';
-                obj.RawIntensityLimits = [NaN NaN];
+                obj.CDataRange = [NaN NaN];
+                obj.CDataClass = '';
+                obj.CDataLimits = [NaN NaN];
             else
-                obj.RawIntensityRange = [min(min(obj.CData)) max(max(obj.CData))]; % actual value range of intensity values
-                obj.RawIntensityClass = class(obj.CData); % data type of intensity image
-                obj.RawIntensityLimits = getrangefromclass(obj.CData); % full range of possible intensity values, given its class
+                obj.CDataRange = [min(min(obj.CData)) max(max(obj.CData))]; % actual value range of intensity values
+                obj.CDataClass = class(obj.CData); % data type of intensity image
+                obj.CDataLimits = getrangefromclass(obj.CData); % full range of possible intensity values, given its class
             end
 
 
-        end
-
-        function i = get.SelfIdx(obj)
-            i = [];
-            P = obj.Parent;
-            if isempty(P) || ~isvalid(P), return; end
-            ord = P.ImageOrder;
-            if isempty(ord), return; end
-            idx = find(ord == obj.ID, 1, 'first');
-            if ~isempty(idx), i = idx; end
         end
 
     end
@@ -167,13 +148,9 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
             end
         end
 
-
-
-
         function removeRegion(obj, regionID)
             regionID = string(regionID);
             if isKey(obj.RegionsDict, regionID)
-
                 % Clear active if removing it
                 if obj.ActiveRegionID == regionID
                     obj.ActiveRegionID = "";
@@ -198,8 +175,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
 
         function setActiveRegion(obj, regionID)
             regionID = string(regionID);
-
-            % prevent unnecessary updates, return if region is already active
+            % return if region is already active
             if regionID == obj.ActiveRegionID, return; end
 
             if strlength(regionID)==0
@@ -267,9 +243,23 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
             reg.resetLinescan();
         end
 
+        function I = regionSubimage(obj,reg)
+            if isempty(reg), I = []; return; end
+            % region box size and center coordinates
+            s = reg.BoxSize; XY = reg.Center;
+            % preallocate array of zeros, type matched to raw intensity class
+            I = zeros(s,obj.CDataClass);
+            % columns
+            c1 = ceil(XY(1)-s/2); c2 = floor(XY(1) + s/2);
+            % rows
+            r1 = ceil(XY(2)-s/2); r2 = floor(XY(2) + s/2);
+            % extract region roi
+            I(:,:) = obj.CData(r1:r2,c1:c2);
+        end
+
     end
 
-    % image-level processing
+    % Image-level processing
     methods
 
         function detectRegions(obj,config)
@@ -348,7 +338,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
         function clim = get.DisplayCLim(obj)
             % If user has never set it, fall back to raw range:
             if any(isnan(obj.DisplayCLim_))
-                clim = obj.RawIntensityRange;
+                clim = obj.CDataRange;
             else
                 clim = obj.DisplayCLim_;
             end
@@ -362,8 +352,8 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
 
             % optional: clamp & sort
             clim = sort(clim);
-            clim(1) = max(clim(1), obj.RawIntensityRange(1));
-            clim(2) = min(clim(2), obj.RawIntensityRange(2));
+            clim(1) = max(clim(1), obj.CDataRange(1));
+            clim(2) = min(clim(2), obj.CDataRange(2));
 
             obj.DisplayCLim_ = clim;
         end
@@ -382,27 +372,6 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
             else
                 val = size(obj.CData,2);
             end
-        end
-
-    end
-
-    %% Region processing
-
-    methods
-
-        function I = regionSubimage(obj,reg)
-            if isempty(reg), I = []; return; end
-
-            % region box size and center coordinates
-            s = reg.BoxSize; XY = reg.Center;
-            % preallocate array of zeros, type matched to raw intensity class
-            I = zeros(s,obj.RawIntensityClass);
-            % columns
-            c1 = ceil(XY(1)-s/2); c2 = floor(XY(1) + s/2);
-            % rows
-            r1 = ceil(XY(2)-s/2); r2 = floor(XY(2) + s/2);
-            % extract region roi
-            I(:,:) = obj.CData(r1:r2,c1:c2);
         end
 
     end
@@ -427,7 +396,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
     methods
 
         function str = ImageInfoDisplayString(obj)
-            str = sprintf('%s (%ix%i %s)',char(obj.Name),obj.Height,obj.Width,obj.RawIntensityClass);
+            str = sprintf('%s (%ix%i %s)',char(obj.Name),obj.Height,obj.Width,obj.CDataClass);
         end
 
     end

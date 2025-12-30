@@ -1,14 +1,15 @@
 classdef STORMRegion < handle
 %STORMRegion Geometry and per-region results
 
-    %% ID/metadata
+    %% ID/ownership/meta
     properties
         ID (1,1) string
-        % ParentImageID (1,1) string
         Parent (1,1) model.STORMImage
         Name (1,1) string = ""
+        CreatedAt datetime = datetime('now')
     end
 
+    % props derived from parent
     properties (Dependent=true)
         PixelSize (1,1) model.units.PixelSize
     end
@@ -18,28 +19,20 @@ classdef STORMRegion < handle
         % Geometry in image pixel center coords (x right, y down)
         Center (1,2) double = [NaN NaN]
         BoxSize (1,1) double = NaN
-        % Linescan input parameters
+        % Linescan ROI properties
         Linescan struct = struct(...
             'CenterX',NaN,...           % rectangle center in pixel edge coordinates
             'CenterY',NaN,...
             'Width',NaN,...             % width of the rectangle (px)
             'Height',NaN,...            % height of the rectangle (px)
             'RotationAngle',NaN)        % CCW rotation angle of the rectangle (deg)
+        % Linescan measurement results
+        LinescanResults (:,1) model.analysis.PeaksData = model.analysis.PeaksData.empty()
     end
 
     %% Outputs
     properties(Dependent)
-        PlaqueToPlaqueDistance (1,1) double
-        PlaqueLength (1,1) double
-        Orientation (1,1) double
         SummaryTable (:,:) table
-        LinescanPhys struct
-        LinescanResultsPhys struct
-    end
-
-    %% Outputs (development)
-    properties
-        LinescanResults (:,1) model.analysis.PeaksData = model.analysis.PeaksData.empty()
     end
 
     %% Lifecycle
@@ -64,11 +57,7 @@ classdef STORMRegion < handle
 
         function updateLinescan(obj,data)
             % Update the region linescan properties with the values in data
-            obj.Linescan.CenterX = data.CenterX;
-            obj.Linescan.CenterY = data.CenterY;
-            obj.Linescan.Width = data.Width;
-            obj.Linescan.Height = data.Height;
-            obj.Linescan.RotationAngle = data.RotationAngle;
+            obj.Linescan = data;
         end
 
         function updateLinescanResults(obj,data)
@@ -119,17 +108,6 @@ classdef STORMRegion < handle
 
     methods
 
-        function out = get.LinescanPhys(obj)
-            out = obj.Linescan;
-            % Convert length measurements according to pixel size
-            out.Width = obj.px2phys(out.Width);
-            out.Height = obj.px2phys(out.Height);
-        end
-
-        function out = get.LinescanResultsPhys(obj)
-            out = obj.LinescanResults.OutputScaled;
-        end
-
         function T = get.SummaryTable(obj)
             % get summary table for use in app uitable
             % variable names to act as row names when the table is rotated
@@ -174,45 +152,23 @@ classdef STORMRegion < handle
             T = utils.rotateTable(T,'ColumnNames',{'Values'});
         end
 
-        function val = get.PlaqueToPlaqueDistance(obj)
-            val = obj.LinescanResults.PeakDistance;
-        end
-
-        function val = get.PlaqueLength(obj)
-            val = obj.Linescan.Width;
-        end
-
-        function val = get.Orientation(obj)
-            val = obj.Linescan.RotationAngle;
-        end
-
         function ps = get.PixelSize(obj)
             ps = obj.Parent.PixelSize;
         end
 
     end
 
-
-
     methods
 
         % format summary table into monospaced line-based string
         function out = TextSummaryTable(obj)
-
             T = obj.SummaryTable;
-
             names = T.Properties.RowNames;
             vals = T.Values;
-
             out = utils.formatKeyValueText(names,vals);
-
         end
 
-
-
     end
-
-
 
     %% Export data
     methods
@@ -292,28 +248,6 @@ classdef STORMRegion < handle
                 'Width',NaN,...             % width of the rectangle (px)
                 'Height',NaN,...            % height of the rectangle (px)
                 'RotationAngle',NaN);       % CCW rotation angle of the rectangle (deg)
-        end
-
-        function T = LinescanResultsTemplate()
-            % Linescan output parameters
-            T = struct(...
-                'Dist',NaN,...
-                'Profile',NaN,...
-                'ProfileNorm',NaN,...
-                'ProfileSmooth',NaN,...
-                'PeakX1',NaN,...
-                'PeakY1',NaN,...
-                'PeakX2',NaN,...
-                'PeakY2',NaN,...
-                'PeakDistance',NaN,...
-                'PeakWidth1',NaN,...
-                'PeakWidth2',NaN,...
-                'PeakWidthxL1',NaN,...
-                'PeakWidthxR1',NaN,...
-                'PeakWidthxL2',NaN,...
-                'PeakWidthxR2',NaN,...
-                'BorderLineXY',NaN,...
-                'Valid',false);
         end
 
     end

@@ -1,12 +1,13 @@
 classdef STORMProject < handle & matlab.mixin.CustomDisplay
-%STORMProject - project container for images
+%STORMProject Stores project metadata, stores and manages images
 
     %% Identity/metadata
     properties
-        ID (1,1) string = model.STORMProject.newID()
-        Name (1,1) string = "Untitled Project"
+        ID (1,1) string = utils.uniqueID()
+        Name (1,1) string = "Untitled"
         CreatedAt datetime = datetime('now')
         SchemaVersion (1,1) double = 1
+        Version (1,1) string = app.Info.Version
     end
 
     %% Images (dictionary + order) and active selection
@@ -37,25 +38,23 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
         DefaultPixelSize model.units.PixelSize = model.units.PixelSize(1, 'px');
     end
 
-
     %% Events 
 
-    % (App listens)
+    % (GUI controller listens)
     events
         ImageAdded
         ImageRemoved
         ActiveImageChanged
     end
 
-    % (Project and App listen)
+    % (Project and GUI controller listen)
     events
         RegionAdded
         RegionRemoved
         ActiveRegionChanged
     end
 
-
-    %% Dependent getters
+    %% Dependent getters 
     methods
 
         function arr = get.ImageArray(obj)
@@ -85,7 +84,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
 
     end
 
-    %% Constructor, image management
+    %% Constructor
     methods
 
         function obj = STORMProject(name)
@@ -100,6 +99,11 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             % add a listener for the ActiveImageChanged event
             obj.ActiveImageListener = addlistener(obj,'ActiveImageChanged',@(~,~) obj.onActiveImageChanged());
         end
+
+    end
+
+    %% Image management
+    methods
 
         % add a new model.STORMImage for the image data located at filePath
         function imageID = addImageFromPath(obj, filePath)
@@ -171,6 +175,19 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             else, im = []; end
         end
 
+        function n = numImages(obj)
+            n = numEntries(obj.ImagesDict);
+        end
+
+        function IDs = imageIDs(obj)
+            IDs = keys(obj.ImagesDict);
+        end
+
+    end
+
+    %% Region management
+    methods
+
         function removeAllRegions(obj)
             arr = obj.ImageArray;
 
@@ -179,14 +196,6 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             for i = 1:numel(arr)
                 arr(i).removeAllRegions();
             end
-        end
-
-        function n = numImages(obj)
-            n = numEntries(obj.ImagesDict);
-        end
-
-        function IDs = imageIDs(obj)
-            IDs = keys(obj.ImagesDict);
         end
 
     end
@@ -287,10 +296,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             writetable(T, filename, 'WriteMode', 'replacefile', 'WriteVariableNames', true);
         end
 
-
     end
-
-
 
     %% Friendlier Command Window / Variable Editor display
     methods (Access=protected)
@@ -303,12 +309,6 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
                 'ImageOrder', obj.ImageOrder, ...
                 'ImageArray', obj.ImageArray);   % editor-friendly
             groups = matlab.mixin.util.PropertyGroup(summary, 'STORMProject');
-        end
-    end
-
-    methods (Static)
-        function ID = newID()
-            ID = string(char(java.util.UUID.randomUUID()));
         end
     end
 
