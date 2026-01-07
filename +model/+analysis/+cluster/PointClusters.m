@@ -169,10 +169,10 @@ classdef PointClusters < handle
             % --- remove clusters with too few points ---
             % idxs to bad clusters
             badIdx = find([obj.Clusters(:).nPoints]<obj.MinPointsPerCluster);
+            % output results
+            if any(badIdx), fprintf('Deleting %i clusters: # points < MinPointsPerCluster...\n',numel(find(badIdx))); end
             % delete bad clusters
             obj.deleteClustersByIdx(badIdx);
-            % output results
-            if any(badIdx), fprintf('Deleted %i clusters: # points < MinPointsPerCluster\n',numel(find(badIdx))); end
 
             % --- remove clusters above hull area threshold ---
             % % idxs to bad clusters
@@ -183,18 +183,20 @@ classdef PointClusters < handle
             % --- remove clusters above eccentricity threshold ---
             % idxs to bad clusters
             badIdx = find([obj.Clusters(:).Eccentricity]>obj.MaxEccentricity);
+            % output results
+            if any(badIdx), fprintf('Deleting %i clusters: Eccentricity < MaxEccentricity...\n',numel(find(badIdx))); end            
             % delete bad clusters
             obj.deleteClustersByIdx(badIdx);
-            % output results
-            if any(badIdx), fprintf('Deleted %i clusters: Eccentricity < MaxEccentricity\n',numel(find(badIdx))); end
+
 
             % --- remove clusters below point density threshold ---
             % idxs to bad clusters
             badIdx = find([obj.Clusters(:).PointDensity]<obj.MinPointDensity);
+            % output results
+            if any(badIdx), fprintf('Deleting %i clusters: PointDensity < MinPointDensity...\n',numel(find(badIdx))); end            
             % delete bad clusters
             obj.deleteClustersByIdx(badIdx);
-            % output results
-            if any(badIdx), fprintf('Deleted %i clusters: PointDensity < MinPointDensity\n',numel(find(badIdx))); end
+
 
         end
 
@@ -213,7 +215,7 @@ classdef PointClusters < handle
 
         function mergeClustersByDistance(obj,dist)
 
-            fprintf('Merging clusters with spacing < %d px\n',dist)
+            fprintf('Merging clusters with spacing < %d px...\n',dist)
 
             Nclose = 1;
 
@@ -263,13 +265,12 @@ classdef PointClusters < handle
             vals = [obj.Clusters(:).(prop)];
             % idxs to bad clusters (outside thresh range)
             badIdx = find(vals<thresh(1) | vals>thresh(2));
+            % output status
+            if any(badIdx)
+                fprintf('Deleting %i clusters: %s outside range [%d %d]...\n',numel(find(badIdx)),prop,thresh(1),thresh(2));
+            end
             % delete bad clusters
             obj.deleteClustersByIdx(badIdx);
-            % output results
-            if any(badIdx)
-                fprintf('Deleted %i clusters: %s outside range [%d %d]\n',numel(find(badIdx)),prop,thresh(1),thresh(2));
-            end
-
             % reset cluster idxs
             obj.resetNumbering();
         end
