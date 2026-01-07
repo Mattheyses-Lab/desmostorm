@@ -5,12 +5,14 @@ classdef Display < handle
     properties (Access=private)
         ColormapName_     string = "turbo"    % selection name
         ColormapCategory_ string = "MATLAB"   % selection category
+        AutoScaleDisplayIntensity_ logical = false     % whether to automatically set display limits
     end
 
     properties (Dependent)
         Colormap          % Nx3 double (loaded on demand)
         ColormapName
         ColormapCategory
+        AutoScaleDisplayIntensity
     end
 
     events
@@ -28,6 +30,9 @@ classdef Display < handle
 
         function s = get.ColormapName(this),     s = this.ColormapName_;     end
         function s = get.ColormapCategory(this), s = this.ColormapCategory_; end
+
+        function s = get.AutoScaleDisplayIntensity(this),   s = this.AutoScaleDisplayIntensity_; end
+
 
         % ---------- Setters ----------
         function setColormap(this, name, category)
@@ -47,6 +52,14 @@ classdef Display < handle
             this.ColormapCategory_ = category;
 
             ev = app.config.ChangeEvent("Display","Colormap",[],[]);
+            notify(this,'DisplayChanged',ev);
+            notify(this,'Changed',ev);
+        end
+
+        function set.AutoScaleDisplayIntensity(this, v)
+            old = this.AutoScaleDisplayIntensity_;
+            this.AutoScaleDisplayIntensity_ = v;
+            ev = app.config.ChangeEvent("Display","AutoScaleDisplayIntensity",old,v);
             notify(this,'DisplayChanged',ev);
             notify(this,'Changed',ev);
         end
