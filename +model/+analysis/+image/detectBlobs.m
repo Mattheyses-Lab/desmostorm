@@ -13,7 +13,7 @@ function out = detectBlobs(I,opts)
         % higher values -> detect more blobs at finer scale increments | recommended values between 3 and 6
         opts.NumScaleLevels (1,1) double {mustBeGreaterThanOrEqual(opts.NumScaleLevels,3)} = 3
         % whether to show SURF detection results
-        opts.DisplayOutput (1,1) logical = true
+        opts.DisplayOutput (1,1) logical = false
     end
 
     %% detect blobs using SURF features (SURFPoints object)

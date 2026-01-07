@@ -20,7 +20,7 @@ function [out,clustData] = detectRegions(I,opts)
         % whether to preprocess input image prior to SURF detection
         opts.Preprocess (1,1) logical = true
         % whether to show SURF detection and cluster results
-        opts.DisplayClusterOutput (1,1) logical = true
+        opts.DisplayClusterOutput (1,1) logical = false
     end
 
     %% fix input
@@ -34,7 +34,6 @@ function [out,clustData] = detectRegions(I,opts)
     %% preprocess image for blob detection - TESTING
 
     if opts.Preprocess
-        %I = imlocalbrighten(I);
         I = utils.suppressHotPuncta(I);
     end
 
@@ -88,17 +87,7 @@ function [out,clustData] = detectRegions(I,opts)
 
     end
 
-
-
-
-
-
-
-
-
     %% remove bad centroids (too close too edge)
-
-
 
     % cluster centroid locations
     C = clustData.Centroids;
@@ -124,10 +113,17 @@ function [out,clustData] = detectRegions(I,opts)
     half = boxSize/2;
     badIdx = C(:,1) < (0.5+half) | C(:,1) > (size(I,2)+0.5-half) | C(:,2) < (0.5+half) | C(:,2) > (size(I,1)+0.5-half);
 
-    % Remove bad centroids
-    C(badIdx,:) = [];
-    
-    % Store valid centers in output
-    out = C;
+
+
+    % delete the clusters using their idxs
+    clustData.deleteClustersByIdx(badIdx);
+    % reset numbering
+    clustData.resetNumbering();
+
+    % output results
+    if any(badIdx), fprintf('Deleted %i clusters too close to edge\n',numel(find(badIdx))); end
+
+    % extract final centroids
+    out = clustData.Centroids;
 
 end
