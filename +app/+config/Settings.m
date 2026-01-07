@@ -10,11 +10,11 @@ classdef Settings < handle
     end
 
     events
-        Changed   % fired whenever any sub-setting changes
+        Changed             % fired whenever any sub-setting changes
+
         AnalysisChanged
         DisplayChanged
         IOChanged
-
         PeaksPlotChanged
         BoxChanged
     end
@@ -24,23 +24,20 @@ classdef Settings < handle
             this.Analysis   = app.config.Analysis();
             this.Display    = app.config.Display();
             this.IO         = app.config.IO();
-
             this.PeaksPlot  = app.config.PeaksPlot();
             this.Box        = app.config.Box();
 
             % Bubble domain-specific change events up to Settings.Changed
-            addlistener(this.Analysis, 'AnalysisChanged', @(s,e) notify(this,'AnalysisChanged',e));
-            addlistener(this.Display,  'DisplayChanged', @(s,e) notify(this,'DisplayChanged',e));
-            addlistener(this.IO,       'IOChanged', @(s,e) notify(this,'IOChanged',e));
-
+            addlistener(this.Analysis,  'AnalysisChanged',  @(s,e) notify(this,'AnalysisChanged',e));
+            addlistener(this.Display,   'DisplayChanged',   @(s,e) notify(this,'DisplayChanged',e));
+            addlistener(this.IO,        'IOChanged',        @(s,e) notify(this,'IOChanged',e));
             addlistener(this.PeaksPlot, 'PeaksPlotChanged', @(s,e) notify(this,'PeaksPlotChanged',e));
-            addlistener(this.Box,       'BoxChanged', @(s,e) notify(this,'BoxChanged',e));
+            addlistener(this.Box,       'BoxChanged',       @(s,e) notify(this,'BoxChanged',e));
 
             % Also bubble generic change events up to Settings.Changed
             addlistener(this.Analysis,      'Changed', @(s,e) notify(this,'Changed',e));
             addlistener(this.Display,       'Changed', @(s,e) notify(this,'Changed',e));
             addlistener(this.IO,            'Changed', @(s,e) notify(this,'Changed',e));
-
             addlistener(this.PeaksPlot,     'Changed', @(s,e) notify(this,'Changed',e));
             addlistener(this.Box,           'Changed', @(s,e) notify(this,'Changed',e));
         end
@@ -70,6 +67,20 @@ classdef Settings < handle
             fwrite(fid, json, 'char'); 
             fclose(fid);
         end
+
+
+        function S = toStruct(obj)
+            S.Version   = char(app.Info.Version);
+            S.Analysis  = obj.Analysis.toStruct();
+            S.Display   = obj.Display.toStruct();
+            S.IO        = obj.IO.toStruct();
+            S.PeaksPlot = obj.PeaksPlot.toStruct();
+            S.Box       = obj.Box.toStruct();
+        end
+
+
+
+
     end
 
     methods (Static)
