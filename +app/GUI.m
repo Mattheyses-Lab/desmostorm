@@ -3,51 +3,62 @@ classdef GUI < handle
 
     % add Transient and NonCopyable attributes?
     properties (Access=private)
+        % --- window and grids ---
         Fig matlab.ui.Figure
         Grid matlab.ui.container.GridLayout
-
         LeftPane matlab.ui.container.GridLayout
+        RegionGrid matlab.ui.container.GridLayout
 
-        SettingsAccordion widgets.uiaccordion
-
+        % --- listboxes ---
+        % images
         ImageListBoxPanel matlab.ui.container.Panel
         ImageListBoxPanelGrid matlab.ui.container.GridLayout
         ImageListBox matlab.ui.control.ListBox
-
+        % regions
         RegionListBoxPanel matlab.ui.container.Panel
         RegionListBoxPanelGrid matlab.ui.container.GridLayout
         RegionListBox matlab.ui.control.ListBox
 
+        % --- viewers ---
+        % active image
         ImageViewerPanel matlab.ui.container.Panel
         ImageViewerPanelGrid matlab.ui.container.GridLayout
-        % ImageAxes object for the ImageViewer
         Ax widgets.ImageAxes
-
-        RegionGrid matlab.ui.container.GridLayout
-
+        % active region
         RegionViewerPanel matlab.ui.container.Panel
         RegionViewerPanelGrid matlab.ui.container.GridLayout
-        % ImageAxes object for the RegionViewer
         RegionViewer widgets.ImageAxes
 
+        % --- region table ---
         RegionSummaryPanel matlab.ui.container.Panel
         RegionSummaryPanelGrid matlab.ui.container.GridLayout
         RegionSummaryTable matlab.ui.control.Table
 
+        % --- linescan plot ---
         RegionLinescanPanel matlab.ui.container.Panel
         RegionLinescanPanelGrid matlab.ui.container.GridLayout
         RegionLinescanPlot widgets.PeaksPlotContainer % custom plot
-
-        L event.listener    % array of all event listeners - make sure to detach on destruct
     end
 
-    % More components for settings, separated from above to reduce clutter
+    % Settings-related graphics components
     properties (Access=private)
+        SettingsUI struct
+
+        SettingsAccordion widgets.uiaccordion
         ExampleColormapPanel matlab.ui.container.Panel
         ExampleColormapAxes matlab.ui.control.UIAxes
         ExampleColormapImage matlab.graphics.primitive.Image
         ColormapTree matlab.ui.container.Tree
         IntensitySlider widgets.uirangeslidereditfield
+
+    end
+
+    % listeners
+    properties (Access=private)
+        % L event.listener
+
+        settingsL event.listener
+        projectL event.listener
     end
 
     % Derived properties for specific component groups to reduce clutter
@@ -68,14 +79,14 @@ classdef GUI < handle
 
         function obj = GUI()
 
-            % --- Settings ---
+            %% --- Settings ---
             obj.Settings = app.config.Settings.load();
 
-            % --- Model ---
-            obj.Project = model.STORMProject("Untitled Project");
+            %% --- Model ---
+            obj.Project = model.STORMProject("untitled");
             obj.Project.DefaultPixelSize = obj.Settings.Analysis.getDefaultPixelSize();
 
-            % --- Figure ---
+            %% --- Figure ---
             % need to add a more elegant way to set window size once app components are finalized
             s = utils.getScreenSize();
             s(4) = 0.45*s(3);
@@ -86,17 +97,29 @@ classdef GUI < handle
                 'Visible','off',...
                 'Theme','dark');
 
-            % --- Menubar ---
+            %% --- Menubar ---
+            % --- File ---
             mFile = uimenu(obj.Fig,'Text','File');
-            uimenu(mFile,'Text','Load Images...','MenuSelectedFcn',@(~,~) obj.onLoadImages());
-            uimenu(mFile,'Text','Save Current Settings','MenuSelectedFcn',@(~,~) obj.onSaveSettings());
-            uimenu(mFile,'Text','Export Measurements...','MenuSelectedFcn',@(~,~) obj.onExportMeasurements());
-            uimenu(mFile,'Text','Export Peak Plots...','MenuSelectedFcn',@(~,~) obj.onExportPeakPlots());
+            uimenu(mFile,'Text','New',  'MenuSelectedFcn',@(~,~) obj.onNew());
+            uimenu(mFile,'Text','Open', 'MenuSelectedFcn',@(~,~) obj.onOpen());
+            uimenu(mFile,'Text','Close','MenuSelectedFcn',@(~,~) obj.onClose());
+            uimenu(mFile,'Text','Save', 'MenuSelectedFcn',@(~,~) obj.onSave(),'Separator','on');
+            % --- separator ---
+            uimenu(mFile,'Text','Save Settings','MenuSelectedFcn',@(~,~) obj.onSaveSettings(),'Separator','on');
+            % --- separator ---
+            uimenu(mFile,'Text','Load Images','MenuSelectedFcn',@(~,~) obj.onLoadImages());
+            % --- File -> Export ---
+            mFileExport = uimenu(mFile,'Text','Export');
+            uimenu(mFileExport,'Text','Measurements (.xlsx)', 'MenuSelectedFcn',@(~,~) obj.onExportMeasurements());
+            uimenu(mFileExport,'Text','Peak Plots (.pdf)',    'MenuSelectedFcn',@(~,~) obj.onExportPeakPlots());
 
+            % --- Run ---
             mRun = uimenu(obj.Fig,'Text','Run');
             uimenu(mRun,'Text','Auto-pick Regions (experimental)...','MenuSelectedFcn',@(~,~) obj.onAutopickRegions());
 
-            % --- Layout ---
+
+            %% --- Layout ---
+            % Main Grid
             obj.Grid = uigridlayout(obj.Fig,[2 3], ...
                 'ColumnWidth',{'fit','1x'}, ...
                 'RowHeight',{'1x'}, ...
@@ -104,8 +127,7 @@ classdef GUI < handle
                 'RowSpacing',5, ...
                 'Padding',[5 5 5 5],...
                 'BackgroundColor',[0.12 0.12 0.12]);
-
-            % --- Left Pane Grid (ListBoxes and settings) ---
+            % Left Pane Grid (ListBoxes and settings)
             obj.LeftPane = uigridlayout(obj.Grid,[1 1],...
                 "RowHeight",{'fit'},...
                 "ColumnWidth",300,...
@@ -115,6 +137,7 @@ classdef GUI < handle
             obj.LeftPane.Layout.Row = [1 2];
             obj.LeftPane.Layout.Column = 1;
 
+            %% --- Settings controllers ---
             % create the accordion and parent it to the grid
             obj.SettingsAccordion = widgets.uiaccordion(obj.LeftPane,...
                 'ItemSpacing',5,...
@@ -174,6 +197,13 @@ classdef GUI < handle
                 'FontColor',[.9 .9 .9]);
 
 
+            % Set up SettingsUI struct
+            obj.SettingsUI = struct(...
+                "Display",struct(),...
+                "Analysis",struct(),...
+                "PeaksPlot",struct(),...
+                "Box",struct());
+
             % add Colormap accordion item
             obj.SettingsAccordion.addItem("Title","Colormap",...
                 "BorderColor",[0.49 0.49 0.49],...
@@ -189,7 +219,6 @@ classdef GUI < handle
                 "ColumnWidth",{'1x'},...
                 "RowSpacing",5,...
                 "ColumnSpacing",5);
-
 
             % panel to hold example colormap axes
             obj.ExampleColormapPanel = uipanel(obj.SettingsAccordion.Items(3).Pane);
@@ -237,13 +266,10 @@ classdef GUI < handle
 
             % get the current active colormap name
             colormapName = obj.Settings.Display.ColormapName;
-
             % select it in the tree
             obj.ColormapTree.SelectedNodes = obj.ColormapTree.findobj("NodeData",colormapName);
-
             % and set it as the colormap of the example colormap image
             obj.ExampleColormapAxes.Colormap = obj.Settings.Display.Colormap;
-
 
             % add Analysis accordion item
             obj.SettingsAccordion.addItem("Title","Analysis",...
@@ -264,42 +290,42 @@ classdef GUI < handle
 
 
             uilabel(obj.SettingsAccordion.Items(4).Pane,"Text","Box Size","FontColor",[0.85 0.85 0.85]);
-            uieditfield(...
+            obj.SettingsUI.Analysis.BoxSizeEditField = uieditfield(...
                 obj.SettingsAccordion.Items(4).Pane,...
                 "numeric",...
                 "ValueChangedFcn",@(o,~) obj.AnalysisSettingsChanged(o,"BoxSize"),...
                 "Value",obj.Settings.Analysis.BoxSize);
 
             uilabel(obj.SettingsAccordion.Items(4).Pane,"Text","Minimum Peak Distance","FontColor",[0.85 0.85 0.85]);
-            uieditfield(...
+            obj.SettingsUI.Analysis.MinPeakDistanceEditField = uieditfield(...
                 obj.SettingsAccordion.Items(4).Pane,...
                 "numeric",...
                 "ValueChangedFcn",@(o,~) obj.AnalysisSettingsChanged(o,"MinPeakDistance"),...
                 "Value",obj.Settings.Analysis.MinPeakDistance);
 
             uilabel(obj.SettingsAccordion.Items(4).Pane,"Text","Minimum Peak Height","FontColor",[0.85 0.85 0.85]);
-            uieditfield(...
+            obj.SettingsUI.Analysis.MinPeakHeightEditField = uieditfield(...
                 obj.SettingsAccordion.Items(4).Pane,...
                 "numeric",...
                 "ValueChangedFcn",@(o,~) obj.AnalysisSettingsChanged(o,"MinPeakHeight"),...
                 "Value",obj.Settings.Analysis.MinPeakHeight);
 
             uilabel(obj.SettingsAccordion.Items(4).Pane,"Text","Peak Smoothing","FontColor",[0.85 0.85 0.85]);
-            uieditfield(...
+            obj.SettingsUI.Analysis.PeakSmoothingEditField = uieditfield(...
                 obj.SettingsAccordion.Items(4).Pane,...
                 "numeric",...
                 "ValueChangedFcn",@(o,~) obj.AnalysisSettingsChanged(o,"PeakSmoothing"),...
                 "Value",obj.Settings.Analysis.PeakSmoothing);
 
             uilabel(obj.SettingsAccordion.Items(4).Pane,"Text","Pixel Size Value","FontColor",[0.85 0.85 0.85]);
-            uieditfield(...
+            obj.SettingsUI.Analysis.PixelSizeValueEditField = uieditfield(...
                 obj.SettingsAccordion.Items(4).Pane,...
                 "numeric",...
                 "ValueChangedFcn",@(o,~) obj.AnalysisSettingsChanged(o,"PixelSizeValue"),...
                 "Value",obj.Settings.Analysis.PixelSizeValue);
 
             uilabel(obj.SettingsAccordion.Items(4).Pane,"Text","Pixel Size Unit","FontColor",[0.85 0.85 0.85]);
-            uidropdown(...
+            obj.SettingsUI.Analysis.PixelSizeUnitDropDown = uidropdown(...
                 obj.SettingsAccordion.Items(4).Pane,...
                 "Items", {'px', 'nm', 'µm'}, ...
                 "ValueChangedFcn",@(o,~) obj.AnalysisSettingsChanged(o,"PixelSizeUnit"),...
@@ -319,10 +345,15 @@ classdef GUI < handle
                 "TitlePadding",1);
             % set size and spacing of pane grid
             set(obj.SettingsAccordion.Items(5).Pane,...
-                "RowHeight",{'fit'},...
+                "RowHeight",{'fit','fit'},...
                 "ColumnWidth",{'1x'},...
                 "RowSpacing",5,...
                 "ColumnSpacing",5);
+
+            obj.SettingsUI.Display.AutoScaleDisplayIntensityCheckBox = uicheckbox(obj.SettingsAccordion.Items(5).Pane,...
+                "Value",obj.Settings.Display.AutoScaleDisplayIntensity,...
+                "ValueChangedFcn",@(o,~) obj.DisplaySettingsChanged(o,"AutoScaleDisplayIntensity"),...
+                "Text","Auto-scale display intensity");
 
             obj.IntensitySlider = widgets.uirangeslidereditfield(obj.SettingsAccordion.Items(5).Pane,...
                 "Title",'Adjust display limits',...
@@ -353,48 +384,44 @@ classdef GUI < handle
                 "ColumnSpacing",5);
 
             uilabel(obj.SettingsAccordion.Items(6).Pane,"Text","Raw Line Color","FontColor",[0.85 0.85 0.85]);
-            uicolorpicker(...
+            obj.SettingsUI.PeaksPlot.RawLineColorPicker = uicolorpicker(...
                 'Parent',obj.SettingsAccordion.Items(6).Pane,...
                 'Value',obj.Settings.PeaksPlot.RawLineColor,...
                 'ValueChangedFcn',@(o,~) obj.PeaksPlotSettingsChanged(o,"RawLineColor"));
 
             uilabel(obj.SettingsAccordion.Items(6).Pane,"Text","Raw Line Width","FontColor",[0.85 0.85 0.85]);
-            uieditfield(...
+            obj.SettingsUI.PeaksPlot.RawLineWidthEditField = uieditfield(...
                 obj.SettingsAccordion.Items(6).Pane,...
                 "numeric",...
                 "ValueChangedFcn",@(o,~) obj.PeaksPlotSettingsChanged(o,"RawLineWidth"),...
                 "Value",obj.Settings.PeaksPlot.RawLineWidth);
 
             uilabel(obj.SettingsAccordion.Items(6).Pane,"Text","Smooth Line Color","FontColor",[0.85 0.85 0.85]);
-            uicolorpicker(...
+            obj.SettingsUI.PeaksPlot.SmoothLineColorPicker = uicolorpicker(...
                 'Parent',obj.SettingsAccordion.Items(6).Pane,...
                 'Value',obj.Settings.PeaksPlot.SmoothLineColor,...
                 'ValueChangedFcn',@(o,~) obj.PeaksPlotSettingsChanged(o,"SmoothLineColor"));
 
             uilabel(obj.SettingsAccordion.Items(6).Pane,"Text","Smooth Line Width","FontColor",[0.85 0.85 0.85]);
-            uieditfield(...
+            obj.SettingsUI.PeaksPlot.SmoothLineWidthEditField = uieditfield(...
                 obj.SettingsAccordion.Items(6).Pane,...
                 "numeric",...
                 "ValueChangedFcn",@(o,~) obj.PeaksPlotSettingsChanged(o,"SmoothLineWidth"),...
                 "Value",obj.Settings.PeaksPlot.SmoothLineWidth);
 
             uilabel(obj.SettingsAccordion.Items(6).Pane,"Text","Background Color","FontColor",[0.85 0.85 0.85]);
-            uicolorpicker(...
+            obj.SettingsUI.PeaksPlot.BackgroundColorPicker = uicolorpicker(...
                 'Parent',obj.SettingsAccordion.Items(6).Pane,...
                 'Value',obj.Settings.PeaksPlot.BackgroundColor,...
                 'ValueChangedFcn',@(o,~) obj.PeaksPlotSettingsChanged(o,"BackgroundColor"));
 
             uilabel(obj.SettingsAccordion.Items(6).Pane,"Text","Foreground Color","FontColor",[0.85 0.85 0.85]);
-            uicolorpicker(...
+            obj.SettingsUI.PeaksPlot.ForegroundColorPicker = uicolorpicker(...
                 'Parent',obj.SettingsAccordion.Items(6).Pane,...
                 'Value',obj.Settings.PeaksPlot.ForegroundColor,...
                 'ValueChangedFcn',@(o,~) obj.PeaksPlotSettingsChanged(o,"ForegroundColor"));
 
-
-
-
-
-            % --- ImageViewer ---
+            %% --- ImageViewer ---
             obj.ImageViewerPanel = uipanel(obj.Grid,'Title','Image Viewer','BackgroundColor',[0.12 0.12 0.12]);
             obj.ImageViewerPanel.Layout.Column = 2;
             obj.ImageViewerPanel.Layout.Row = [1 2];
@@ -424,7 +451,7 @@ classdef GUI < handle
             % set the box size for Pick tool
             obj.Ax.Tools.Pick.BoxSize = obj.Settings.Analysis.BoxSize;
 
-            % --- Region Area ---
+            %% --- RegionViewer ---
 
             % separate gridlayout object for the Region area
             obj.RegionGrid = uigridlayout(obj.Grid,[1 1],...
@@ -464,7 +491,7 @@ classdef GUI < handle
             % set options for RegionViewer DrawRectangle tool
             obj.RegionViewer.Tools.DrawRectangle.RotationAngleMode = 'half-circle';
 
-            % --- RegionSummaryTable ---
+            %% --- RegionSummaryTable ---
             obj.RegionSummaryPanel = uipanel(obj.RegionGrid,...
                 'Title','Region Summary',...
                 'BackgroundColor',[.12 .12 .12]);
@@ -481,7 +508,7 @@ classdef GUI < handle
             obj.RegionSummaryTable.Layout.Row = 1;
             obj.RegionSummaryTable.Layout.Column = 1;
 
-
+            %% --- RegionSummaryPlot ---
             obj.RegionLinescanPanel = uipanel(obj.RegionGrid,...
                 'Title','Region Linescan',...
                 'BackgroundColor',[.12 .12 .12]);
@@ -506,42 +533,37 @@ classdef GUI < handle
             % center the GUI after defining all graphics components and ImageAxesTool settings
             movegui(obj.Fig,"center");
 
-            % % --- Model ---
-            % obj.Project = model.STORMProject("Untitled Project");
+            %% --- Listeners ---
+            obj.projectL(1) = addlistener(obj.Project,'ImageAdded',          @(~,~) obj.refreshImageList());
+            obj.projectL(2) = addlistener(obj.Project,'ImageRemoved',        @(~,~) obj.refreshImageList());
+            obj.projectL(3) = addlistener(obj.Project,'ActiveImageChanged',  @(~,~) obj.syncActiveImageToView());
+            obj.projectL(4) = addlistener(obj.Project,'RegionAdded',         @(~,~) obj.onRegionAdded());
+            obj.projectL(5) = addlistener(obj.Project,'RegionRemoved',       @(~,~) obj.refreshRegionList());
+            obj.projectL(6) = addlistener(obj.Project,'ActiveRegionChanged', @(~,~) obj.syncActiveRegionToView());
 
-            % --- Listeners ---
-            obj.L(1) = addlistener(obj.Project,'ImageAdded',         @(~,~) obj.refreshImageList());
-            obj.L(2) = addlistener(obj.Project,'ImageRemoved',       @(~,~) obj.refreshImageList());
-            obj.L(3) = addlistener(obj.Project,'ActiveImageChanged', @(~,~) obj.syncActiveImageToView());
-            % obj.L(4) = addlistener(obj.Project,'RegionAdded',         @(~,~) obj.refreshRegionList());
-            obj.L(4) = addlistener(obj.Project,'RegionAdded',         @(~,~) obj.onRegionAdded());
+            obj.settingsL(1) = addlistener(obj.Settings,'DisplayChanged',   @(~,e) obj.onDisplayChanged(e));
+            obj.settingsL(2) = addlistener(obj.Settings,'AnalysisChanged',  @(~,e) obj.onAnalysisChanged(e));
+            obj.settingsL(3) = addlistener(obj.Settings,'IOChanged',        @(~,e) obj.onIOChanged(e));
+            obj.settingsL(4) = addlistener(obj.Settings,'PeaksPlotChanged', @(~,e) obj.onPeaksPlotChanged(e));
+            obj.settingsL(5) = addlistener(obj.Settings,'BoxChanged',       @(~,e) obj.onBoxChanged(e));
 
-            obj.L(5) = addlistener(obj.Project,'RegionRemoved',       @(~,~) obj.refreshRegionList());
-            obj.L(6) = addlistener(obj.Project,'ActiveRegionChanged', @(~,~) obj.syncActiveRegionToView());
-
-            obj.L(7) = addlistener(obj.Settings,'DisplayChanged', @(~,e) obj.onDisplayChanged(e));
-            obj.L(8) = addlistener(obj.Settings,'AnalysisChanged',@(~,e) obj.onAnalysisChanged(e));
-            obj.L(9) = addlistener(obj.Settings,'IOChanged',      @(~,e) obj.onIOChanged(e));
-
-            obj.L(10) = addlistener(obj.Settings,'PeaksPlotChanged',@(~,e) obj.onPeaksPlotChanged(e));
-            obj.L(11) = addlistener(obj.Settings,'BoxChanged',      @(~,e) obj.onBoxChanged(e));
-
-
+            %% --- Final cleanup ---
             % Expand Image and Region listbox accordion items
             obj.SettingsAccordion.Items(1).expand();
             obj.SettingsAccordion.Items(2).expand();
-
 
             % Show figure
             obj.Fig.Visible = 'on';
 
             % Initial UI sync
-            obj.refreshImageList();
-            obj.syncActiveImageToView();
+            obj.refreshUI();
+
         end
 
         function delete(obj)
-            if ~isempty(obj.L), delete(obj.L(isvalid(obj.L))); end
+            % if ~isempty(obj.L), delete(obj.L(isvalid(obj.L))); end
+            if ~isempty(obj.projectL), delete(obj.projectL(isvalid(obj.projectL))); end
+            if ~isempty(obj.settingsL), delete(obj.settingsL(isvalid(obj.settingsL))); end
             if ~isempty(obj.Ax) && isvalid(obj.Ax), delete(obj.Ax); end
             if ~isempty(obj.RegionViewer) && isvalid(obj.RegionViewer), delete(obj.RegionViewer); end
             if ~isempty(obj.Grid) && isvalid(obj.Grid), delete(obj.Grid); end
@@ -550,8 +572,120 @@ classdef GUI < handle
 
     end
 
-    %% Derived getters
-    methods
+    %% Global UI sync
+    methods (Access=private)
+
+        function refreshUI(obj)
+
+            % empty project -> clear out UI
+            if isempty(obj.Project)
+                obj.clearUI();
+                return
+            end
+
+            % settings controllers
+            obj.refreshSettingsControllers();
+
+            % images
+            obj.refreshImageList();
+            obj.syncActiveImageToView();
+
+            % regions
+            obj.refreshRegionList();
+            obj.syncActiveRegionToView();
+
+        end
+
+
+        function clearUI(obj)
+
+            str = string.empty(1,0);
+
+            % ImageListBox
+            set(obj.ImageListBox,...
+                "Items",str,...
+                "ItemsData",str,...
+                "Value",str);
+
+            % ImageViewer
+            obj.Ax.CData = [];
+            obj.Ax.Tools.Pick.clearBoxes();
+
+            % RegionListBox
+            set(obj.RegionListBox,...
+                "Items",str,...
+                "ItemsData",str,...
+                "Value",str);
+
+            % RegionViewer
+            obj.RegionViewer.CData = [];
+            obj.RegionViewer.Tools.DrawRectangle.setROIPosition(model.STORMRegion.LinescanTemplate);
+
+            % RegionLinescanPlot
+            obj.RegionLinescanPlot.Data = model.analysis.PeaksData.empty();
+            obj.RegionLinescanPlot.Title = '';
+
+            % RegionSummaryTable
+            obj.RegionSummaryTable.Data = [];
+
+        end
+
+        function refreshSettingsControllers(obj)
+            S = obj.Settings;
+            % Colormap
+            cmap = S.Display.Colormap;
+            cmapName = obj.Settings.Display.ColormapName;
+            obj.ColormapTree.SelectedNodes = obj.ColormapTree.findobj("NodeData",cmapName);
+            obj.ExampleColormapAxes.Colormap = cmap;
+            obj.Ax.Colormap = cmap;
+            obj.RegionViewer.Colormap = cmap;
+            % Analysis
+            obj.SettingsUI.Analysis.BoxSizeEditField.Value = S.Analysis.BoxSize;
+            obj.SettingsUI.Analysis.MinPeakDistanceEditField.Value = S.Analysis.MinPeakDistance;
+            obj.SettingsUI.Analysis.MinPeakHeightEditField.Value = S.Analysis.MinPeakHeight;
+            obj.SettingsUI.Analysis.PeakSmoothingEditField.Value = S.Analysis.PeakSmoothing;
+            obj.SettingsUI.Analysis.PixelSizeValueEditField.Value = S.Analysis.PixelSizeValue;
+            obj.SettingsUI.Analysis.PixelSizeUnitDropDown.Value = S.Analysis.PixelSizeUnit;
+            % PeaksPlot
+            obj.SettingsUI.PeaksPlot.RawLineColorPicker.Value = S.PeaksPlot.RawLineColor;
+            obj.SettingsUI.PeaksPlot.RawLineWidthEditField.Value = S.PeaksPlot.RawLineWidth;
+            obj.SettingsUI.PeaksPlot.SmoothLineColorPicker.Value = S.PeaksPlot.SmoothLineColor;
+            obj.SettingsUI.PeaksPlot.SmoothLineWidthEditField.Value = S.PeaksPlot.SmoothLineWidth;
+            obj.SettingsUI.PeaksPlot.BackgroundColorPicker.Value = S.PeaksPlot.BackgroundColor;
+            obj.SettingsUI.PeaksPlot.ForegroundColorPicker.Value = S.PeaksPlot.ForegroundColor;
+        end
+
+
+    end
+
+    %% Helpers
+    methods (Access=private)
+
+        function detatchListeners(obj)
+            % project
+            if ~isempty(obj.projectL), delete(obj.projectL(isvalid(obj.projectL))); end
+            obj.projectL = event.listener.empty();
+            % settings
+            if ~isempty(obj.settingsL), delete(obj.settingsL(isvalid(obj.settingsL))); end
+            obj.settingsL = event.listener.empty();
+        end
+
+        function refreshListeners(obj)
+            if ~isempty(obj.Project)
+                obj.projectL(1) = addlistener(obj.Project,'ImageAdded',          @(~,~) obj.refreshImageList());
+                obj.projectL(2) = addlistener(obj.Project,'ImageRemoved',        @(~,~) obj.refreshImageList());
+                obj.projectL(3) = addlistener(obj.Project,'ActiveImageChanged',  @(~,~) obj.syncActiveImageToView());
+                obj.projectL(4) = addlistener(obj.Project,'RegionAdded',         @(~,~) obj.onRegionAdded());
+                obj.projectL(5) = addlistener(obj.Project,'RegionRemoved',       @(~,~) obj.refreshRegionList());
+                obj.projectL(6) = addlistener(obj.Project,'ActiveRegionChanged', @(~,~) obj.syncActiveRegionToView());
+            end
+
+            obj.settingsL(1) = addlistener(obj.Settings,'DisplayChanged',   @(~,e) obj.onDisplayChanged(e));
+            obj.settingsL(2) = addlistener(obj.Settings,'AnalysisChanged',  @(~,e) obj.onAnalysisChanged(e));
+            obj.settingsL(3) = addlistener(obj.Settings,'IOChanged',        @(~,e) obj.onIOChanged(e));
+            obj.settingsL(4) = addlistener(obj.Settings,'PeaksPlotChanged', @(~,e) obj.onPeaksPlotChanged(e));
+            obj.settingsL(5) = addlistener(obj.Settings,'BoxChanged',       @(~,e) obj.onBoxChanged(e));
+        end
 
     end
 
@@ -584,7 +718,10 @@ classdef GUI < handle
         % fired on ImageAdded and ImageRemoved events
         function refreshImageList(obj)
             % string array of image IDs
-            ids = obj.Project.ImageOrder;
+            %ids = obj.Project.ImageOrder;
+
+            ids = obj.Project.ImageIDs;
+
             if isempty(ids)
                 obj.ImageListBox.Items = string.empty(1,0);
                 obj.ImageListBox.ItemsData = string.empty(1,0);
@@ -599,9 +736,11 @@ classdef GUI < handle
             obj.ImageListBox.Items     = names;
             obj.ImageListBox.ItemsData = ids;
 
-            % Keep selection synced
-            if strlength(obj.Project.ActiveImageID) > 0
-                obj.ImageListBox.Value = obj.Project.ActiveImageID;
+
+            img = obj.Project.ActiveImage;
+
+            if ~isempty(img)
+                obj.ImageListBox.Value = img.ID;
             else
                 obj.ImageListBox.Value = ids(1);
             end
@@ -618,18 +757,27 @@ classdef GUI < handle
 
         % fired on ActiveImageChanged event
         function syncActiveImageToView(obj)
-            % get the active image
-            img = obj.Project.ActiveImage;
-            % if empty, clear view and return
-            if isempty(img)
-                obj.Ax.CData = [];
-                obj.Ax.Tools.Pick.clearBoxes();
-                return
-            end
+            % % get the active image
+            % img = obj.Project.ActiveImage;
+            % % if empty, clear view and return
+            % if isempty(img)
+            %     obj.Ax.CData = [];
+            %     obj.Ax.Tools.Pick.clearBoxes();
+            %     return
+            % end
+            % 
+            % % set CData and CLim of ImageViewer
+            % obj.Ax.CData = img.CData;
+            % 
+            % switch obj.Settings.Display.AutoScaleDisplayIntensity
+            %     case true
+            %         obj.Ax.CLim = img.AutoDisplayCLim;
+            %     case false
+            %         obj.Ax.CLim = img.DisplayCLim;
+            % end
 
-            % set CData and CLim of ImageViewer
-            obj.Ax.CData = img.CData;
-            obj.Ax.CLim = img.DisplayCLim;
+            % refresh ImageViewer CData and CLim
+            obj.refreshImageViewer();
 
             % refresh region boxes
             obj.refreshRegionBoxes();
@@ -638,9 +786,36 @@ classdef GUI < handle
             obj.refreshRegionList();
             obj.syncActiveRegionToView();
 
-            % update IntensitySlider
-            obj.IntensitySlider.Limits = img.CDataRange;
-            obj.IntensitySlider.Value = img.DisplayCLim;
+            % % update IntensitySlider
+            % obj.IntensitySlider.Limits = img.CDataRange;
+            % obj.IntensitySlider.Value = img.DisplayCLim;
+        end
+
+        function refreshImageViewer(obj)
+            % refresh ImageViewer CData and CLim
+            % get the active image
+            img = obj.Project.ActiveImage;
+            % if empty, clear view and return
+            if isempty(img), obj.Ax.CData = []; return, end
+            % get CData
+            cdata = img.CData;
+            % get CLim
+            switch obj.Settings.Display.AutoScaleDisplayIntensity
+                case true
+                    clim = img.AutoDisplayCLim;
+                case false
+                    clim = img.DisplayCLim;
+            end
+
+            % obj.Ax.CData = cdata;
+            % obj.Ax.CLim = clim;
+
+            % update ImageViewer CData and CLim
+            set(obj.Ax,'CData',cdata,'CLim',clim);
+
+            % update IntensitySlider Limits and Value
+            set(obj.IntensitySlider,'Limits',img.CDataRange,'Value',clim);
+
         end
 
     end
@@ -660,8 +835,14 @@ classdef GUI < handle
         end
 
         function refreshRegionList(obj)
-            % string array of region IDs
-            ids = obj.Project.ActiveImage.RegionOrder;
+            img = obj.Project.ActiveImage;
+            if isempty(img)
+                ids = [];
+            else
+                % string array of region IDs
+                ids = img.RegionOrder;
+            end
+
             if isempty(ids)
                 obj.RegionListBox.Items = string.empty(1,0);
                 obj.RegionListBox.ItemsData = string.empty(1,0);
@@ -670,14 +851,14 @@ classdef GUI < handle
             end
 
             % string array of image names
-            names = obj.Project.ActiveImage.RegionNames;         
+            names = img.RegionNames;         
 
             obj.RegionListBox.Items     = names;
             obj.RegionListBox.ItemsData = ids;
 
             % Keep selection synced
-            if strlength(obj.Project.ActiveImage.ActiveRegionID) > 0
-                obj.RegionListBox.Value = obj.Project.ActiveImage.ActiveRegionID;
+            if strlength(img.ActiveRegionID) > 0
+                obj.RegionListBox.Value = img.ActiveRegionID;
             else
                 obj.RegionListBox.Value = ids(1);
             end
@@ -692,23 +873,22 @@ classdef GUI < handle
 
             % get the active image
             img = obj.Project.ActiveImage;
-            % if empty, return
+            % if empty -> return
             if isempty(img), return; end
 
-            % clear overlays & bindings, then replay from model
-            obj.Ax.Tools.Pick.clearBoxes();
-
-            % replay boxes from model
+            % get the region array
             regs = img.RegionArray;
-            if ~isempty(regs)
-                for k = 1:numel(regs)
-                    r = regs(k);
-                    bs = r.BoxSize; 
-                    if ~isfinite(bs) || bs<=0
-                        bs = obj.Settings.Analysis.BoxSize;
-                    end
-                    obj.Ax.Tools.Pick.addBox(r.ID, r.Center, bs);
-                end
+            % if empty -> return
+            if isempty(regs), return; end
+
+            for k = 1:numel(regs)
+                r = regs(k);
+                % bs = r.BoxSize;
+                % if ~isfinite(bs) || bs<=0
+                %     bs = obj.Settings.Analysis.BoxSize;
+                % end
+                % obj.Ax.Tools.Pick.addBox(r.ID, r.Center, bs);
+                obj.Ax.Tools.Pick.addBox(r.ID, r.Center, r.BoxSize);
             end
 
         end
@@ -719,8 +899,13 @@ classdef GUI < handle
         end
 
         function syncActiveRegionToView(obj)
-            % get the ActiveRegion
-            reg = obj.Project.ActiveImage.ActiveRegion;
+            img = obj.Project.ActiveImage;
+            if isempty(img)
+                reg = [];
+            else
+                % get the ActiveRegion
+                reg = img.ActiveRegion;
+            end
 
             % no ActiveRegion exists -> clear out view and return
             if isempty(reg)
@@ -768,7 +953,6 @@ classdef GUI < handle
 
         end
 
-
         function refreshRegionLinescanROI(obj)
             % get the ActiveImage, exit if empty
             img = obj.Project.ActiveImage; if isempty(img), return; end
@@ -801,14 +985,17 @@ classdef GUI < handle
                     %set(obj.ROI, 'FaceColor', obj.Settings.Display.BoxFaceColor);
                 case "BoxEdgeColor"
                     %set(obj.ROI, 'EdgeColor', obj.Settings.Display.BoxEdgeColor);
+                case "AutoScaleDisplayIntensity"
+                    % make sure checked/unchecked state matches settings
+                    obj.SettingsUI.AutoScaleDisplayIntensityCheckBox.Value = e.NewValue;
+                    % refresh image view
+                    obj.refreshImageViewer();
             end
         end
-
 
         function onPeaksPlotChanged(obj,e)
             obj.RegionLinescanPlot.(e.Name) = obj.Settings.PeaksPlot.(e.Name);
         end
-
 
         function onBoxChanged(obj,e)
             % do something
@@ -887,10 +1074,125 @@ classdef GUI < handle
             end
         end
 
-
         function PeaksPlotSettingsChanged(obj,src,stgName)
             % apply the specified setting
             obj.Settings.PeaksPlot.(stgName) = src.Value;
+        end
+
+        function DisplaySettingsChanged(obj,src,stgName)
+            % apply the specified setting
+            obj.Settings.Display.(stgName) = src.Value;
+        end
+
+    end
+
+    %% Callbacks - Menubar
+    methods (Access=private)
+
+        function onNew(obj)
+            % start a new project
+
+        end
+
+        function onOpen(obj)
+            % open existing project from file
+            % hide figure to show file selection dialog
+            obj.Fig.Visible = 'off';
+            % file selection dialog
+            [file, path] = uigetfile('*.mat','Select project file (.mat)','MultiSelect','off');
+            % show figure
+            obj.Fig.Visible = 'on';
+            % if cancelled or no files selected
+            if isequal(file,0)
+                return
+            end
+
+            % get full file name
+            fname = fullfile(path, file);
+
+            % create progress dialog
+            msg = sprintf('Loading project:\n%s',fname);
+            h = uiprogressdlg(obj.Fig,"Message",msg,'Indeterminate','on');
+
+
+            % --- cleanup before loading ---
+            % delete project
+            obj.Project.delete();
+            % detach listeners
+            obj.detatchListeners();
+
+
+            % --- load the project ---
+            [proj,stgs] = model.STORMProject.load(fname);
+
+
+            % --- update after load ---
+            % assign new project and settings
+            obj.Project = proj;
+            obj.Settings = stgs;
+
+            % run region analysis
+            obj.processAllRegions();
+
+            % refresh view
+            obj.refreshUI();
+            % refresh listeners
+            obj.refreshListeners();
+
+            % close progress dialog
+            close(h);
+        end
+
+        function onClose(obj)
+            % close current project
+
+            % return if empty
+            if isempty(obj.Project)
+                return
+            end
+
+            % --- delete current project and cleanup ---
+            % delete project
+            obj.Project.delete(); obj.Project = model.STORMProject.empty();
+            % detach listeners
+            obj.detatchListeners();
+
+            % --- update ---
+            % refresh view
+            obj.refreshUI();
+
+        end
+
+        function onSave(obj)
+            % save current project
+            obj.Fig.Visible = 'off';
+
+            if obj.Project.isOnDisk
+                defaultName = obj.Project.SourcePath;
+            else
+                defaultName = fullfile(obj.Settings.IO.DefaultFolder, obj.Project.Name + '.mat');
+            end
+
+            [file, path] = uiputfile('*.mat','Save project', defaultName);
+
+            obj.Fig.Visible = 'on';
+
+            if isequal(file,0)
+                return;  % user cancelled
+            end
+
+            % get full file name
+            fname = fullfile(path, file);
+
+            % create progress dialog
+            msg = sprintf('Saving project:\n%s',fname);
+            h = uiprogressdlg(obj.Fig,"Message",msg,'Indeterminate','on');
+
+            % save the project
+            obj.Project.save(fname,obj.Settings);
+
+            % clost progress dialog
+            close(h);
         end
 
         function onSaveSettings(obj)
@@ -914,6 +1216,10 @@ classdef GUI < handle
                 set([obj.Ax,obj.RegionViewer],'CLim',obj.IntensitySlider.Value);
             end
 
+            % disable AutoScaleDisplayIntensity if enabled
+            if obj.Settings.Display.AutoScaleDisplayIntensity
+                obj.Settings.Display.AutoScaleDisplayIntensity = "off";
+            end
         end
 
         function onIntensitySliderChanged(obj,~)
@@ -952,7 +1258,6 @@ classdef GUI < handle
             obj.RegionSummaryTable.Data = reg.SummaryTable;
         end
 
-
         function processAllRegions(obj)
             % create progress dialog
             h = uiprogressdlg(obj.Fig,"Message",'Please wait...','Indeterminate','on');
@@ -972,17 +1277,29 @@ classdef GUI < handle
         end
 
         function onAutopickRegions(obj)
-            % get the ActiveImage, exit if empty
-            img = obj.Project.ActiveImage; if isempty(img), return; end
+            % % get the ActiveImage, exit if empty
+            % img = obj.Project.ActiveImage; if isempty(img), return; end
+            % 
+            % % create progress dialog
+            % h = uiprogressdlg(obj.Fig,"Message",'Please wait...','Indeterminate','on');
+            % 
+            % % detect regions for the active image
+            % img.detectRegions(app.config.RunConfig.fromSettings(obj.Settings));
+            % 
+            % % close the progress dialog
+            % close(h);
+
+
 
             % create progress dialog
             h = uiprogressdlg(obj.Fig,"Message",'Please wait...','Indeterminate','on');
 
             % detect regions for the active image
-            img.detectRegions(app.config.RunConfig.fromSettings(obj.Settings));
+            obj.Project.detectRegions(app.config.RunConfig.fromSettings(obj.Settings),h);
 
             % close the progress dialog
             close(h);
+
         end
 
     end
@@ -1064,7 +1381,6 @@ classdef GUI < handle
             end
         end
 
-
     end
 
     %% Event handlers for DrawRectangle tool callbacks
@@ -1090,6 +1406,8 @@ classdef GUI < handle
         end
 
         function onROIDeleted(obj)
+            % exit if project empty
+            if isempty(obj.Project), return; end
             % get the ActiveImage, exit if empty
             img = obj.Project.ActiveImage; if isempty(img), return; end
             % get the ActiveRegion, exit if empty
@@ -1272,10 +1590,6 @@ classdef GUI < handle
             close(h);
 
         end
-
-
-
-
 
     end
 

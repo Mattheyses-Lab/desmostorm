@@ -19,8 +19,8 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
     %% Regions (dictionary + order) and active selection
     properties (Access=private)
         RegionsDict = dictionary   % string id -> model.STORMRegion
-        % monotonic counter used to set human-friendly unique region names
-        NextRegionOrdinal (1,1) double = 1
+
+
     end
 
     properties
@@ -34,28 +34,46 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
         ActiveRegion  % model.STORMRegion or []
     end
 
+    properties(Access=?model.STORMProject)
+        % monotonic counter used to set human-friendly unique region names
+        NextRegionOrdinal (1,1) double = 1
+    end
+
     properties (Dependent)
         RegionNames
     end
 
 
-    %% Image data and display settings
-    properties
-        CData = []                     % numeric image array
-        CLim (1,2) double
-        CDataRange (1,2) = [NaN NaN]
-        CDataClass (1,:) char = ''
-        CDataLimits (1,2) = [NaN NaN]
+
+
+    %% Image data (LAZY) and display settings
+    properties (Dependent)
+        CData                  % numeric image array (lazy-loaded)
+        Height (1,1) double
+        Width (1,1) double
     end
 
-    properties (Access = private)
-        DisplayCLim_ (1,2) double = [NaN NaN];  % backing store
+    properties
+        CLim (1,2) double
+        CDataRange (1,2) = [NaN NaN]     % filled after first load
+        CDataLimits (1,2) = [NaN NaN]    % filled after first load
+        CDataClass (1,:) char = ''       % filled after first load
+    end
+
+    properties (Access=private)
+        CDataBuffer = []                % backing store
+        CDataState (1,1) string = "unloaded"  % "unloaded"|"loaded"|"failed"
+        CDataLoadError = []             % store last exception, if failed
+
+        ImageSize_ (1,2) double = [NaN NaN]   % [H W] from imfinfo (cheap), if available
+
+        DisplayCLim_ (1,2) double = [NaN NaN]  % backing store
+        AutoDisplayCLim_ (1,2) double = [NaN NaN]
     end
 
     properties (Dependent)
         DisplayCLim
-        Height (1,1) double
-        Width (1,1) double
+        AutoDisplayCLim
     end
 
     %% Events for UI sync
@@ -68,19 +86,24 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
     %% Constructor
     methods
 
-        function obj = STORMImage(parent, name, sourcePath, cdata)
+        function obj = STORMImage(parent, name, sourcePath, ID)
             arguments
                 parent (:,1) model.STORMProject = model.STORMProject.empty()
                 name (1,1) string = ""
                 sourcePath (1,1) string = ""
-                cdata = []
+                ID (1,1) string = ""     % allow ID injection on reload
             end
 
-            obj.ID = model.STORMImage.newID();
+            if strlength(ID) > 0
+                obj.ID = ID;
+            else
+                %obj.ID = model.STORMImage.newID();
+                obj.ID = utils.uniqueID();
+            end
+
             obj.Parent = parent;
             obj.Name = name;
             obj.SourcePath = sourcePath;
-            obj.CData = cdata;
 
             if strlength(obj.FileType)==0 && strlength(obj.SourcePath)>0
                 [~,~,ext] = fileparts(char(obj.SourcePath));
@@ -90,17 +113,171 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
             obj.RegionsDict = dictionary(string.empty(1,0), model.STORMRegion.empty(1,0));
             obj.RegionOrder = string.empty(1,0);
 
-            if isempty(obj.CData)
+            % cache image size from file
+            obj.cacheImageSizeFromFile();
+
+        end
+
+    end
+
+
+
+    %% CData lazy access + buffer management
+    methods
+        function I = get.CData(obj)
+            % Lazy-load raw image data on first access.
+            if obj.CDataState == "loaded"
+                I = obj.CDataBuffer;
+                return
+            end
+            if obj.CDataState == "failed"
+                rethrow(obj.CDataLoadError);
+            end
+
+            % Attempt load
+            try
+                if strlength(obj.SourcePath)==0
+                    error('STORMImage:CDataMissingPath', 'Cannot load CData: SourcePath is empty.');
+                end
+                if ~isfile(obj.SourcePath)
+                    error('STORMImage:CDataMissingFile', 'Cannot load CData: file not found: %s', obj.SourcePath);
+                end
+
+                obj.CDataBuffer = imread(obj.SourcePath);
+                obj.CDataState = "loaded";
+                obj.updateCDataStatsFromBuffer();
+                I = obj.CDataBuffer;
+
+            catch ME
+                obj.CDataState = "failed";
+                obj.CDataLoadError = ME;
+                rethrow(ME);
+            end
+        end
+
+        function clearCDataBuffer(obj)
+            obj.CDataBuffer = [];
+            obj.CDataState = "unloaded";
+            obj.CDataLoadError = [];
+            % Keep cached ImageSize_ (so Height/Width still cheap)
+        end
+
+        function bufferCData(obj)
+            obj.CDataBuffer = imread(obj.SourcePath);
+            obj.CDataState = "loaded";
+        end
+
+        function updateCDataStats(obj)
+            switch obj.CDataState
+                case "loaded"
+                    obj.updateCDataStatsFromBuffer();
+                case "unloaded"
+                    obj.updateCDataStatsFromFile();
+                case "failed"
+                    rethrow(obj.CDataLoadError);
+            end
+        end
+
+    end
+
+    %% Dependent getters/setters related to CData
+    methods
+
+        function val = get.Height(obj)
+            if ~any(isnan(obj.ImageSize_))
+                val = obj.ImageSize_(1);
+            elseif obj.CDataState == "loaded"
+                val = size(obj.CDataBuffer,1);
+            else
+                obj.cacheImageSizeFromFile();
+                val = obj.ImageSize_(1);
+            end
+        end
+
+        function val = get.Width(obj)
+            if ~any(isnan(obj.ImageSize_))
+                val = obj.ImageSize_(2);
+            elseif obj.CDataState == "loaded"
+                val = size(obj.CDataBuffer,2);
+            else
+                obj.cacheImageSizeFromFile();
+                val = obj.ImageSize_(2);
+            end
+        end
+
+        function clim = get.DisplayCLim(obj)
+            if any(isnan(obj.DisplayCLim_))
+                clim = obj.CDataRange;  % if still NaN, UI can decide how to handle
+            else
+                clim = obj.DisplayCLim_;
+            end
+        end
+
+        function set.DisplayCLim(obj, clim)
+
+            arguments
+                obj
+                clim (1,2) double
+            end
+
+            clim = sort(clim);
+
+            % If CDataRange known, clamp; otherwise accept as-is.
+            if ~any(isnan(obj.CDataRange))
+                clim(1) = max(clim(1), obj.CDataRange(1));
+                clim(2) = min(clim(2), obj.CDataRange(2));
+            end
+
+            obj.DisplayCLim_ = clim;
+        end
+
+        function clim = get.AutoDisplayCLim(obj)
+
+            if any(isnan(obj.AutoDisplayCLim_))
+                obj.updateCDataStats();
+            end
+
+            clim = obj.AutoDisplayCLim_;
+        end
+
+    end
+
+    %% Private helpers
+    methods (Access=private)
+        function cacheImageSizeFromFile(obj)
+            if strlength(obj.SourcePath)==0 || ~isfile(obj.SourcePath)
+                return
+            end
+            try
+                info = imfinfo(obj.SourcePath);
+                obj.ImageSize_ = [info(1).Height, info(1).Width];
+            catch
+                % leave as NaN; worst case size forces a load later
+            end
+        end
+
+        function updateCDataStatsFromBuffer(obj)
+            if isempty(obj.CDataBuffer)
                 obj.CDataRange = [NaN NaN];
                 obj.CDataClass = '';
                 obj.CDataLimits = [NaN NaN];
-            else
-                obj.CDataRange = [min(min(obj.CData)) max(max(obj.CData))]; % actual value range of intensity values
-                obj.CDataClass = class(obj.CData); % data type of intensity image
-                obj.CDataLimits = getrangefromclass(obj.CData); % full range of possible intensity values, given its class
+                return
             end
 
+            % store image info
+            obj.ImageSize_ = [size(obj.CDataBuffer,1), size(obj.CDataBuffer,2)];
+            obj.CDataClass = class(obj.CDataBuffer);
+            obj.CDataLimits = getrangefromclass(obj.CDataBuffer);
+            obj.CDataRange = [min(obj.CDataBuffer(:)), max(obj.CDataBuffer(:))];
 
+            % store display autolimits
+            obj.AutoDisplayCLim_ = stretchlim(obj.CDataBuffer,[0.1 0.9999])*obj.CDataLimits(2);
+        end
+
+        function updateCDataStatsFromFile(obj)
+            obj.bufferCData();
+            obj.updateCDataStatsFromBuffer();
+            obj.clearCDataBuffer();
         end
 
     end
@@ -208,6 +385,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
             arr = obj.RegionArray;
             % return if empty
             if isempty(arr), return; end
+
             % otherwise, process each region
             for i = 1:numel(arr)
                 obj.processRegionLinescan(arr(i),config);
@@ -259,10 +437,10 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
 
     end
 
-    % Image-level processing
+    %% Image-level processing
     methods
 
-        function detectRegions(obj,config)
+        function detectRegions(obj, config)
             arguments
                 obj model.STORMImage
                 config app.config.RunConfig
@@ -335,45 +513,6 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
             obj.PixelSizeOverride = ps;
         end
 
-        function clim = get.DisplayCLim(obj)
-            % If user has never set it, fall back to raw range:
-            if any(isnan(obj.DisplayCLim_))
-                clim = obj.CDataRange;
-            else
-                clim = obj.DisplayCLim_;
-            end
-        end
-
-        function set.DisplayCLim(obj, clim)
-            arguments
-                obj
-                clim (1,2) double
-            end
-
-            % optional: clamp & sort
-            clim = sort(clim);
-            clim(1) = max(clim(1), obj.CDataRange(1));
-            clim(2) = min(clim(2), obj.CDataRange(2));
-
-            obj.DisplayCLim_ = clim;
-        end
-
-        function val = get.Height(obj)
-            if isempty(obj.CData)
-                val = NaN;
-            else
-                val = size(obj.CData,1);
-            end
-        end
-
-        function val = get.Width(obj)
-            if isempty(obj.CData)
-                val = NaN;
-            else
-                val = size(obj.CData,2);
-            end
-        end
-
     end
 
     %% Export data
@@ -391,8 +530,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
 
     end
 
-
-    % Display helpers
+    %% Display helpers
     methods
 
         function str = ImageInfoDisplayString(obj)
@@ -410,7 +548,8 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
                 'SourcePath', obj.SourcePath, ...
                 'FileType', obj.FileType, ...
                 'PixelSize', obj.PixelSize.stringDisplay(), ...
-                'Size', size(obj.CData), ...
+                'Size', obj.ImageSize_, ...
+                'CDataState', obj.CDataState, ...
                 'NumRegions', numEntries(obj.RegionsDict), ...
                 'RegionOrder', obj.RegionOrder, ...
                 'RegionArray', obj.RegionArray );
@@ -419,12 +558,116 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
 
     end
 
+    %% Serialization helpers
+    methods(Access=?model.STORMProject)
 
+        function I = toStruct(obj)
+            I.ID         = obj.ID;
+            I.Name       = obj.Name;
+            I.SourcePath = obj.SourcePath;
+            I.FileType   = obj.FileType;
+            I.CreatedAt  = obj.CreatedAt;
+
+            % Fingerprint hints
+            I.FileName = string.empty;
+            I.Ext = string.empty;
+            I.FileSizeBytes = NaN;
+            I.ModifiedDatenum = NaN;
+
+            if strlength(obj.SourcePath) > 0
+                [~,nm,ex] = fileparts(obj.SourcePath);
+                I.FileName = string(nm);
+                I.Ext = string(ex);
+                if isfile(obj.SourcePath)
+                    d = dir(obj.SourcePath);
+                    I.FileSizeBytes = d.bytes;
+                    I.ModifiedDatenum = d.datenum;
+                end
+            end
+
+            % Pixel size override (if set)
+            if ~isempty(obj.PixelSizeOverride)
+                I.PixelSizeOverride = struct('Value', obj.PixelSizeOverride.Value, 'Unit', obj.PixelSizeOverride.Unit);
+            else
+                I.PixelSizeOverride = [];
+            end
+
+            % Display limits
+            I.DisplayCLim = obj.DisplayCLim;
+
+            % Regions / naming counter
+            I.NextRegionOrdinal = obj.NextRegionOrdinal;
+            I.RegionOrder = obj.RegionOrder;
+
+            regs = obj.RegionArray;
+            I.Regions = repmat(struct(), 1, numel(regs));
+            for r = 1:numel(regs)
+                reg = regs(r);
+                I.Regions(r).ID      = reg.ID;
+                I.Regions(r).Name    = reg.Name;
+                I.Regions(r).CreatedAt = reg.CreatedAt;
+                I.Regions(r).Center  = reg.Center;
+                I.Regions(r).BoxSize = reg.BoxSize;
+                I.Regions(r).Linescan = reg.Linescan;
+            end
+        end
+
+    end
+
+    %% Static
     methods (Static)
 
-        function id = newID()
-            id = string(char(java.util.UUID.randomUUID()));
+        function img = fromStruct(S,proj)
+
+            name = string(S.Name);
+            path = string(S.SourcePath);
+
+            img = model.STORMImage(proj, name, path, string(S.ID));
+
+            % restore per-image settings/state
+            img.CreatedAt = S.CreatedAt;
+
+            if ~isempty(S.PixelSizeOverride)
+                img.PixelSizeOverride = model.units.PixelSize(S.PixelSizeOverride.Value, S.PixelSizeOverride.Unit);
+            end
+
+            % if isfield(S,'DisplayCLim') && ~isempty(S.DisplayCLim) && all(~isnan(S.DisplayCLim))
+            %     img.DisplayCLim = S.DisplayCLim;
+            % end
+
+            img.DisplayCLim = S.DisplayCLim;
+
+            % if isfield(S,'NextRegionOrdinal')
+            %     img.NextRegionOrdinal = S.NextRegionOrdinal;
+            % end
+
+            img.NextRegionOrdinal = S.NextRegionOrdinal;
+
+            % update CData stats
+            img.updateCDataStats();
+
+            % rebuild regions
+            if isfield(S,'Regions') && ~isempty(S.Regions)
+                for r = 1:numel(S.Regions)
+                    R = S.Regions(r);
+                    img.addRegionSilent(string(R.ID), R.Center, R.BoxSize);
+                    reg = img.getRegion(string(R.ID));
+                    reg.Name = string(R.Name);
+                    if isfield(R,'Linescan') && ~isempty(R.Linescan)
+                        reg.Linescan = R.Linescan;
+                    end
+                end
+                % restore region order exactly
+                if isfield(S,'RegionOrder')
+                    img.RegionOrder = string(S.RegionOrder);
+                end
+            end
+
         end
+
+
+
+
 
     end
 

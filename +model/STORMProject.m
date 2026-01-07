@@ -4,33 +4,34 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
     %% Identity/metadata
     properties
         ID (1,1) string = utils.uniqueID()
-        Name (1,1) string = "Untitled"
+        Name (1,1) string = "untitled"
+        SourcePath (1,1) string = ""
         CreatedAt datetime = datetime('now')
-        SchemaVersion (1,1) double = 1
         Version (1,1) string = app.Info.Version
+        isOnDisk (1,1) logical = false
     end
 
     %% Images (dictionary + order) and active selection
     properties (Access=private)
         ImagesDict = dictionary   % string ID -> model.STORMImage
-
-        ActiveImageListener event.listener
-        RegionListeners event.listener
-    end
-
-    properties
         ImageOrder (1,:) string = string.empty(1,0)
         ActiveImageID (1,1) string = ""
     end
 
+    properties (Access=private)
+        CDataCacheSize (1,1) double {mustBeNonnegative, mustBeInteger} = 2  % active + 1 previous
+        RecentImageIDs (1,:) string = string.empty(1,0)
+    end
+
     properties (Dependent)
         ImageNames
+        ImageIDs
     end
 
     %% ergonomic array view, public, editor-friendly
     properties (Dependent, GetAccess=public, SetAccess=private)
         ImageArray   % [1×N model.STORMImage] in ImageOrder
-        ActiveImage  % model.STORMImage or []
+        ActiveImage (:,1) model.STORMImage
     end
 
     %% Project-wide defaults
@@ -38,7 +39,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
         DefaultPixelSize model.units.PixelSize = model.units.PixelSize(1, 'px');
     end
 
-    %% Events 
+    %% Events and listeners
 
     % (GUI controller listens)
     events
@@ -52,6 +53,12 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
         RegionAdded
         RegionRemoved
         ActiveRegionChanged
+    end
+
+
+    properties
+        ActiveImageListener event.listener
+        RegionListeners event.listener
     end
 
     %% Dependent getters 
@@ -82,6 +89,16 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             end
         end
 
+        function IDs = get.ImageIDs(obj)
+            arr = obj.ImageArray;
+            if isempty(arr)
+                IDs = string.empty(1,0);
+            else
+                IDs = arrayfun(@(im) im.ID, arr);
+            end
+        end
+
+
     end
 
     %% Constructor
@@ -105,16 +122,17 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
     %% Image management
     methods
 
-        % add a new model.STORMImage for the image data located at filePath
         function imageID = addImageFromPath(obj, filePath)
-            cdata = imread(filePath);
+            % get file name and extension
             [~,name,ext] = fileparts(filePath);
-            img = model.STORMImage(obj, string(name)+string(ext), filePath, cdata);
+            % create a STORMImage object with new unique ID
+            img = model.STORMImage(obj, string(name)+string(ext), string(filePath), utils.uniqueID());  % NO imread
 
+            % bind to dictionary and emit ImageAdded
             obj.ImagesDict(img.ID) = img;
             obj.ImageOrder(end+1) = img.ID;
             notify(obj,'ImageAdded');
-
+        
             if strlength(obj.ActiveImageID)==0
                 obj.setActiveImage(img.ID);
             end
@@ -203,6 +221,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
     %% Processing hooks
     methods
 
+        % process all Regions (compute and analyze linescans from drawn ROIs)
         function processAll(obj, config)
             % get Image array
             arr = obj.ImageArray;
@@ -214,12 +233,75 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             end
         end
 
+
+
+        function detectRegions(obj, config, progressdlg)
+            arguments
+                obj (1,1) model.STORMProject
+                config (1,1) app.config.RunConfig
+                progressdlg (:,1) matlab.ui.dialog.ProgressDialog = matlab.ui.dialog.ProgressDialog.empty()
+            end
+
+            % get Image array
+            arr = obj.ImageArray;
+            % return if empty
+            if isempty(arr), return; end
+
+            % total to process
+            N = numel(arr);
+
+            % process each image
+            for i = 1:numel(arr)
+                % update progrgess dialog
+                if ~isempty(progressdlg)
+                    set(progressdlg,...
+                        "Title","Processing",...
+                        "Indeterminate","off",...
+                        "Message",sprintf('Autopicking regions (image %i/%i)',i,N),...
+                        "Value",0);
+                end
+
+                % detect region in this image
+                arr(i).detectRegions(config);
+            end
+
+        end
+
+
+
+
     end
 
     %% Listener callbacks
     methods
 
         function onActiveImageChanged(obj)
+
+            % --- buffer clearing policy: keep active + last N-1 ---
+            imgID = obj.ActiveImageID;
+        
+            % Update LRU list
+            if strlength(imgID) > 0
+                obj.RecentImageIDs(obj.RecentImageIDs == imgID) = [];
+                obj.RecentImageIDs = [imgID, obj.RecentImageIDs];
+                if numel(obj.RecentImageIDs) > obj.CDataCacheSize
+                    obj.RecentImageIDs = obj.RecentImageIDs(1:obj.CDataCacheSize);
+                end
+            end
+        
+            % Clear anything not in cache list
+            imgIDs = obj.ImageOrder;
+            keep = obj.RecentImageIDs;
+            toClear = imgIDs(~ismember(imgIDs, keep));
+        
+            for k = 1:numel(toClear)
+                if isKey(obj.ImagesDict, toClear(k))
+                    try
+                        obj.ImagesDict(toClear(k)).clearCDataBuffer();
+                    catch
+                    end
+                end
+            end
 
             % remove listeners first
             if ~isempty(obj.RegionListeners)
@@ -297,6 +379,214 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
         end
 
     end
+
+
+methods
+
+    function save(obj, file, settings)
+        %SAVE Save project + regions + settings to a .mat file.
+        arguments
+            obj
+            file (1,1) string
+            settings (1,1) app.config.Settings
+        end
+
+        [folder,name,~] = fileparts(file);
+        if strlength(folder) > 0 && ~exist(folder,'dir')
+            mkdir(folder);
+        end
+
+        % set Name to match file short name
+        obj.Name = name;
+        obj.SourcePath = file;
+
+        % get save struct
+        Project = obj.toStruct(settings);
+
+        % save it
+        save(file, 'Project', '-mat');
+
+        % indicate that it is now on disk
+        obj.isOnDisk = true;
+
+    end
+
+end
+
+methods (Static)
+
+    function [proj, settings] = load(file)
+        %LOAD Loads a project file created by STORMProject.save()
+        arguments
+            file (1,1) string % name of the saved file
+        end
+
+        % load the mat file
+        S = load(file, 'Project', '-mat');
+
+        %assert(isfield(S,'Project'), 'Project file did not contain variable: Project.');
+
+        % ensure file contains a variable named "Project"
+        if ~isfield(S,'Project')
+            error('STORMProject:InvalidProjectFile', 'Cannot load project file: no variable named "Project" found')
+        end
+
+        [proj, settings] = model.STORMProject.fromStruct(S.Project, file);
+    end
+
+    function [proj, settings] = fromStruct(P, file)
+
+        projectFolder = string(fileparts(file));
+
+        % Settings restore 
+        % (migrations handled in Settings.load, here we restore directly from struct)
+        settings = app.config.Settings();
+        if isfield(P,'Settings') && ~isempty(P.Settings)
+            settings.Analysis.fromStruct(P.Settings.Analysis);
+            settings.Display.fromStruct(P.Settings.Display);
+            settings.IO.fromStruct(P.Settings.IO);
+            settings.PeaksPlot.fromStruct(P.Settings.PeaksPlot);
+            settings.Box.fromStruct(P.Settings.Box);
+        end
+
+        % Project
+        proj = model.STORMProject(P.Project.Name);
+        proj.ID = string(P.Project.ID);
+        proj.CreatedAt = P.Project.CreatedAt;
+        proj.Version = string(P.Project.Version);
+        proj.SchemaVersion = P.SchemaVersion;
+        proj.SourcePath = file;
+
+        if isfield(P.Project,'DefaultPixelSize')
+            ps = P.Project.DefaultPixelSize;
+            proj.DefaultPixelSize = model.units.PixelSize(ps.Value, ps.Unit);
+        end
+
+        % Resolve image paths
+        resolved = model.STORMProject.resolveImagePaths(P.Images, projectFolder);
+
+        % Rebuild images/regions without eager pixel loads
+        proj.ImagesDict = dictionary(string.empty(1,0), model.STORMImage.empty(1,0));
+        proj.ImageOrder = string.empty(1,0);
+
+        for k = 1:numel(resolved)
+            img = model.STORMImage.fromStruct(resolved(k),proj);
+            proj.ImagesDict(img.ID) = img;
+            proj.ImageOrder(end+1) = img.ID;
+        end
+
+        % Restore active selection
+        if isfield(P,'ActiveImageID') && strlength(string(P.ActiveImageID))>0
+            proj.setActiveImage(string(P.ActiveImageID));
+        end
+
+        % indicate file exists on disk at SourcePath
+        proj.isOnDisk = true;
+
+    end
+
+    function imagesOut = resolveImagePaths(imagesIn, projectFolder)
+        imagesOut = imagesIn;
+
+        % First pass: keep paths that still exist; also try project folder + filename.
+        missing = false(1, numel(imagesOut));
+        for k = 1:numel(imagesOut)
+            p = string(imagesOut(k).SourcePath);
+            if strlength(p) > 0 && isfile(p)
+                continue
+            end
+
+            % Try project folder + filename
+            if strlength(projectFolder) > 0 && isfield(imagesOut(k),'FileName')
+                candidate = fullfile(projectFolder, imagesOut(k).FileName + imagesOut(k).Ext);
+                if isfile(candidate)
+                    imagesOut(k).SourcePath = string(candidate);
+                    continue
+                end
+            end
+
+            missing(k) = true;
+        end
+
+        if ~any(missing)
+            return
+        end
+
+        % Prompt once for a folder to search
+        msg = sprintf('Locate missing image files (%d missing)...', nnz(missing));
+        disp(msg);
+        searchRoot = uigetdir(projectFolder, msg);
+        if isequal(searchRoot, 0)
+            % User canceled: leave missing unresolved; project still loads.
+            return
+        end
+        searchRoot = string(searchRoot);
+
+        % Build filename->paths map via recursive dir
+        files = dir(fullfile(searchRoot, "**", "*"));
+        files = files(~[files.isdir]);
+
+        % Resolve each missing entry by filename, prefer matching file size if available
+        for k = find(missing)
+            targetName = imagesOut(k).FileName + imagesOut(k).Ext;
+            hits = files(string({files.name}) == targetName);
+
+            if isempty(hits)
+                continue
+            end
+
+            % If only one hit, take it
+            if isscalar(hits)
+                imagesOut(k).SourcePath = string(fullfile(hits.folder, hits.name));
+                continue
+            end
+
+            % Prefer matching file size if recorded
+            sz = imagesOut(k).FileSizeBytes;
+            if ~isnan(sz)
+                szHits = hits([hits.bytes] == sz);
+                if isscalar(szHits)
+                    imagesOut(k).SourcePath = string(fullfile(szHits.folder, szHits.name));
+                    continue
+                elseif ~isempty(szHits)
+                    hits = szHits; % narrow
+                end
+            end
+
+            % Fallback: take most recently modified
+            [~,idx] = max([hits.datenum]);
+            imagesOut(k).SourcePath = string(fullfile(hits(idx).folder, hits(idx).name));
+        end
+    end
+
+end
+
+methods (Access=private)
+
+    function P = toStruct(obj, settings)
+        % Project meta
+        P.Project.ID           = obj.ID;
+        P.Project.Name         = obj.Name;
+        P.Project.CreatedAt    = obj.CreatedAt;
+        P.Project.Version      = obj.Version;
+        P.Project.SourcePath   = obj.SourcePath;
+        P.Project.DefaultPixelSize = struct('Value', obj.DefaultPixelSize.Value, 'Unit', obj.DefaultPixelSize.Unit);
+
+        % Settings snapshot (portable)
+        P.Settings = settings.toStruct();
+
+        % Images
+        imgs = obj.ImageArray;
+        P.ImageOrder     = obj.ImageOrder;
+        P.ActiveImageID  = obj.ActiveImageID;
+
+        for k = 1:numel(imgs)
+            im = imgs(k);
+            P.Images(k) = im.toStruct();
+        end
+    end
+
+end
 
     %% Friendlier Command Window / Variable Editor display
     methods (Access=protected)
