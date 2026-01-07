@@ -53,6 +53,16 @@ classdef GUI < handle
 
     end
 
+
+    % Menu-related graphics components
+    properties (Access=private)
+
+        MenubarUI struct
+
+    end
+
+
+
     % listeners
     properties (Access=private)
         % L event.listener
@@ -79,12 +89,12 @@ classdef GUI < handle
 
         function obj = GUI()
 
-            %% --- Settings ---
+            % %% --- Settings ---
             obj.Settings = app.config.Settings.load();
 
-            %% --- Model ---
-            obj.Project = model.STORMProject("untitled");
-            obj.Project.DefaultPixelSize = obj.Settings.Analysis.getDefaultPixelSize();
+            % %% --- Model ---
+            % obj.Project = model.STORMProject("untitled");
+            % obj.Project.DefaultPixelSize = obj.Settings.Analysis.getDefaultPixelSize();
 
             %% --- Figure ---
             % need to add a more elegant way to set window size once app components are finalized
@@ -98,24 +108,50 @@ classdef GUI < handle
                 'Theme','dark');
 
             %% --- Menubar ---
+
+            % Set up MenubarUI struct
+            obj.MenubarUI = struct(...
+                "File",struct(),...
+                "Run",struct());
+
             % --- File ---
-            mFile = uimenu(obj.Fig,'Text','File');
-            uimenu(mFile,'Text','New',  'MenuSelectedFcn',@(~,~) obj.onNew());
-            uimenu(mFile,'Text','Open', 'MenuSelectedFcn',@(~,~) obj.onOpen());
-            uimenu(mFile,'Text','Close','MenuSelectedFcn',@(~,~) obj.onClose());
-            uimenu(mFile,'Text','Save', 'MenuSelectedFcn',@(~,~) obj.onSave(),'Separator','on');
+            %mFile = uimenu(obj.Fig,'Text','File');
+            % uimenu(mFile,'Text','New',  'MenuSelectedFcn',@(~,~) obj.onNew());
+            % uimenu(mFile,'Text','Open', 'MenuSelectedFcn',@(~,~) obj.onOpen());
+            % uimenu(mFile,'Text','Close','MenuSelectedFcn',@(~,~) obj.onClose());
+            % uimenu(mFile,'Text','Save', 'MenuSelectedFcn',@(~,~) obj.onSave(),'Separator','on');
+
+
+            obj.MenubarUI.File       = uimenu(obj.Fig,'Text','File');
+            obj.MenubarUI.File_New   = uimenu(obj.MenubarUI.File,'Text','New',  'MenuSelectedFcn',@(~,~) obj.onNew());
+            obj.MenubarUI.File_Open  = uimenu(obj.MenubarUI.File,'Text','Open', 'MenuSelectedFcn',@(~,~) obj.onOpen());
+            obj.MenubarUI.File_Close = uimenu(obj.MenubarUI.File,'Text','Close','MenuSelectedFcn',@(~,~) obj.onClose());
+            obj.MenubarUI.File_Save  = uimenu(obj.MenubarUI.File,'Text','Save', 'MenuSelectedFcn',@(~,~) obj.onSave(),'Separator','on');
+
+
+
             % --- separator ---
-            uimenu(mFile,'Text','Save Settings','MenuSelectedFcn',@(~,~) obj.onSaveSettings(),'Separator','on');
+            % uimenu(mFile,'Text','Save Settings','MenuSelectedFcn',@(~,~) obj.onSaveSettings(),'Separator','on');
+            obj.MenubarUI.File_SaveSettings = uimenu(obj.MenubarUI.File,'Text','Save Settings','MenuSelectedFcn',@(~,~) obj.onSaveSettings(),'Separator','on');
             % --- separator ---
-            uimenu(mFile,'Text','Load Images','MenuSelectedFcn',@(~,~) obj.onLoadImages());
+            % uimenu(mFile,'Text','Load Images','MenuSelectedFcn',@(~,~) obj.onLoadImages());
+            obj.MenubarUI.File_LoadImages = uimenu(obj.MenubarUI.File,'Text','Load Images','MenuSelectedFcn',@(~,~) obj.onLoadImages());
             % --- File -> Export ---
-            mFileExport = uimenu(mFile,'Text','Export');
-            uimenu(mFileExport,'Text','Measurements (.xlsx)', 'MenuSelectedFcn',@(~,~) obj.onExportMeasurements());
-            uimenu(mFileExport,'Text','Peak Plots (.pdf)',    'MenuSelectedFcn',@(~,~) obj.onExportPeakPlots());
+            % mFileExport = uimenu(mFile,'Text','Export');
+            % uimenu(mFileExport,'Text','Measurements (.xlsx)', 'MenuSelectedFcn',@(~,~) obj.onExportMeasurements());
+            % uimenu(mFileExport,'Text','Peak Plots (.pdf)',    'MenuSelectedFcn',@(~,~) obj.onExportPeakPlots());
+
+            obj.MenubarUI.File_Export = uimenu(obj.MenubarUI.File,'Text','Export');
+            obj.MenubarUI.File_Export_Measurements = uimenu(obj.MenubarUI.File_Export,'Text','Measurements (.xlsx)', 'MenuSelectedFcn',@(~,~) obj.onExportMeasurements());
+            obj.MenubarUI.File_Export_PeakPlots    = uimenu(obj.MenubarUI.File_Export,'Text','Peak Plots (.pdf)',    'MenuSelectedFcn',@(~,~) obj.onExportPeakPlots());
+
 
             % --- Run ---
-            mRun = uimenu(obj.Fig,'Text','Run');
-            uimenu(mRun,'Text','Auto-pick Regions (experimental)...','MenuSelectedFcn',@(~,~) obj.onAutopickRegions());
+            % mRun = uimenu(obj.Fig,'Text','Run');
+            % uimenu(mRun,'Text','Auto-pick Regions (experimental)...','MenuSelectedFcn',@(~,~) obj.onAutopickRegions());
+            obj.MenubarUI.Run = uimenu(obj.Fig,'Text','Run');
+            obj.MenubarUI.Run_Autopick = uimenu(obj.MenubarUI.Run,'Text','Auto-pick Regions (experimental)...','MenuSelectedFcn',@(~,~) obj.onAutopickRegions());
+
 
 
             %% --- Layout ---
@@ -534,18 +570,18 @@ classdef GUI < handle
             movegui(obj.Fig,"center");
 
             %% --- Listeners ---
-            obj.projectL(1) = addlistener(obj.Project,'ImageAdded',          @(~,~) obj.refreshImageList());
-            obj.projectL(2) = addlistener(obj.Project,'ImageRemoved',        @(~,~) obj.refreshImageList());
-            obj.projectL(3) = addlistener(obj.Project,'ActiveImageChanged',  @(~,~) obj.syncActiveImageToView());
-            obj.projectL(4) = addlistener(obj.Project,'RegionAdded',         @(~,~) obj.onRegionAdded());
-            obj.projectL(5) = addlistener(obj.Project,'RegionRemoved',       @(~,~) obj.refreshRegionList());
-            obj.projectL(6) = addlistener(obj.Project,'ActiveRegionChanged', @(~,~) obj.syncActiveRegionToView());
-
-            obj.settingsL(1) = addlistener(obj.Settings,'DisplayChanged',   @(~,e) obj.onDisplayChanged(e));
-            obj.settingsL(2) = addlistener(obj.Settings,'AnalysisChanged',  @(~,e) obj.onAnalysisChanged(e));
-            obj.settingsL(3) = addlistener(obj.Settings,'IOChanged',        @(~,e) obj.onIOChanged(e));
-            obj.settingsL(4) = addlistener(obj.Settings,'PeaksPlotChanged', @(~,e) obj.onPeaksPlotChanged(e));
-            obj.settingsL(5) = addlistener(obj.Settings,'BoxChanged',       @(~,e) obj.onBoxChanged(e));
+            % obj.projectL(1) = addlistener(obj.Project,'ImageAdded',          @(~,~) obj.refreshImageList());
+            % obj.projectL(2) = addlistener(obj.Project,'ImageRemoved',        @(~,~) obj.refreshImageList());
+            % obj.projectL(3) = addlistener(obj.Project,'ActiveImageChanged',  @(~,~) obj.syncActiveImageToView());
+            % obj.projectL(4) = addlistener(obj.Project,'RegionAdded',         @(~,~) obj.onRegionAdded());
+            % obj.projectL(5) = addlistener(obj.Project,'RegionRemoved',       @(~,~) obj.refreshRegionList());
+            % obj.projectL(6) = addlistener(obj.Project,'ActiveRegionChanged', @(~,~) obj.syncActiveRegionToView());
+            % 
+            % obj.settingsL(1) = addlistener(obj.Settings,'DisplayChanged',   @(~,e) obj.onDisplayChanged(e));
+            % obj.settingsL(2) = addlistener(obj.Settings,'AnalysisChanged',  @(~,e) obj.onAnalysisChanged(e));
+            % obj.settingsL(3) = addlistener(obj.Settings,'IOChanged',        @(~,e) obj.onIOChanged(e));
+            % obj.settingsL(4) = addlistener(obj.Settings,'PeaksPlotChanged', @(~,e) obj.onPeaksPlotChanged(e));
+            % obj.settingsL(5) = addlistener(obj.Settings,'BoxChanged',       @(~,e) obj.onBoxChanged(e));
 
             %% --- Final cleanup ---
             % Expand Image and Region listbox accordion items
@@ -580,8 +616,17 @@ classdef GUI < handle
             % empty project -> clear out UI
             if isempty(obj.Project)
                 obj.clearUI();
+                obj.Grid.Visible = "off";
                 return
+            else
+                obj.Grid.Visible = "on";
             end
+
+            % menubar
+            obj.refreshMenubar();
+
+            % window name
+            obj.refreshWindowName();
 
             % settings controllers
             obj.refreshSettingsControllers();
@@ -596,10 +641,15 @@ classdef GUI < handle
 
         end
 
-
         function clearUI(obj)
 
             str = string.empty(1,0);
+
+            % menubar
+            obj.refreshMenubar();
+
+            % window name
+            obj.Fig.Name = sprintf("%s (%s)",app.Info.Name,app.Info.Version);
 
             % ImageListBox
             set(obj.ImageListBox,...
@@ -639,6 +689,8 @@ classdef GUI < handle
             obj.ExampleColormapAxes.Colormap = cmap;
             obj.Ax.Colormap = cmap;
             obj.RegionViewer.Colormap = cmap;
+            % set axes limits so that colorbar image fills axes area
+            set(obj.ExampleColormapAxes,"YLim",[0.5 50.5],"XLim",[0.5 256.5]);
             % Analysis
             obj.SettingsUI.Analysis.BoxSizeEditField.Value = S.Analysis.BoxSize;
             obj.SettingsUI.Analysis.MinPeakDistanceEditField.Value = S.Analysis.MinPeakDistance;
@@ -653,8 +705,40 @@ classdef GUI < handle
             obj.SettingsUI.PeaksPlot.SmoothLineWidthEditField.Value = S.PeaksPlot.SmoothLineWidth;
             obj.SettingsUI.PeaksPlot.BackgroundColorPicker.Value = S.PeaksPlot.BackgroundColor;
             obj.SettingsUI.PeaksPlot.ForegroundColorPicker.Value = S.PeaksPlot.ForegroundColor;
+            % Display
+            obj.SettingsUI.Display.AutoScaleDisplayIntensityCheckBox.Value = S.Display.AutoScaleDisplayIntensity;
+
+            % Sliders
+            set(obj.IntensitySlider,'Limits',[0 1],'Value',[0 1]);
         end
 
+        function refreshWindowName(obj)
+            if isempty(obj.Project)
+                obj.Fig.Name = sprintf("%s (%s)",app.Info.Name,app.Info.Version);
+            else
+                obj.Fig.Name = sprintf("%s (%s) - %s",app.Info.Name,app.Info.Version,obj.Project.Name);
+            end
+        end
+
+        function refreshMenubar(obj)
+
+            if isempty(obj.Project)
+                % disable all menubar options
+                names = fieldnames(obj.MenubarUI);
+                for i = 1:numel(names)
+                    obj.MenubarUI.(names{i}).Enable = "off";
+                end
+                % re-enable only File, File->New, and File->Open
+                set([obj.MenubarUI.File,obj.MenubarUI.File_New,obj.MenubarUI.File_Open],'Enable','on');
+            else
+                % enable all menubar options
+                names = fieldnames(obj.MenubarUI);
+                for i = 1:numel(names)
+                    obj.MenubarUI.(names{i}).Enable = "on";
+                end
+            end
+
+        end
 
     end
 
@@ -757,38 +841,13 @@ classdef GUI < handle
 
         % fired on ActiveImageChanged event
         function syncActiveImageToView(obj)
-            % % get the active image
-            % img = obj.Project.ActiveImage;
-            % % if empty, clear view and return
-            % if isempty(img)
-            %     obj.Ax.CData = [];
-            %     obj.Ax.Tools.Pick.clearBoxes();
-            %     return
-            % end
-            % 
-            % % set CData and CLim of ImageViewer
-            % obj.Ax.CData = img.CData;
-            % 
-            % switch obj.Settings.Display.AutoScaleDisplayIntensity
-            %     case true
-            %         obj.Ax.CLim = img.AutoDisplayCLim;
-            %     case false
-            %         obj.Ax.CLim = img.DisplayCLim;
-            % end
-
             % refresh ImageViewer CData and CLim
             obj.refreshImageViewer();
-
             % refresh region boxes
             obj.refreshRegionBoxes();
-
             % refresh RegionListBox
             obj.refreshRegionList();
             obj.syncActiveRegionToView();
-
-            % % update IntensitySlider
-            % obj.IntensitySlider.Limits = img.CDataRange;
-            % obj.IntensitySlider.Value = img.DisplayCLim;
         end
 
         function refreshImageViewer(obj)
@@ -807,15 +866,10 @@ classdef GUI < handle
                     clim = img.DisplayCLim;
             end
 
-            % obj.Ax.CData = cdata;
-            % obj.Ax.CLim = clim;
-
             % update ImageViewer CData and CLim
             set(obj.Ax,'CData',cdata,'CLim',clim);
-
             % update IntensitySlider Limits and Value
             set(obj.IntensitySlider,'Limits',img.CDataRange,'Value',clim);
-
         end
 
     end
@@ -899,39 +953,69 @@ classdef GUI < handle
         end
 
         function syncActiveRegionToView(obj)
+            % get the active region
             img = obj.Project.ActiveImage;
             if isempty(img)
                 reg = [];
             else
-                % get the ActiveRegion
                 reg = img.ActiveRegion;
             end
 
-            % no ActiveRegion exists -> clear out view and return
-            if isempty(reg)
-                obj.RegionViewer.CData = [];
-                obj.RegionSummaryTable.Data = [];
-                obj.refreshRegionLinescanROI();
-                obj.refreshRegionLinescanPlot();
-                return
+            if ~isempty(reg)
+                % update RegionListBox selection
+                obj.RegionListBox.Value = reg.ID;
+                % update ROI box selection highlight
+                obj.Ax.Tools.Pick.setActiveBoxByID(reg.ID);
             end
 
-            % update RegionViewer CData with ActiveRegion CData
-            obj.RegionViewer.CData = obj.Project.ActiveImage.regionSubimage(reg);
-            obj.RegionViewer.CLim = obj.Project.ActiveImage.DisplayCLim;
-
-            % update RegionListBox selection
-            obj.RegionListBox.Value = reg.ID;
-
-            % update ROI box selection highlight
-            obj.Ax.Tools.Pick.setActiveBoxByID(reg.ID);
+            % refresh RegionViewer CData and CLim
+            obj.refreshRegionViewer();
 
             % update RegionSummaryTable
-            obj.RegionSummaryTable.Data = reg.SummaryTable;
+            obj.refreshRegionSummaryTable();
 
             % update linescan
             obj.refreshRegionLinescanROI();
             obj.refreshRegionLinescanPlot();
+
+        end
+
+
+        function refreshRegionViewer(obj)
+            img = obj.Project.ActiveImage;
+            if isempty(img)
+                reg = [];
+            else
+                reg = img.ActiveRegion;
+            end
+            % if empty, clear view and return
+            if isempty(reg), obj.RegionViewer.CData = []; return, end
+            % get CData
+            cdata = img.regionSubimage(reg);
+            % get CLim
+            switch obj.Settings.Display.AutoScaleDisplayIntensity
+                case true
+                    clim = img.AutoDisplayCLim;
+                case false
+                    clim = img.DisplayCLim;
+            end
+            % update ImageViewer CData and CLim
+            set(obj.RegionViewer,'CData',cdata,'CLim',clim);
+        end
+
+        function refreshRegionSummaryTable(obj)
+            img = obj.Project.ActiveImage;
+            if isempty(img)
+                reg = [];
+            else
+                reg = img.ActiveRegion;
+            end
+
+            if isempty(reg)
+                obj.RegionSummaryTable.Data = [];
+            else
+                obj.RegionSummaryTable.Data = reg.SummaryTable;
+            end
         end
 
         function refreshRegionLinescanPlot(obj)
@@ -987,9 +1071,11 @@ classdef GUI < handle
                     %set(obj.ROI, 'EdgeColor', obj.Settings.Display.BoxEdgeColor);
                 case "AutoScaleDisplayIntensity"
                     % make sure checked/unchecked state matches settings
-                    obj.SettingsUI.AutoScaleDisplayIntensityCheckBox.Value = e.NewValue;
+                    obj.SettingsUI.Display.AutoScaleDisplayIntensityCheckBox.Value = e.NewValue;
                     % refresh image view
                     obj.refreshImageViewer();
+                    % refresh region view
+                    obj.refreshRegionViewer();
             end
         end
 
@@ -1092,6 +1178,26 @@ classdef GUI < handle
         function onNew(obj)
             % start a new project
 
+            % --- cleanup before starting new ---
+            % delete project
+            obj.Project.delete();
+            % delete settings
+            obj.Settings.delete();
+            % detach listeners
+            obj.detatchListeners();
+
+            % --- Settings ---
+            obj.Settings = app.config.Settings.load();
+
+            % --- Model ---
+            obj.Project = model.STORMProject("untitled");
+            obj.Project.DefaultPixelSize = obj.Settings.Analysis.getDefaultPixelSize();
+
+            % refresh UI
+            obj.refreshUI();  
+
+            % refresh listeners
+            obj.refreshListeners();
         end
 
         function onOpen(obj)
@@ -1118,13 +1224,13 @@ classdef GUI < handle
             % --- cleanup before loading ---
             % delete project
             obj.Project.delete();
+            % delete settings
+            obj.Settings.delete();
             % detach listeners
             obj.detatchListeners();
 
-
             % --- load the project ---
             [proj,stgs] = model.STORMProject.load(fname);
-
 
             % --- update after load ---
             % assign new project and settings
@@ -1134,7 +1240,7 @@ classdef GUI < handle
             % run region analysis
             obj.processAllRegions();
 
-            % refresh view
+            % refresh UI
             obj.refreshUI();
             % refresh listeners
             obj.refreshListeners();
@@ -1191,6 +1297,9 @@ classdef GUI < handle
             % save the project
             obj.Project.save(fname,obj.Settings);
 
+            % refresh the window name
+            obj.refreshWindowName();
+
             % clost progress dialog
             close(h);
         end
@@ -1216,10 +1325,6 @@ classdef GUI < handle
                 set([obj.Ax,obj.RegionViewer],'CLim',obj.IntensitySlider.Value);
             end
 
-            % disable AutoScaleDisplayIntensity if enabled
-            if obj.Settings.Display.AutoScaleDisplayIntensity
-                obj.Settings.Display.AutoScaleDisplayIntensity = "off";
-            end
         end
 
         function onIntensitySliderChanged(obj,~)
@@ -1233,6 +1338,11 @@ classdef GUI < handle
             img.DisplayCLim = newVal;
             obj.Ax.CLim = newVal;
             obj.RegionViewer.CLim = newVal;
+
+            % disable AutoScaleDisplayIntensity if enabled
+            if obj.Settings.Display.AutoScaleDisplayIntensity
+                obj.Settings.Display.AutoScaleDisplayIntensity = false;
+            end
 
         end
 

@@ -454,7 +454,6 @@ methods (Static)
         proj.ID = string(P.Project.ID);
         proj.CreatedAt = P.Project.CreatedAt;
         proj.Version = string(P.Project.Version);
-        proj.SchemaVersion = P.SchemaVersion;
         proj.SourcePath = file;
 
         if isfield(P.Project,'DefaultPixelSize')
