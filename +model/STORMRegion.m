@@ -172,6 +172,7 @@ classdef STORMRegion < handle
 
     %% Export data
     methods
+
         function row = exportRow(obj)
 
             ps = obj.PixelSize;
@@ -222,6 +223,7 @@ classdef STORMRegion < handle
             row.PeakWidth2_phys     = obj.px2phys(row.PeakWidth2_px);
 
         end
+        
     end
 
     %% Static methods
