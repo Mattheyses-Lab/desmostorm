@@ -1,7 +1,7 @@
 classdef ROIBox < handle & matlab.mixin.SetGetExactNames
 
     properties
-        UUID (1,1) string = ""    % widget-local id (opaque to the model)
+        ID (1,1) string = ""    % widget-local id (opaque to the model)
     end
 
     properties (SetObservable, AbortSet)
@@ -45,7 +45,7 @@ classdef ROIBox < handle & matlab.mixin.SetGetExactNames
                 opts.Center   (1,2) double = [NaN NaN]
                 opts.BoxSize  (1,1) double {mustBePositive} = 50
                 opts.ButtonDownFcn = []
-                opts.UUID (1,1) string = ""
+                opts.ID (1,1) string = ""
             end
 
             obj.BoxPatch = patch(ax, ...
@@ -59,17 +59,17 @@ classdef ROIBox < handle & matlab.mixin.SetGetExactNames
                 'LineWidth', obj.LineWidth, ...
                 'Tag','ROIBox');
 
-            % add UUID property to the BoxPatch for tracking ownership
-            obj.P(1) = addprop(obj.BoxPatch,'UUID');
+            % add ID property to the BoxPatch for tracking ownership
+            obj.P(1) = addprop(obj.BoxPatch,'ID');
 
             % apply inputs
             obj.Center        = opts.Center;
             obj.BoxSize       = opts.BoxSize;
             obj.ButtonDownFcn = opts.ButtonDownFcn;
-            obj.UUID = opts.UUID;
+            obj.ID = opts.ID;
 
-            % set dynamic property (UUID)
-            obj.BoxPatch.UUID = opts.UUID;
+            % set dynamic property (ID)
+            obj.BoxPatch.ID = opts.ID;
 
             % one listener covers Center, BoxSize, and ButtonDownFcn
             obj.L = addlistener(obj, {'Center','BoxSize','ButtonDownFcn'}, ...
