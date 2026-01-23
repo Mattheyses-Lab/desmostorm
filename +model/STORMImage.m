@@ -244,6 +244,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
 
     %% Private helpers
     methods (Access=private)
+        
         function cacheImageSizeFromFile(obj)
             if strlength(obj.SourcePath)==0 || ~isfile(obj.SourcePath)
                 return
@@ -664,10 +665,6 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
             end
 
         end
-
-
-
-
 
     end
 
