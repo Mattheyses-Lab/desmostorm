@@ -424,8 +424,6 @@ methods (Static)
         % load the mat file
         S = load(file, 'Project', '-mat');
 
-        %assert(isfield(S,'Project'), 'Project file did not contain variable: Project.');
-
         % ensure file contains a variable named "Project"
         if ~isfield(S,'Project')
             error('STORMProject:InvalidProjectFile', 'Cannot load project file: no variable named "Project" found')
@@ -463,6 +461,13 @@ methods (Static)
 
         % Resolve image paths
         resolved = model.STORMProject.resolveImagePaths(P.Images, projectFolder);
+
+        % If resolved comes back empty -> return empty, load fails
+        if isempty(resolved)
+            delete(proj); delete(settings);
+            proj = []; settings = [];
+            return
+        end
 
         % Rebuild images/regions without eager pixel loads
         proj.ImagesDict = dictionary(string.empty(1,0), model.STORMImage.empty(1,0));
@@ -504,6 +509,7 @@ methods (Static)
                 end
             end
 
+            % not found -> mark as missing
             missing(k) = true;
         end
 
@@ -511,16 +517,47 @@ methods (Static)
             return
         end
 
-        % Prompt once for a folder to search
-        msg = sprintf('Locate missing image files (%d missing)...', nnz(missing));
+        % get cell array of missing filenames
+        missingNames = [imagesOut(missing).SourcePath]';
+
+        % user prompt (Command Window)
+        msg = sprintf('Locate missing image files (%d missing):', nnz(missing));
         disp(msg);
-        searchRoot = uigetdir(projectFolder, msg);
+        for i = 1:numel(missingNames)
+            fprintf('%s\n',missingNames{i});
+        end
+
+        % find the GUI window
+        fig = app.GUI.findGUI();
+
+        % user prompt (modal dialog)
+        selection = uiconfirm(fig,...
+            [msg;"";missingNames],...
+            'Image files missing',...
+            "Options",["Locate","Cancel"],...
+            "DefaultOption",1,...
+            "CancelOption",2,...
+            "Icon","warning");
+
+        switch selection
+            case "Locate"
+                fig.Visible = "off";
+                searchRoot = uigetdir(projectFolder, msg);
+                fig.Visible = "on";
+            case "Cancel" % -> return empty
+                imagesOut = [];
+                return
+        end
+
+        % user cancels -> return empty, load fails
         if isequal(searchRoot, 0)
-            % User canceled: leave missing unresolved; project still loads.
+            imagesOut = [];
             return
         end
-        searchRoot = string(searchRoot);
 
+        % root path for search
+        searchRoot = string(searchRoot);
+        
         % Build filename->paths map via recursive dir
         files = dir(fullfile(searchRoot, "**", "*"));
         files = files(~[files.isdir]);
@@ -530,9 +567,7 @@ methods (Static)
             targetName = imagesOut(k).FileName + imagesOut(k).Ext;
             hits = files(string({files.name}) == targetName);
 
-            if isempty(hits)
-                continue
-            end
+            if isempty(hits), continue, end
 
             % If only one hit, take it
             if isscalar(hits)
@@ -556,6 +591,10 @@ methods (Static)
             [~,idx] = max([hits.datenum]);
             imagesOut(k).SourcePath = string(fullfile(hits(idx).folder, hits(idx).name));
         end
+
+        % recurse until all files found or empty returned (user cancels)
+        imagesOut = model.STORMProject.resolveImagePaths(imagesOut, projectFolder);
+
     end
 
 end
