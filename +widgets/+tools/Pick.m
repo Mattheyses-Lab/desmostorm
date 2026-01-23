@@ -12,12 +12,12 @@ classdef Pick < widgets.ImageAxesTool
     % Callbacks
     properties
         % Optimistic, widget-first events (controller may ignore them):
-        % BoxCreatedFcn:        data.UUID, data.CenterPx, data.BoxSize
-        % BoxMoveStartedFcn:    data.UUID
-        % BoxPreviewMovedFcn:   data.UUID, data.CenterPx
-        % BoxMoveCommittedFcn:  data.UUID, data.CenterPx
-        % BoxDeletedFcn:        data.UUID
-        % BoxActivatedFcn:      data.UUID
+        % BoxCreatedFcn:        data.ID, data.CenterPx, data.BoxSize
+        % BoxMoveStartedFcn:    data.ID
+        % BoxPreviewMovedFcn:   data.ID, data.CenterPx
+        % BoxMoveCommittedFcn:  data.ID, data.CenterPx
+        % BoxDeletedFcn:        data.ID
+        % BoxActivatedFcn:      data.ID
         BoxCreatedFcn
         BoxMoveStartedFcn
         BoxPreviewMovedFcn
@@ -105,13 +105,14 @@ classdef Pick < widgets.ImageAxesTool
 
             s = obj.BoxSize;
             [cx,cy] = obj.clampCenter(XY, s);
-            UUID = string(char(java.util.UUID.randomUUID()));
+            % ID = string(char(java.util.UUID.randomUUID()));
+            ID = utils.uniqueID();
 
             % Draw now; notify controller (optimistic)
-            obj.addBox(UUID, [cx cy], s);
+            obj.addBox(ID, [cx cy], s);
 
             if ~isempty(obj.BoxCreatedFcn)
-                obj.BoxCreatedFcn(H, struct('UUID', UUID, 'CenterPx', [cx cy], 'BoxSize', s));
+                obj.BoxCreatedFcn(H, struct('ID', ID, 'CenterPx', [cx cy], 'BoxSize', s));
             end
 
         end
@@ -126,12 +127,23 @@ classdef Pick < widgets.ImageAxesTool
 
             obj.printStatus(sprintf('%s.onDistractDown()\n',obj.Name));
 
+
+            % % ROIBox clicks handled by patch (drag/delete)
+            % if isa(tgt,'matlab.graphics.primitive.Patch') && strcmp(get(tgt,'Tag'),'ROIBox')
+            %     tf = true;
+            % else
+            %     tf = false;
+            % end
+
+
             % ROIBox clicks handled by patch (drag/delete)
-            if isa(tgt,'matlab.graphics.primitive.Patch') && strcmp(get(tgt,'Tag'),'ROIBox')
+            if isprop(tgt,'ID') && obj.hasBox(tgt.ID)
                 tf = true;
             else
                 tf = false;
             end
+
+
 
         end
 
@@ -155,8 +167,8 @@ classdef Pick < widgets.ImageAxesTool
 
             % cursor target is ROIBox patch
             if isa(tgt,'matlab.graphics.primitive.Patch') && strcmp(get(tgt,'Tag'),'ROIBox')
-                % turn HoverHighlight mode 'on' on the box (get idx from custom patch property, UUID)
-                obj.startHoverByIdx(obj.idxOfId(tgt.UUID));
+                % turn HoverHighlight mode 'on' on the box (get idx from custom patch property, ID)
+                obj.startHoverByIdx(obj.idxOfId(tgt.ID));
             else % cursor target is anything else
                 % turn off HoverHighlight mode for box corresponding to ActiveHoverIdx, if it exists
                 obj.stopHover();
@@ -194,9 +206,13 @@ classdef Pick < widgets.ImageAxesTool
     %% Private Helpers (Pick)
     methods (Access=private)
 
-        % helpers
         function idx = idxOfId(obj, id)
             idx = find(obj.BoxIds == string(id), 1, 'first');
+        end
+
+        % check if this tool owns box indicated by id
+        function TF = hasBox(obj,id)
+            TF = ismember(id,obj.BoxIds);
         end
 
         function deleteBoxByIdx(obj, idx)
@@ -234,9 +250,9 @@ classdef Pick < widgets.ImageAxesTool
                     obj.Host.setMode('PrimedForDrag',true);
                 case 'alt'   % delete immediately (optimistic), then notify
                     obj.deleteBoxByIdx(idx);   % remove overlay now
-                    % call BoxDeletedFcn if it exists, pass UUID
+                    % call BoxDeletedFcn if it exists, pass ID
                     if ~isempty(obj.BoxDeletedFcn)
-                        obj.BoxDeletedFcn(obj, struct('UUID', string(id)));
+                        obj.BoxDeletedFcn(obj, struct('ID', string(id)));
                     end
             end
 
@@ -256,8 +272,8 @@ classdef Pick < widgets.ImageAxesTool
             obj.BoxCenters(idx,:)  = [cx cy];
             % emit high-frequency preview (controller may ignore)
             if ~isempty(obj.BoxPreviewMovedFcn)
-                UUID = obj.BoxIds(idx);
-                obj.BoxPreviewMovedFcn(obj, struct('UUID', UUID, 'CenterPx', [cx cy]));
+                ID = obj.BoxIds(idx);
+                obj.BoxPreviewMovedFcn(obj, struct('ID', ID, 'CenterPx', [cx cy]));
             end
         end
 
@@ -269,8 +285,8 @@ classdef Pick < widgets.ImageAxesTool
             obj.Host.setMode('DragBox',true);
             % fire BoxMoveStartedFcn
             if ~isempty(obj.BoxMoveStartedFcn)
-                UUID = obj.BoxIds(idx);
-                obj.BoxMoveStartedFcn(obj, struct('UUID', UUID));
+                ID = obj.BoxIds(idx);
+                obj.BoxMoveStartedFcn(obj, struct('ID', ID));
             end
             % request Host update
             obj.Host.updateFromTool();
@@ -281,9 +297,9 @@ classdef Pick < widgets.ImageAxesTool
             if ~isempty(idx) && isscalar(idx) && idx>=1 && idx<=obj.nBoxes && isvalid(obj.BoxROI(idx))
                 obj.dragBox(idx); % snap to final position before stopping drag
                 if ~isempty(obj.BoxMoveCommittedFcn)
-                    UUID = obj.BoxIds(idx);
+                    ID = obj.BoxIds(idx);
                     ctr  = obj.BoxCenters(idx,:);
-                    obj.BoxMoveCommittedFcn(obj, struct('UUID', UUID, 'CenterPx', ctr));
+                    obj.BoxMoveCommittedFcn(obj, struct('ID', ID, 'CenterPx', ctr));
                 end
             end
             obj.Host.setMode('DragBox',false);
@@ -383,7 +399,7 @@ classdef Pick < widgets.ImageAxesTool
             obj.BoxROI(next) = widgets.overlays.ROIBox(hostAxes, ...
                 "Center",[cx cy], ...
                 "BoxSize", boxSize, ...
-                "UUID", string(id), ...
+                "ID", string(id), ...
                 "ButtonDownFcn", @(~,~) obj.boxClickedById(string(id)));
 
             obj.BoxCenters(end+1,:) = [cx cy];
@@ -406,7 +422,7 @@ classdef Pick < widgets.ImageAxesTool
         end
 
         function setActiveBoxByID(obj, id)
-            % get box idx from UUID
+            % get box idx from ID
             idx = obj.idxOfId(id); 
             % if empty, return
             if isempty(idx), return; end
@@ -437,8 +453,8 @@ classdef Pick < widgets.ImageAxesTool
 
             % call BoxActivatedFcn if it exists
             if ~isempty(obj.BoxActivatedFcn)
-                UUID = obj.BoxIds(idx);
-                obj.BoxActivatedFcn(obj, struct('UUID', UUID));
+                ID = obj.BoxIds(idx);
+                obj.BoxActivatedFcn(obj, struct('ID', ID));
             end
         end
 
