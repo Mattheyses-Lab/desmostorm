@@ -100,12 +100,14 @@ classdef GUI < handle
             % need to add a more elegant way to set window size once app components are finalized
             s = utils.getScreenSize();
             s(4) = 0.45*s(3);
-            obj.Fig  = uifigure('Name','DesmoSTORM',...
+            obj.Fig = uifigure('Name','DesmoSTORM',...
                 'Color',[0 0 0],...
                 'Position',s(1,:),...
                 'WindowStyle','alwaysontop',...
                 'Visible','off',...
-                'Theme','dark');
+                'Theme','dark',...
+                'HandleVisibility','on',...
+                'Tag',app.Info.Name);
 
             %% --- Menubar ---
 
@@ -115,44 +117,23 @@ classdef GUI < handle
                 "Run",struct());
 
             % --- File ---
-            %mFile = uimenu(obj.Fig,'Text','File');
-            % uimenu(mFile,'Text','New',  'MenuSelectedFcn',@(~,~) obj.onNew());
-            % uimenu(mFile,'Text','Open', 'MenuSelectedFcn',@(~,~) obj.onOpen());
-            % uimenu(mFile,'Text','Close','MenuSelectedFcn',@(~,~) obj.onClose());
-            % uimenu(mFile,'Text','Save', 'MenuSelectedFcn',@(~,~) obj.onSave(),'Separator','on');
-
-
             obj.MenubarUI.File       = uimenu(obj.Fig,'Text','File');
             obj.MenubarUI.File_New   = uimenu(obj.MenubarUI.File,'Text','New',  'MenuSelectedFcn',@(~,~) obj.onNew());
             obj.MenubarUI.File_Open  = uimenu(obj.MenubarUI.File,'Text','Open', 'MenuSelectedFcn',@(~,~) obj.onOpen());
             obj.MenubarUI.File_Close = uimenu(obj.MenubarUI.File,'Text','Close','MenuSelectedFcn',@(~,~) obj.onClose());
             obj.MenubarUI.File_Save  = uimenu(obj.MenubarUI.File,'Text','Save', 'MenuSelectedFcn',@(~,~) obj.onSave(),'Separator','on');
-
-
-
             % --- separator ---
-            % uimenu(mFile,'Text','Save Settings','MenuSelectedFcn',@(~,~) obj.onSaveSettings(),'Separator','on');
             obj.MenubarUI.File_SaveSettings = uimenu(obj.MenubarUI.File,'Text','Save Settings','MenuSelectedFcn',@(~,~) obj.onSaveSettings(),'Separator','on');
             % --- separator ---
-            % uimenu(mFile,'Text','Load Images','MenuSelectedFcn',@(~,~) obj.onLoadImages());
             obj.MenubarUI.File_LoadImages = uimenu(obj.MenubarUI.File,'Text','Load Images','MenuSelectedFcn',@(~,~) obj.onLoadImages());
             % --- File -> Export ---
-            % mFileExport = uimenu(mFile,'Text','Export');
-            % uimenu(mFileExport,'Text','Measurements (.xlsx)', 'MenuSelectedFcn',@(~,~) obj.onExportMeasurements());
-            % uimenu(mFileExport,'Text','Peak Plots (.pdf)',    'MenuSelectedFcn',@(~,~) obj.onExportPeakPlots());
-
             obj.MenubarUI.File_Export = uimenu(obj.MenubarUI.File,'Text','Export');
             obj.MenubarUI.File_Export_Measurements = uimenu(obj.MenubarUI.File_Export,'Text','Measurements (.xlsx)', 'MenuSelectedFcn',@(~,~) obj.onExportMeasurements());
             obj.MenubarUI.File_Export_PeakPlots    = uimenu(obj.MenubarUI.File_Export,'Text','Peak Plots (.pdf)',    'MenuSelectedFcn',@(~,~) obj.onExportPeakPlots());
 
-
             % --- Run ---
-            % mRun = uimenu(obj.Fig,'Text','Run');
-            % uimenu(mRun,'Text','Auto-pick Regions (experimental)...','MenuSelectedFcn',@(~,~) obj.onAutopickRegions());
             obj.MenubarUI.Run = uimenu(obj.Fig,'Text','Run');
             obj.MenubarUI.Run_Autopick = uimenu(obj.MenubarUI.Run,'Text','Auto-pick Regions (experimental)...','MenuSelectedFcn',@(~,~) obj.onAutopickRegions());
-
-
 
             %% --- Layout ---
             % Main Grid
@@ -470,11 +451,11 @@ classdef GUI < handle
             % ImageAxes to view active image CData, select Regions
             obj.Ax = widgets.ImageAxes(obj.ImageViewerPanelGrid,...
                 'Name','ImageViewer',...
-                'ToolBox',{'Zoom','Pick','Colorbar'},...
+                'CData',[],...
                 'ToolBelt',{'Zoom','Pick','Colorbar'},...
                 'Colormap',obj.Settings.Display.Colormap,...
-                'CLim',[0 1],...
-                'CData',[]);
+                'CLim',[0 1]);
+
 
             % wire the optimistic callbacks for ImageViewer Pick tool
             obj.Ax.Tools.Pick.BoxCreatedFcn       = @(~,d) obj.onBoxCreated(d);
@@ -514,11 +495,11 @@ classdef GUI < handle
             % ImageAxes to show active region CData, make region measurements
             obj.RegionViewer = widgets.ImageAxes(obj.RegionViewerPanelGrid,...
                 'Name','RegionViewer',...
-                'ToolBox',{'DrawRectangle'},...
+                'CData',[],...
                 'ToolBelt',{'DrawRectangle'},...
                 'Colormap',obj.Settings.Display.Colormap,...
-                'CLim',[0 1],...
-                'CData',[]);
+                'CLim',[0 1]);
+
 
             % wire the callbacks for RegionViewer DrawRectangle tool
             obj.RegionViewer.Tools.DrawRectangle.ROIPreviewMovedFcn    = @(~,d) obj.onROIPreviewMoved(d);
@@ -980,7 +961,6 @@ classdef GUI < handle
 
         end
 
-
         function refreshRegionViewer(obj)
             img = obj.Project.ActiveImage;
             if isempty(img)
@@ -1233,12 +1213,20 @@ classdef GUI < handle
             [proj,stgs] = model.STORMProject.load(fname);
 
             % --- update after load ---
-            % assign new project and settings
-            obj.Project = proj;
-            obj.Settings = stgs;
 
-            % run region analysis
-            obj.processAllRegions();
+            % valid project and settings returned
+            if ~isempty(proj) && ~isempty(stgs)
+                % assign new project and settings
+                obj.Project = proj;
+                obj.Settings = stgs;
+                % run region analysis
+                obj.processAllRegions();
+            else
+                % empty project
+                obj.Project = model.STORMProject.empty();
+                % use default settings
+                obj.Settings = app.config.Settings.load();
+            end
 
             % refresh UI
             obj.refreshUI();
@@ -1319,11 +1307,21 @@ classdef GUI < handle
             img = obj.Project.ActiveImage;
             if isempty(img), return; end
 
-            change = max(abs(obj.Ax.CLim-obj.IntensitySlider.Value));
+            % change = max(abs(obj.Ax.CLim-obj.IntensitySlider.Value));
+            % 
+            % if change > img.CDataLimits(2)*0.01
+            %     set([obj.Ax,obj.RegionViewer],'CLim',obj.IntensitySlider.Value);
+            % end
 
-            if change > img.CDataLimits(2)*0.01
-                set([obj.Ax,obj.RegionViewer],'CLim',obj.IntensitySlider.Value);
-            end
+
+            % set MaxRenderedResolution for smoother updates in ImageViewer, RegionViewer
+            % obj.Ax.MaxRenderedResolution = 500;
+            obj.Ax.MaxRenderedResolution = obj.Ax.CDataSize(1)/4;
+            obj.RegionViewer.MaxRenderedResolution = obj.Settings.Analysis.BoxSize/4;
+
+
+            % set the new CLim
+            set([obj.Ax,obj.RegionViewer],'CLim',obj.IntensitySlider.Value);
 
         end
 
@@ -1335,7 +1333,10 @@ classdef GUI < handle
             % newVal = evt.Source.Value;
             newVal = obj.IntensitySlider.Value;
 
+            % update model
             img.DisplayCLim = newVal;
+
+            % update view
             obj.Ax.CLim = newVal;
             obj.RegionViewer.CLim = newVal;
 
@@ -1343,6 +1344,10 @@ classdef GUI < handle
             if obj.Settings.Display.AutoScaleDisplayIntensity
                 obj.Settings.Display.AutoScaleDisplayIntensity = false;
             end
+
+            % reset MaxRenderedResolution
+            obj.Ax.MaxRenderedResolution = 'none';
+            obj.RegionViewer.MaxRenderedResolution = 'none';
 
         end
 
@@ -1422,14 +1427,14 @@ classdef GUI < handle
             % get the ActiveImage, exit if empty
             img = obj.Project.ActiveImage; if isempty(img), return; end
             % create a new STORMRegion
-            img.addRegion(data.UUID, data.CenterPx, obj.Settings.Analysis.BoxSize);
+            img.addRegion(data.ID, data.CenterPx, obj.Settings.Analysis.BoxSize);
             % set new region as the ActiveRegion
-            img.setActiveRegion(data.UUID);
+            img.setActiveRegion(data.ID);
         end
 
         function onBoxMoveStarted(obj, data)
             img = obj.Project.ActiveImage; if isempty(img), return; end
-            regionID = data.UUID;
+            regionID = data.ID;
             if img.hasRegion(regionID)
                 img.setActiveRegion(regionID);
             end
@@ -1440,7 +1445,7 @@ classdef GUI < handle
             % get active image
             img = obj.Project.ActiveImage; if isempty(img), return; end
             % get region using ID
-            regionID = data.UUID;
+            regionID = data.ID;
             r = img.getRegion(regionID);
             if ~isempty(r)
                 % update region in model
@@ -1452,7 +1457,7 @@ classdef GUI < handle
 
         function onBoxMoveCommitted(obj, data)
             img = obj.Project.ActiveImage; if isempty(img), return; end
-            regionID = data.UUID;
+            regionID = data.ID;
             r = img.getRegion(regionID);
             if ~isempty(r)
                 r.Center = data.CenterPx;
@@ -1470,7 +1475,7 @@ classdef GUI < handle
         function onBoxDeleted(obj, data)
             % Widget already removed the overlay optimistically -> remove the corresponding region
             img = obj.Project.ActiveImage; if isempty(img), return; end
-            regionID = data.UUID;
+            regionID = data.ID;
             if img.hasRegion(regionID)
                 img.removeRegion(regionID);
             end
@@ -1480,7 +1485,7 @@ classdef GUI < handle
             % return if no active image
             img = obj.Project.ActiveImage; if isempty(img), return; end
             % get region id from box id
-            regionID = data.UUID;
+            regionID = data.ID;
             % if region exists in active image
             if img.hasRegion(regionID)
                 % set it as the active region
@@ -1664,7 +1669,8 @@ classdef GUI < handle
                     l.Text = regs(j).TextSummaryTable;
 
                     % create a temporary unique name for each PDF
-                    tempName = fullfile(path,[char(java.util.UUID.randomUUID()),'.pdf']);
+                    % tempName = fullfile(path,[char(java.util.UUID.randomUUID()),'.pdf']);
+                    tempName = fullfile(path,[utils.uniqueID("char"),'.pdf']);
 
                     drawnow
                     if i==1 && j==1
@@ -1700,6 +1706,19 @@ classdef GUI < handle
             close(h);
 
         end
+
+    end
+
+    %% Static helpers
+    methods (Static)
+
+        function h = findGUI()
+            % locate and return handle to GUI figure window
+            h = findobj(groot,'Tag',app.Info.Name);
+            % more than one found -> return first
+            if numel(h) > 1, h = h(1); end
+        end
+
 
     end
 
