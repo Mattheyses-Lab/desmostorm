@@ -11,23 +11,19 @@ classdef sliderthumb < handle
     end
 
     properties(SetObservable,AbortSet)
-        % Value = 1
-        % YPosition = 25.5
         FaceColor = [0.5 0.5 0.5]
         EdgeColor = 1
         EdgeWidth = 1
         ButtonDownFcn = ''
-        Size1 = 10
-        Size2 = 12
+        Size1 = 6
+        Size2 = 8
 
         isSelected (1,1) logical = false
     end
 
     properties(Access=private,Transient,NonCopyable)
         thumb matlab.graphics.primitive.Line
-
         pendingUpdate logical = false
-
         L event.listener
     end
 
@@ -47,8 +43,8 @@ classdef sliderthumb < handle
                 Options.YPosition (1,1) = 25.5
                 Options.ButtonDownFcn = '';
                 Options.ID (1,1) = 1
-                Options.Size1 (1,1) = 10
-                Options.Size2 (1,1) = 12
+                Options.Size1 (1,1) = 6
+                Options.Size2 (1,1) = 8
             end
             % create the primitive line object which will show a single plot marker
             obj.thumb = line(Parent,...
@@ -73,10 +69,6 @@ classdef sliderthumb < handle
             obj.Size1       = Options.Size1;
             obj.Size2       = Options.Size2;
             obj.ID          = Options.ID;
-
-            % obj.L = addlistener(obj, {'Value','YPosition'}, ...
-            %     'PostSet', @(~,~) obj.updatePosition());
-
 
             obj.L = addlistener(obj, {'FaceColor','EdgeColor','EdgeWidth','Size1','Size2','isSelected'}, ...
                 'PostSet', @(~,~) obj.updateAppearance());
@@ -103,25 +95,6 @@ classdef sliderthumb < handle
     end
 
     methods (Access=private)
-
-        % function queuePositionUpdate(obj)
-        %     if obj.pendingUpdate
-        %         return
-        %     end
-        %     obj.pendingUpdate = true;
-        %     % coalesce updates
-        %     drawnow limitrate nocallbacks
-        %     obj.updatePosition();
-        %     obj.pendingUpdate = false;
-        % end
-
-        % function updatePosition(obj)
-        %     % position
-        %     X = obj.Value;
-        %     Y = obj.YPosition;
-        %     set(obj.thumb,'XData',X,'YData',Y);
-        % end
-
 
         function updateAppearance(obj)
 
@@ -165,9 +138,7 @@ classdef sliderthumb < handle
 
     end
 
-
-
-    % select and deselect thumbs
+    %% Thumb select/deselect
     methods
 
         function select(obj)
