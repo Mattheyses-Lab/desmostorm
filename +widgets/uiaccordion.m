@@ -145,6 +145,9 @@ classdef uiaccordion < matlab.ui.componentcontainer.ComponentContainer
         % onScroll(obj,evt,tgt)
         function onScroll(~, ~, ~), end
 
+        % onKeyPress(obj,evt,tgt)
+        function onKeyPress(~, ~, ~), end
+        
         % onEnter(obj,evt,tgt)
         function onEnter(obj,~,tgt)
             ID = obj.getTargetID(tgt);
