@@ -37,20 +37,13 @@ classdef FigureEventHub < handle
         % struct of registrant info (each registrant registers themselves during startup)
         % Registry entries: struct('obj',handle,'Priority',double,'CaptureDuringDrag',logical)
         Registry = struct('obj',{},'id',{},'Priority',{},'CaptureDuringDrag',{});
-        % stable ID of the current captor (NaN if none)
-        %CaptureIdx double = NaN   % active capture holder (index into Registry)
+
+        % ID to add to the next registrant
+        NextID double = 1
 
 
-        NextID double = 0
         HoverID double = NaN
         CaptureID double = NaN
-
-
-    end
-
-    properties (Access=private)
-        % stable ID of the registrant that currently "claims" the cursor, based on matches() (NaN if none)
-        %HoverIdx double = NaN   % who currently has hover
     end
 
     methods (Static)
@@ -73,7 +66,7 @@ classdef FigureEventHub < handle
             fig.WindowButtonMotionFcn = @(~,~)   obj.route('move',[]);
             fig.WindowButtonUpFcn     = @(~,evt) obj.route('up',evt);
             fig.WindowScrollWheelFcn  = @(~,evt) obj.route('scroll',evt);
-
+            fig.KeyPressFcn           = @(~,evt) obj.route('key',evt);
         end
 
     end
@@ -99,11 +92,13 @@ classdef FigureEventHub < handle
             end
 
             % new entry with stable ID
-            obj.NextID = obj.NextID + 1;
+            % obj.NextID = obj.NextID + 1;
             entry.id = obj.NextID;
             entry.obj = h;
             entry.Priority = p.Results.Priority;
             entry.CaptureDuringDrag = p.Results.CaptureDuringDrag;
+
+            obj.NextID = obj.NextID + 1;
 
             % add entry to the registry
             obj.Registry(end+1) = entry;
@@ -117,15 +112,6 @@ classdef FigureEventHub < handle
         end
 
         function unregister(obj, id)
-            % if nargin<2 || isempty(id) || ~isfinite(id), return; end
-            % if id>=1 && id<=numel(obj.Registry)
-            %     obj.Registry(id) = [];
-            % end
-            % if ~isnan(obj.CaptureIdx) && obj.CaptureIdx==id
-            %     obj.CaptureIdx = NaN;
-            % end
-
-
 
             if nargin<2 || isempty(id) || ~isfinite(id)
                 return
@@ -165,9 +151,6 @@ classdef FigureEventHub < handle
             % otherwise, route event to the highest priority matcher
 
             tgt = hittest(obj.Fig);
-
-            % uncomment to display target class in the command window
-            %fprintf("FigureEventHub.route() -> %s\n",class(tgt))
 
             % If captured, route only to captor until mouse up
             if ~isnan(obj.CaptureID)
@@ -302,10 +285,11 @@ classdef FigureEventHub < handle
             % Call method if present; ignore if missing
             if ~isvalid(h), return; end
             % switch kind
-            %     case 'down',   if ismethod(h,'onDown'),   h.onDown(evt,tgt);   end
-            %     case 'move',   if ismethod(h,'onMove'),   h.onMove(evt,tgt);   end
-            %     case 'up',     if ismethod(h,'onUp'),     h.onUp(evt,tgt);     end
-            %     case 'scroll', if ismethod(h,'onScroll'), h.onScroll(evt,tgt); end
+            %     case 'down',   if ismethod(h,'onDown'),     h.onDown(evt,tgt);     end
+            %     case 'move',   if ismethod(h,'onMove'),     h.onMove(evt,tgt);     end
+            %     case 'up',     if ismethod(h,'onUp'),       h.onUp(evt,tgt);       end
+            %     case 'scroll', if ismethod(h,'onScroll'),   h.onScroll(evt,tgt);   end
+            %     case 'key',    if ismethod(h,'onKeyPress'), h.onKeyPress(evt,tgt); end
             % end
 
             switch kind
@@ -313,6 +297,7 @@ classdef FigureEventHub < handle
                 case 'move',   h.onMove(evt,tgt);
                 case 'up',     h.onUp(evt,tgt);
                 case 'scroll', h.onScroll(evt,tgt);
+                case 'key',    h.onKeyPress(evt,tgt);
             end
 
         end
