@@ -1,5 +1,18 @@
 classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
 % widgets.ImageAxes - Image viewer with custom tool hosting and figure-level event routing via FigureEventHub
+%
+%
+%
+%   Notes:
+%
+%   Make sure CData argument comes before CLim when calling the constructor
+%
+%   If you use multiple instances of ImageAxes in the same figure window, 
+%   make sure the Name property of each is unique
+%
+%
+
+
 
     %% Tool Management
 
@@ -9,9 +22,9 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
     end
 
     properties (Dependent)
-        % the set of tools to INSTALL in this ImageAxes (can be changed by user)
+        % the set of tools to INSTALL (tools which are listed in the toolbar)
         ToolBelt
-        % the set of tools to LOAD in this ImageAxes (can be changed by user)
+        % the set of tools to LOAD (tools which are available for install)
         ToolBox
     end
 
@@ -22,7 +35,7 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
         ToolRegistry    % containers.Map name->tool
     end
 
-    properties (Access = ?widgets.ImageAxesTool)
+    properties (Access=?widgets.ImageAxesTool)
         % the currently enabled tool with IsExclusive=true (if it exists)
         ActiveExclusiveTool
         % struct() of ToolbarButtons, fieldnames match tool Name
@@ -39,52 +52,87 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
         ImageVisible
         AxesVisible
         ColorbarVisible
-        Colormap (256,3) double = turbo
+        Colormap (256,3) double
+        MaxRenderedResolution
     end
 
-    %% Public props with private backing
-    properties (Dependent,AbortSet)
-        CLim (1,2) double
-        CData (:,:)
-        CLimMode (1,:) char
+    %% CData management
+
+    % Public properties (some with private backing)
+    properties (Dependent, AbortSet)
+        CLim                (1,2) double
+        CanMerge            (1,1) logical
+
+        CData               (:,:,:) {mustBeA(CData,{'double','single','uint8','uint16','logical','cell'})}
+        CLimMode            (1,:) char
+        ChannelIdx          (1,1) double
+        ShowComposite       (1,1) matlab.lang.OnOffSwitchState
+        ChannelColors       (1,:) cell {mustBeMember(ChannelColors,{'cyan','magenta','yellow','red','green','blue'})} = {}
+        ChannelColormaps    (1,:) cell
+        ChannelColorMode    (1,:) char {mustBeMember(ChannelColorMode,{'colors','luts'})}
     end
 
     properties (Access=private)
-        CLim_ (1,2) double = [0 1]
-        CData_ (:,:) = widgets.ImageAxes.placeholderImage;
-        CLimMode_ (1,:) char {mustBeMember(CLimMode_,{'auto','manual'})} = 'auto'
+        CData_              (:,:,:) = widgets.ImageAxes.placeholderImage;
+        CLimMode_           (1,:) char {mustBeMember(CLimMode_,{'auto','manual'})} = 'auto'
+        ChannelIdx_         (1,1) double = 1
+        ShowComposite_      (1,1) matlab.lang.OnOffSwitchState = 'off'
+        ChannelColors_      (1,:) cell {mustBeMember(ChannelColors_,{'cyan','magenta','yellow','red','green','blue'})} = {}
+        ChannelColormaps_   (1,:) cell = {}
+        ChannelColorMode_   (1,:) char {mustBeMember(ChannelColorMode_,{'colors','luts'})} = 'colors'
     end
 
-    properties (Dependent)
+    % read-only
+    properties (Dependent, SetAccess=private)
         DisplayCData
-        CDataClass
+        CDataType       (1,:) char {mustBeMember(CDataType,{'grayscale','rgb'})}
+        CDataSize       (1,:) double
+        CDataClass      (1,:) char {mustBeMember(CDataClass,{'double','single','uint8','uint16','logical',''})}
+    end
+
+    properties (SetAccess=private)
+        nChannels           (1,1) double = 1
+        MultiChannel        (1,1) matlab.lang.OnOffSwitchState = 'off'
+        MultiChannelType    (1,:) {mustBeMember(MultiChannelType,{'grayscale','rgb','mixed','none'})} = 'none'
+    end
+
+    % CData prop stores
+    properties (Access=private)
+        CDataStore      (1,:) cell = {}
+        CLimStore       (1,:) cell = {}
+        CDataClassStore (1,:) cell = {}
+        CDataSizeStore  (1,:) cell = {}
+        CDataTypeStore  (1,:) cell = {}
+        CDataMapStore   (1,:) cell = {}
     end
 
     %% UI/Graphics
 
     % private
-    properties (Access = private, Transient, NonCopyable)
+    properties (Access=private, Transient, NonCopyable)
         Grid matlab.ui.container.GridLayout
         Panel matlab.ui.container.Panel
         staticAxes matlab.ui.control.UIAxes
         hImage matlab.graphics.primitive.Image
         L event.listener
-        Label (1,1) matlab.graphics.primitive.Text
-
+        TopLabel (1,1) matlab.graphics.primitive.Text
+        BottomLabel (1,1) matlab.graphics.primitive.Text
         Colorbar matlab.graphics.illustration.ColorBar
     end
 
     % tool-accessible
-    properties (Access = ?widgets.ImageAxesTool)
+    properties (Access=?widgets.ImageAxesTool)
         mainAxes matlab.ui.control.UIAxes
     end
 
     %% Derived properties (accessible to tools)
-    properties (Access = ?widgets.ImageAxesTool, Dependent)
+    properties (Access=?widgets.ImageAxesTool, Dependent)
         ParentFig
+
         ImageSize
         ImageWidth
         ImageHeight
+
         defaultXLim
         defaultYLim
         cursorPosition
@@ -93,15 +141,14 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
     end
 
     %% Tool helper variables
-    properties (Access = ?widgets.ImageAxesTool)
+    properties (Access=?widgets.ImageAxesTool)
         % control XLim and YLim of axes holding the image (if empty, lims will be set to default)
         XLim = []
         YLim = []
     end
 
     %% Modes for routing
-    properties (SetAccess = private)
-        % Mode struct = struct('Zoom',false,'Pan',true,'Pick',false,'DragBox',false)
+    properties (SetAccess=private)
         Mode struct = struct()
     end
 
@@ -112,12 +159,13 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
     end
 
     %% Events
-    events (NotifyAccess = protected)
+    events (NotifyAccess=protected)
         CDataChanged
     end
 
-    %% ComponentContainer lifecycle
+    %% ComponentContainer lifecycle (setup/update)
     methods (Access=protected)
+
         function setup(obj)
 
             obj.Interruptible = 'off';
@@ -138,13 +186,79 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
                 'AutoResizeChildren','off',...
                 'BorderWidth',0);
 
+            % % Main axes
+            % obj.mainAxes = uiaxes(obj.Panel, ...
+            %     'Units','normalized', ...
+            %     'InnerPosition',[0 0 1 1], ...
+            %     'YDir','reverse', ...
+            %     'YLim',obj.defaultYLim, ...
+            %     'XLim',obj.defaultXLim, ...
+            %     'XTick',[], ...
+            %     'YTick',[], ...
+            %     'Color',[0 0 1], ...
+            %     'XColor','none', ...
+            %     'YColor','none', ...
+            %     'Visible','off', ...
+            %     'PositionConstraint','innerposition', ...
+            %     'NextPlot','add', ...
+            %     'HitTest','on', ...
+            %     'PickableParts','all');
+            % obj.mainAxes.Toolbar = axtoolbar(obj.mainAxes,{});
+            % obj.mainAxes.Interactions = [];
+            % disableDefaultInteractivity(obj.mainAxes);
+            % 
+            % 
+            % % Static axes (used for cursor-follow zoom math)
+            % obj.staticAxes = uiaxes(obj.Panel, ...
+            %     'Units','normalized', ...
+            %     'InnerPosition',[0 0 1 1], ...
+            %     'YDir','reverse', ...
+            %     'YLim',obj.defaultYLim, ...
+            %     'XLim',obj.defaultXLim, ...
+            %     'XTick',[], ...
+            %     'YTick',[], ...
+            %     'Color',[0 0 1], ...
+            %     'XColor','none', ...
+            %     'YColor','none', ...
+            %     'Visible','off', ...
+            %     'PositionConstraint','innerposition', ...
+            %     'HitTest','off', ...
+            %     'PickableParts','none');
+            % obj.staticAxes.Toolbar = axtoolbar(obj.staticAxes,{});
+            % obj.staticAxes.Interactions = [];
+            % disableDefaultInteractivity(obj.staticAxes);
+            % obj.staticAxes.PlotBoxAspectRatio = [1 1 1];
+            % obj.staticAxes.DataAspectRatio = [1 1 1];
+
+            % Main axes
+            obj.mainAxes = uiaxes(obj.Panel, ...
+                'Units','normalized', ...
+                'InnerPosition',[0 0 1 1], ...
+                'YDir','reverse', ...
+                'YLim',[0 1], ...
+                'XLim',[0 1], ...
+                'XTick',[], ...
+                'YTick',[], ...
+                'Color',[0 0 1], ...
+                'XColor','none', ...
+                'YColor','none', ...
+                'Visible','off', ...
+                'PositionConstraint','innerposition', ...
+                'NextPlot','add', ...
+                'HitTest','on', ...
+                'PickableParts','all');
+            obj.mainAxes.Toolbar = axtoolbar(obj.mainAxes,{});
+            obj.mainAxes.Interactions = [];
+            disableDefaultInteractivity(obj.mainAxes);
+
+
             % Static axes (used for cursor-follow zoom math)
             obj.staticAxes = uiaxes(obj.Panel, ...
                 'Units','normalized', ...
                 'InnerPosition',[0 0 1 1], ...
                 'YDir','reverse', ...
-                'YLim',obj.defaultYLim, ...
-                'XLim',obj.defaultXLim, ...
+                'YLim',[0 1], ...
+                'XLim',[0 1], ...
                 'XTick',[], ...
                 'YTick',[], ...
                 'Color',[0 0 1], ...
@@ -160,26 +274,7 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
             obj.staticAxes.PlotBoxAspectRatio = [1 1 1];
             obj.staticAxes.DataAspectRatio = [1 1 1];
 
-            % Main axes
-            obj.mainAxes = uiaxes(obj.Panel, ...
-                'Units','normalized', ...
-                'InnerPosition',[0 0 1 1], ...
-                'YDir','reverse', ...
-                'YLim',obj.defaultYLim, ...
-                'XLim',obj.defaultXLim, ...
-                'XTick',[], ...
-                'YTick',[], ...
-                'Color',[0 0 1], ...
-                'XColor','none', ...
-                'YColor','none', ...
-                'Visible','off', ...
-                'PositionConstraint','innerposition', ...
-                'NextPlot','add', ...
-                'HitTest','on', ...
-                'PickableParts','all');
-            obj.mainAxes.Toolbar = axtoolbar(obj.mainAxes,{});
-            obj.mainAxes.Interactions = [];
-            disableDefaultInteractivity(obj.mainAxes);
+
 
             % setup and store colorbar
             obj.Colorbar = colorbar(obj.mainAxes,"east","Visible","off");
@@ -195,9 +290,7 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
 
             % Hub registration (one hub per figure; this instance registers itself)
             obj.Hub = app.FigureEventHub.ensure(obj.ParentFig);
-            obj.RouterId = obj.Hub.register(obj, ...
-                'Priority', 10, ...
-                'CaptureDuringDrag', true);
+            obj.RouterId = obj.Hub.register(obj,'Priority',10,'CaptureDuringDrag',true);
 
             % Image
             obj.hImage = image(obj.mainAxes,[],...
@@ -213,16 +306,39 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
             % set SizeChangedFcn so we can force visual update upon resizing (AutoResizeChildren of parent must be Off)
             obj.SizeChangedFcn = @(~,~) obj.updateOnResize();
 
-            obj.Label = text('Parent',obj.mainAxes,...
+            % label in bottom-left corner
+            obj.BottomLabel = text('Parent',obj.staticAxes,...
                 'Units','normalized',...
-                'Position',[0 0],...
+                'Position',[0.005 0.005],...
                 'Color',[1 1 1],...
+                'BackgroundColor',[0 0 0 0.5],...
                 'String','',...
+                'Clipping','on',...
+                'Margin',3,...
                 'HorizontalAlignment','left',...
                 'VerticalAlignment','bottom');
 
+            % label in top-left corner
+            obj.TopLabel = text('Parent',obj.staticAxes,...
+                'Units','normalized',...
+                'Position',[0.005 0.995],...
+                'Color',[1 1 1],...
+                'BackgroundColor',[0 0 0 0.5],...
+                'String','',...
+                'Clipping','on',...
+                'Margin',3,...
+                'HorizontalAlignment','left',...
+                'VerticalAlignment','top');
+
+
             % set default colormap
-            obj.Colormap = turbo;
+            obj.Colormap = gray;
+
+            % update CData prop stores
+            obj.setChannels(obj.CData_);
+
+            % initial UI sync
+            obj.refreshView();
 
         end
 
@@ -237,7 +353,7 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
 
     end
 
-    %% Update helpers (private)
+    %% Internal update helpers
     methods (Access=private)
 
         function updateOnResize(obj)
@@ -246,14 +362,33 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
             obj.update();
         end
 
-        function updateLabelText(obj)
+        function updateBottomLabelText(obj)
 
             px = obj.activePixel;
 
-            if isempty(px), obj.Label.String ='Hover over image to interact'; return; end
+            if isempty(px), obj.BottomLabel.String ='Hover over image to interact'; return; end
 
-            posStr = sprintf(' (X, Y)=(%0.f, %0.f)',px(1),px(2));
-            valStr = sprintf('Val: %0.2f',obj.CData(px(2),px(1)));
+            % posStr = sprintf(' (X, Y)=(%0.f, %0.f)',px(1),px(2));
+            posStr = sprintf('Pixel: (%0.f,%0.f)',px(1),px(2));
+
+            switch obj.CDataType
+                case 'grayscale'
+                    switch obj.CDataClass
+                        case {'double','single'}
+                            valStr = sprintf('Intensity: %0.2f',obj.CData(px(2),px(1)));
+                        case {'uint8','uint16'}
+                            valStr = sprintf('Intensity: %i',obj.CData(px(2),px(1)));
+                        case 'logical'
+                            valStr = sprintf('Value: %i',obj.CData(px(2),px(1)));
+                    end
+                case 'rgb'
+                    switch obj.CDataClass
+                        case {'double','single'}
+                            valStr = sprintf('RGB: [%0.2f, %0.2f, %0.2f]',obj.CData(px(2),px(1),1:3));
+                        case {'uint8'}
+                            valStr = sprintf('RGB: [%i, %i, %i]',obj.CData(px(2),px(1),1:3));
+                    end
+            end
 
             % get cell array of installed tools, sorted by priority
             tools = obj.prioritySortTools(obj.ToolRegistry);
@@ -275,7 +410,20 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
             % join each fragment with spaced pipe
             txt = strjoin(txt,' | ');
 
-            obj.Label.String = txt;
+            obj.BottomLabel.String = [' ',txt];
+        end
+
+        function updateTopLabelText(obj)
+
+            infoStr = obj.getImageInfoString();
+            channelStr = obj.getChannelInfoStr();
+
+            txt = {infoStr,channelStr};
+
+            % join each fragment with spaced pipe
+            txt = strjoin(txt,' | ');
+
+            obj.TopLabel.String = [' ',txt];
         end
 
         function updatePointer(obj)
@@ -315,40 +463,77 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
 
         function updateImageCData(obj)
             obj.hImage.CData = obj.DisplayCData;
-
-            % --- testing - update colorbar ---
-            obj.updateColorbar();
         end
 
         function updateColorbar(obj)
             clim = obj.CLim;
-            %tickLabelValues = linspace(clim(1),clim(2),11);
-            %tickLabels = arrayfun(@(v) sprintf('%f',v),linspace(clim(1),clim(2),11));
 
-            % obj.Colorbar.TickLabels = arrayfun(@(v) sprintf('%f',v),linspace(clim(1),clim(2),11),'UniformOutput',false);
+            ticks = {};
+            labels = {};
 
-            switch obj.CDataClass
-                case 'logical'
-                    labels = arrayfun(@(v) '',1:11,'UniformOutput',false);
-                case 'double'
-                    labels = arrayfun(@(v) sprintf('%.2f',v),linspace(clim(1),clim(2),11),'UniformOutput',false);
-                case {'uint16','uint8'}
-                    labels = arrayfun(@(v) sprintf('%i',v),round(linspace(clim(1),clim(2),11)),'UniformOutput',false);
+            switch obj.CDataType
+                case 'grayscale'
+                    [ticks,labels] = widgets.ImageAxes.getColorbarTickLabels(obj.CDataClass,clim);
+                case 'rgb'
+                    if obj.ShowComposite
+                        [ticks,labels] = widgets.ImageAxes.getColorbarTickLabels(obj.CDataClassStore{obj.ChannelIdx},clim);
+                    end
             end
 
+            obj.Colorbar.Ticks = ticks;
             obj.Colorbar.TickLabels = labels;
+        end
+
+        function updateAxesColormap(obj)
+            obj.mainAxes.Colormap = obj.CDataMapStore{obj.ChannelIdx};
+        end
+
+        function refreshView(obj)
+            % update the CData of the Image
+            obj.updateImageCData();
+            % update the Colormap of the Axes
+            obj.updateAxesColormap();
+            % update the Colorbar
+            obj.updateColorbar();
+            % update axes limits
+            obj.restoreDefaultLimits();
+            % update image info label
+            obj.updateTopLabelText();
         end
 
     end
 
-    % Tool-accessible helpers
-    methods (Access = ?widgets.ImageAxesTool, Hidden = true)
+    %% Internal display helpers
+    methods (Access=private)
+
+        function s = getImageInfoString(obj)
+
+            s1 = sprintf(strjoin(repmat({'%i'},1,numel(obj.CDataSize)),'x'),obj.CDataSize);
+            s2 = sprintf('%s (%s)',obj.CDataClass,obj.CDataType);
+
+            s = [s1,' ',s2];
+        end
+
+        function s = getChannelInfoStr(obj)
+            switch obj.ShowComposite
+                case 'on'
+                    s = sprintf('Channel: %i/%i (composite)',obj.ChannelIdx,obj.nChannels);
+                case 'off'
+                    s = sprintf('Channel: %i/%i',obj.ChannelIdx,obj.nChannels);
+            end
+
+        end
+
+    end
+
+    %% Tool-accessible helpers
+    methods (Access=?widgets.ImageAxesTool, Hidden=true)
         
         function setMode(obj, modeName, modeState)
             % if mode does not exist
             if ~isfield(obj.Mode,modeName)
                 % warn and return
-                warning('Could not remove mode. "%s" mode does not exist.',modeName)
+                warning('Could not set mode state. "%s" mode does not exist.',modeName)
                 return
             end
             % set the mode state
@@ -378,7 +563,7 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
         end
 
         function updateFromTool(obj)
-            obj.updateLabelText();
+            obj.updateBottomLabelText();
             obj.updatePointer();
         end
 
@@ -393,6 +578,8 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
 
     %% Derived getters and setters
     methods
+
+        % cursor position in axes/image
         function cursorPosition = get.cursorPosition(obj)
             cursorPosition = obj.mainAxes.CurrentPoint(1,[1,2]);
             % return empty if outside limits
@@ -410,32 +597,32 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
         end
 
         function px = get.activePixel(obj)
-
+            % cursor position in axes
             XY = obj.cursorPosition;
-
-            if isempty(XY)
-                px = [];
-                return
-            end
-
-            px = [clip(round(XY(1)),1,obj.ImageWidth), ...
-                  clip(round(XY(2)),1,obj.ImageHeight)];
-
+            % empty -> return
+            if isempty(XY), px = []; return, end
+            % round to integer px indices, clip to image dimensions
+            px = [clip(round(XY(1)),1,obj.ImageWidth), clip(round(XY(2)),1,obj.ImageHeight)];
         end
 
-        function s = get.ImageSize(obj),    s = size(obj.CData); end
-        function h = get.ImageHeight(obj),  h = size(obj.CData,1); end
-        function w = get.ImageWidth(obj),   w = size(obj.CData,2); end
-        function f = get.ParentFig(obj),    f = ancestor(obj,'Figure'); end
+        % image dimensions
+        function s = get.ImageSize(obj),    s = obj.CDataSize;    end
+        function h = get.ImageHeight(obj),  h = obj.ImageSize(1); end
+        function w = get.ImageWidth(obj),   w = obj.ImageSize(2); end
+
+
         
+        % default axes limits (set to prefectly enclose image)
         function x = get.defaultXLim(obj),  x = [0 obj.ImageWidth] + 0.5; end
         function y = get.defaultYLim(obj),  y = [0 obj.ImageHeight] + 0.5; end
 
-        % passthroughs
+        % retrieve fig/axes handles
+        function f = get.ParentFig(obj),    f = ancestor(obj,'Figure'); end
+        function ax = getAxes(obj), ax = obj.mainAxes; end
+        function ax = getOverlayAxes(obj), ax = obj.staticAxes; end
 
-        % Colormap
-        function v = get.Colormap(obj),        v = obj.mainAxes.Colormap; end
-        function set.Colormap(obj,val),        obj.mainAxes.Colormap = val; end
+        % axes/image passthroughs (Set/Get)
+
         % ImageVisible
         function v = get.ImageVisible(obj),v = obj.hImage.Visible; end
         function set.ImageVisible(obj,val),obj.hImage.Visible = val; end
@@ -445,15 +632,14 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
         % ColorbarVisible
         function v = get.ColorbarVisible(obj), v = obj.Colorbar.Visible; end
         function set.ColorbarVisible(obj,val), obj.Colorbar.Visible = val; end
+        % MaxRenderedResolution
+        function v = get.MaxRenderedResolution(obj), v = obj.hImage.MaxRenderedResolution; end
+        function set.MaxRenderedResolution(obj,val), obj.hImage.MaxRenderedResolution = val; end
 
-
-
-        % axes handle
-        function ax = getAxes(obj), ax = obj.mainAxes; end
 
     end
 
-    %% Hub-facing event handlers (matches / onDown / onMove / onUp / onScroll / onEnter / onLeave)
+    %% Hub-facing event handlers (matches | onDown | onMove | onUp | onScroll | onKeyPress | onEnter | onLeave)
     methods
 
         % determine whether this instance should claim event from FigureEventHub
@@ -461,35 +647,22 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
             % tf = matches(obj, tgt, kind, evt)
             % obj: this component
             % tgt: hittest result from FigureEventHub that we are checking for a match to this component
-            % kind: the specific kind of mouse event (i.e. 'move', 'down', 'up', or 'scroll')
+            % kind: the specific kind of mouse event (i.e. 'move', 'down', 'up', 'scroll', or 'key')
             % evt: event data associated with the event
 
-            % % skip toolbar buttons
-            % if ~isempty(ancestor(tgt,'matlab.ui.container.Toolbar')) || isa(tgt,'matlab.graphics.shape.internal.Button')
-            %     tf = false;
-            %     return
-            % end
-
-
-            % get the ancestor axes
+            % get the ancestor axes of tgt
             ancestorAx = ancestor(tgt,'matlab.ui.control.UIAxes');
+            % empty -> return false
+            if isempty(ancestorAx), tf = false; return, end
 
-            if isempty(ancestorAx)
-                tf = false; return
-            end
+            % axes Tag does not match Name of this ImageAxes -> return false
+            if ~strcmp(ancestorAx.Tag,obj.Name), tf = false; return, end
 
-            % make sure ancestor axes Tag matches Name of this ImageAxes, if not -> return false
-            if ~strcmp(ancestorAx.Tag,obj.Name)
-                tf = false; return
-            end
-
-
-            % skip toolbar buttons
-            if ~isempty(ancestor(tgt,'matlab.ui.controls.AxesToolbar')) % if event hits the toolbar
-                % get the corresponding button
+            % event hit the toolbar
+            if ~isempty(ancestor(tgt,'matlab.ui.controls.AxesToolbar'))
+                % get toolbar button under cursor (if it exists)
                 btn = ancestor(tgt,'matlab.ui.controls.ToolbarStateButton');
-                % % set the info label string to the Tooltip of the button under cursor
-                % obj.Label.String = btn.Tooltip;
+                % button exists and event kind is 'move' -> return true (otherwise return false)
 
                 if ~isempty(btn) && strcmp(kind,'move')
                     tf = true;
@@ -500,12 +673,10 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
                 return
             end
 
-
-            % accept anything else that belongs to *this* ImageAxes instance
+            % return true for anything else that belongs to *this* ImageAxes instance
             ia = ancestor(tgt,'widgets.ImageAxes');
             tf = (ia == obj);
         end
-
 
         function onDown(obj, evt, tgt)
             skipInterceptor = obj.routeToDistractors(evt,tgt,'Down');
@@ -522,7 +693,7 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
             btn = ancestor(tgt,'matlab.ui.controls.ToolbarStateButton');
             if ~isempty(btn) % if it exists
                 % set image info label to display button tooltip, return
-                obj.Label.String = sprintf(' %s',btn.Tooltip); return
+                obj.BottomLabel.String = sprintf(' %s',btn.Tooltip); return
             end
 
             skipInterceptor = obj.routeToDistractors(evt,tgt,'Move');
@@ -556,14 +727,44 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
             if ~isempty(t), t.onScroll(evt, tgt); end
         end
 
+        function onKeyPress(obj, evt, tgt)
+            % get highest priority KeyPressInterceptor
+            t = obj.getPriorityInterceptor('KeyPress');
+            % if tool exists, forward this event to the tool
+            if ~isempty(t), t.onKeyPress(evt, tgt); end
+
+
+            fprintf('widgets.ImageAxes.onKeyPressed()\n');
+            fprintf('Character: %s\n',evt.Character)
+            fprintf('Key: %s\n',evt.Key)
+            fprintf('Unicode: %d\n',double(evt.Character))
+
+            n = 1;
+            for m = evt.Modifier
+                fprintf('Modifier %i: %s\n',n,m{1});
+                n = n+1;
+            end
+
+            switch evt.Key
+                case 'rightarrow'
+                    obj.nextChannel();
+                case 'leftarrow'
+                    obj.previousChannel();
+                case {'uparrow','downarrow'}
+                    obj.toggleComposite();
+            end
+
+            fprintf('%s\n',strjoin([evt.Modifier,{evt.Character}],'|'))
+        end
+
         function onEnter(obj,~,~)
-            obj.Label.Visible = "on";
+            obj.BottomLabel.Visible = "on";
             % no-op to tools by default
         end
 
         function onLeave(obj,~,~)
             % hide label
-            obj.Label.Visible = "off";
+            obj.BottomLabel.Visible = "off";
             % reset pointer to arrow
             if isvalid(obj.ParentFig)
                 obj.ParentFig.Pointer = 'arrow';
@@ -573,11 +774,11 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
     end
 
     %% Internal behaviors
-    methods (Access = private)
+    methods (Access=private)
 
         % executes on mouse move after Distractors/Interceptors
         function onMouseMove(obj)
-            obj.updateLabelText();
+            obj.updateBottomLabelText();
             obj.updatePointer();
         end
 
@@ -606,7 +807,7 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
 
     end
 
-    %% Tool management (register/unregister, load/unload, install/uninstall, find by name)
+    %% Tool management (register/unregister, load/unload, install/uninstall)
     methods
 
         % register a tool (add it to the installed tool registry) - tools call this themselves
@@ -772,7 +973,7 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
 
     end
 
-    %% Toggle/query tool states
+    %% Toggle/query tool state
     methods
 
         % enable installed tool specified by name
@@ -885,7 +1086,7 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
 
     end
 
-    %% Tool Management (user-facing set/get methods to change loaded/installed tools)
+    %% User-facing tool management (Set/Get to change loaded/installed tools)
     methods
 
         % get loaded tool names
@@ -952,60 +1153,46 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
 
     end
 
-    %% CData/CLim
+    %% Active CData/CLim management
     methods
 
-        % CLim
+        % --- CLim ---
         function v = get.CLim(obj)
-            v = obj.CLim_;
+            v = obj.CLimStore{obj.ChannelIdx};
         end
 
         function set.CLim(obj,val)
             % update private backing
-            obj.CLim_ = val;
+            obj.CLimStore{obj.ChannelIdx} = double(val);
             % setting the CLim switches CLim mode to manual
             obj.CLimMode_ = 'manual';
-            % update the CData on the actual image object (do not emit CDataChanged)
+            if obj.ShowComposite
+                obj.CData_ = obj.getComposite(); % update CData backing with composite
+            end
+            % update the CData of the Image object
             obj.updateImageCData();
+            % update the Colorbar
+            obj.updateColorbar();
         end
 
-        % CData
+        % --- CData ---
         function v = get.CData(obj)
             v = obj.CData_;
         end
 
-        function set.CData(obj,val)
-
-            placeholder = false;
-
-            if isempty(val)
-                val = widgets.ImageAxes.placeholderImage();
-                placeholder = true;
+        % user-facing setter, resets CDataStore
+        function set.CData(obj,cdata)
+            % empty -> set placeholder
+            if isempty(cdata)
+                cdata = widgets.ImageAxes.placeholderImage();
             end
-
-            % create event data payload before setting new CData and emitting CDataChanged event
-            evtData = widgets.events.CDataChangedEventData(obj.CData_,val);
-            % update private backing
-            obj.CData_ = val;
-
-            % if CLimMode set to 'auto'
-            if strcmp(obj.CLimMode_,'auto')
-                if placeholder
-                    obj.CLim_ = [0 1];
-                else
-                    % set private CLim backing to match min/max of CData
-                    obj.CLim_ = [min(min(obj.CData_)) max(max(obj.CData_))];
-                end
-            end
-            % update the CData on the actual image object
-            obj.updateImageCData();
-            % update axes limits
-            obj.restoreDefaultLimits();
-            % emit event, send payload
-            notify(obj,'CDataChanged',evtData);
+            % set CDataStore and multi-channel management props
+            obj.setChannels(cdata);
+            % sync CData to active channel
+            obj.syncCDataToActiveChannel();
         end
 
-        % CLimMode
+        % --- CLimMode ---
         function v = get.CLimMode(obj)
             v = obj.CLimMode_;
         end
@@ -1013,26 +1200,373 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
         function set.CLimMode(obj,val)
             % update private backing
             obj.CLimMode_ = val;
+            % if set to 'auto'
+            if strcmp(obj.CLimMode_,'auto')
+                % update CLim for each channel
+                obj.updateCLimStore();
+            end
             % update the CData on the actual image object
             obj.updateImageCData();
+            % update the Colorbar
+            obj.updateColorbar();
         end
 
-        % DisplayCData
-        function v = get.DisplayCData(obj)
-            v = utils.rescaleLinear(obj.CData,obj.CLim);
+        % --- CDataSize ---
+        function v = get.CDataSize(obj)
+            if obj.ShowComposite
+                v = size(obj.CData_);
+            else
+                v = obj.CDataSizeStore{obj.ChannelIdx};
+            end
         end
 
-        % CDataClass
+        % --- CDataType ---
+        function v = get.CDataType(obj)
+            if obj.ShowComposite
+                v = 'rgb';
+            else
+                v = obj.CDataTypeStore{obj.ChannelIdx};
+            end
+        end
+
+        % --- CDataClass ---
         function v = get.CDataClass(obj)
-            v = class(obj.CData);
+            if obj.ShowComposite
+                v = class(obj.CData_);
+            else
+                v = obj.CDataClassStore{obj.ChannelIdx};
+            end
+        end
+
+        % --- DisplayCData ---
+        function v = get.DisplayCData(obj)
+            switch obj.CDataType
+                case 'grayscale'
+                    v = utils.rescaleLinear(obj.CData,obj.CLim);
+                case 'rgb'
+                    v = obj.CData_;
+            end
         end
 
     end
 
+    %% Multi-channel CData management (internal)
+    methods (Access=private)
+
+        function setChannels(obj,channels)
+            % not cell input -> make cell
+            if ~iscell(channels), channels = {channels}; end
+
+            obj.CDataStore = channels;
+            obj.nChannels = numel(obj.CDataStore);
+            obj.ChannelIdx_ = 1;
+            obj.MultiChannel = obj.nChannels > 1;
+
+            % determine CDataType, CDataClass, and CDataSize for each channel
+            for c = 1:obj.nChannels
+
+                cdata = obj.CDataStore{c};
+
+                % image dimensions
+                sz = size(cdata);
+
+                % set CDataType based on number of dimensions
+                switch numel(sz)
+                    case 2
+                        cdataType = 'grayscale';
+                    case 3
+                        if sz(3)==3
+                            cdataType = 'rgb';
+                        else
+                            error('ImageAxes:InvalidCDataSize','CData must be MxN (grayscale) or MxNx3 (truecolor)');
+                        end
+                    otherwise
+                        error('ImageAxes:InvalidCDataDimensions','CData must have either 2 or 3 dimensions');
+                end
+
+                obj.CDataTypeStore{c} = cdataType;
+                obj.CDataClassStore{c} = class(cdata);
+                obj.CDataSizeStore{c} = sz;
+                obj.CLimStore{c} = [0 1]; % default
+            end
+
+            % update CLimStore -> determine CLim for each channel
+            obj.updateCLimStore();
+            % update MultiChannelType
+            obj.updateMultiChannelType();
+            % update colormaps
+            obj.updateCDataMapStore();
+        end
+
+        function updateCLimStore(obj)
+        % get auto CLim for each element of CDataStore
+            for c = 1:obj.nChannels
+                cdata = obj.CDataStore{c};
+                switch obj.CDataTypeStore{c}
+                    case 'grayscale'
+                        clim = double([min(min(cdata)) max(max(cdata))]);
+                    case 'rgb'
+                        clim = [0 1];
+                end
+                if clim(1)==clim(2)
+                    obj.CLimStore{c} = getrangefromclass(cdata);
+                else
+                    obj.CLimStore{c} = clim;
+                end
+            end
+        end
+
+        function updateMultiChannelType(obj)
+            if ~obj.MultiChannel, obj.MultiChannelType = 'none';
+            elseif all(ismember(obj.CDataTypeStore,'grayscale')), obj.MultiChannelType = 'grayscale';
+            elseif all(ismember(obj.CDataTypeStore,'rgb')), obj.MultiChannelType = 'rgb';
+            else, obj.MultiChannelType = 'mixed'; 
+            end
+        end
+
+        function syncCDataToActiveChannel(obj)
+            if obj.ShowComposite
+                % set CData from composite of all channels
+                obj.setCData(obj.getComposite());
+            else
+                % set CData from the active channel
+                obj.setCData(obj.CDataStore{obj.ChannelIdx});
+            end
+        end
+
+        % sets active CData and emits CDataChanged
+        function setCData(obj,cdata)
+            % create event data payload before setting new CData and emitting CDataChanged event
+            evtData = widgets.events.CDataChangedEventData(obj.CData_,cdata);
+            % update private backing
+            obj.CData_ = cdata;
+            % refresh view
+            obj.refreshView();
+            % emit event, send payload
+            notify(obj,'CDataChanged',evtData);
+        end
+
+        function I = getComposite(obj)
+
+            switch obj.MultiChannelType
+                case 'grayscale'
+                    clims = cell2mat(obj.CLimStore');
+        
+                    switch obj.ChannelColorMode
+                        case 'colors'
+                            clrs = cellfun(@(C) utils.getColor(C),obj.ChannelColors,'UniformOutput',false);
+                            colors = cell2mat(clrs');
+                            I = utils.mergeChannelsRGB_add(obj.CDataStore,clims,colors(1:obj.nChannels,:));
+                        case 'luts'
+                            I = utils.mergeChannelsRGB_LUT(obj.CDataStore,clims,obj.CDataMapStore);
+                    end
+                case 'rgb'
+                    I = utils.mergeRGBImages(obj.CDataStore,"Method","additive");
+            end
+        end
+
+        function updateCDataMapStore(obj)
+            switch obj.ChannelColorMode
+                case 'colors'
+                    for c = 1:obj.nChannels
+                        obj.CDataMapStore{c} = utils.colorGradient([0 0 0],utils.getColor(obj.ChannelColors{c}),256);
+                    end
+                case 'luts'
+                    obj.CDataMapStore = obj.ChannelColormaps;
+            end
+        end
+
+    end
+
+    methods
+
+         % --- channel switching ---
+        function nextChannel(obj)
+            obj.ChannelIdx = utils.wrapStep(obj.ChannelIdx,1,1,obj.nChannels);
+        end
+
+        function previousChannel(obj)
+            obj.ChannelIdx = utils.wrapStep(obj.ChannelIdx,-1,1,obj.nChannels);
+        end       
+
+        % --- ChannelIdx ---
+        function v = get.ChannelIdx(obj)
+            v = obj.ChannelIdx_;
+        end
+
+        function set.ChannelIdx(obj,val)
+            % update private backing, clip ChannelIdx to [1 nChannels]
+            obj.ChannelIdx_ = clip(val,1,obj.nChannels);
+            % sync to active channel
+            obj.syncCDataToActiveChannel();
+        end
+
+        % --- ChannelColors ---
+        function val = get.ChannelColors(obj)
+            val = obj.ChannelColors_;
+
+            if numel(val)==obj.nChannels
+                return
+            end
+
+            if numel(val)>obj.nChannels % too many colors
+                val = val(1:obj.nChannels);
+            elseif numel(val)<obj.nChannels % too few colors
+                % get available colors not already in val
+                avail = setdiff(widgets.ImageAxes.getColorNames,val);
+                % number of additional colors we need
+                nNeeded = obj.nChannels-numel(val);
+                % add the number we need
+                val = [val,avail(1:nNeeded)];
+            end
+            % update private backing
+            obj.ChannelColors_ = val;
+        end
+
+        function set.ChannelColors(obj,val)
+            % update private backing
+            obj.ChannelColors_ = val;
+            % update map store
+            obj.updateCDataMapStore();
+            % sync to active channel
+            obj.syncCDataToActiveChannel();
+        end
+
+        % --- ChannelColormaps ---
+        function val = get.ChannelColormaps(obj)
+            val = obj.ChannelColormaps_;
+
+            if numel(val)==obj.nChannels
+                return
+            end
+
+            if numel(val)>obj.nChannels % too many colors
+                val = val(1:obj.nChannels);
+            elseif numel(val)<obj.nChannels % too few colors
+                % number of additional maps we need
+                nNeeded = obj.nChannels-numel(val);
+                % add the number we need
+                val = [val,repmat({gray},1,nNeeded)];
+            end
+            % update private backing
+            obj.ChannelColormaps_ = val;
+        end
+
+        function set.ChannelColormaps(obj,val)
+            % update private backing
+            obj.ChannelColormaps_ = val;
+            % update map store
+            obj.updateCDataMapStore();
+            % sync to active channel
+            obj.syncCDataToActiveChannel();
+        end
+
+        % --- Colormap ---
+        function v = get.Colormap(obj)
+            v = obj.CDataMapStore{obj.ChannelIdx};
+        end
+
+        function set.Colormap(obj,val)
+            % update private backing
+            obj.ChannelColormaps_{obj.ChannelIdx} = double(val);
+            % setting the Colormap switches ChannelColorMode mode to 'luts'
+            obj.ChannelColorMode_ = 'luts';
+            % update map store
+            obj.updateCDataMapStore();
+            % update the colormap on the actual axes object
+            obj.updateAxesColormap();
+        end
+
+        % --- ChannelColorMode ---
+        function v = get.ChannelColorMode(obj)
+            v = obj.ChannelColorMode_;
+        end
+
+        function set.ChannelColorMode(obj,val)
+            % update private backing
+            obj.ChannelColorMode_ = val;
+            % update colormap store
+            obj.updateCDataMapStore();
+            % sync
+            obj.syncCDataToActiveChannel();
+        end
+
+        % --- ShowComposite ---
+        function v = get.ShowComposite(obj)
+            v = obj.ShowComposite_;
+        end
+
+        function set.ShowComposite(obj,val)
+            % update backing
+            obj.ShowComposite_ = val && obj.CanMerge;
+            % sync
+            obj.syncCDataToActiveChannel();
+        end
+
+        % toggle state on/off
+        function toggleComposite(obj)
+            obj.ShowComposite = ~obj.ShowComposite_;
+        end
+
+        % --- CanMerge ---
+        function tf = get.CanMerge(obj)
+            switch obj.MultiChannelType
+                case {'grayscale','rgb'}
+                    % true only if all channels have matching sizes and types
+                    tf = isequal(obj.CDataSizeStore{:}) && isequal(obj.CDataClassStore{:});
+                otherwise
+                    tf = false;
+            end
+        end
+
+        % --- ChannelCLim ---
+        function setCLim(obj,clim,idx)
+            arguments
+                obj (1,1) widgets.ImageAxes
+                clim (1,2) double
+                idx (:,1) = []
+            end
+
+            % idx empty -> use active channel
+            if isempty(idx)
+                idx = obj.ChannelIdx;
+            end
+
+            if idx < 1 || idx > obj.nChannels
+                error('ImageAxes:InvalidChannelIndex','Index %i does not refer to an existing channel',idx)
+            end
+
+            % update CLimStore
+            obj.CLimStore{idx} = clim;
+            % setting the CLim switches CLim mode to manual
+            obj.CLimMode_ = 'manual';
+            if obj.ShowComposite
+                obj.CData_ = obj.getComposite(); % update CData backing with composite
+            end
+            % update the CData on the actual image object (do not emit CDataChanged)
+            obj.updateImageCData();
+        end
+
+
+    end
+
+    %% Hidden entrypoint for debugging
+    methods (Hidden)
+
+        function DEBUG_(obj)
+
+            debug
+
+
+        end
+
+    end
+
+
     %% Utils
     methods (Static, Access=private)
 
-        function y = clip(x,a,b), y = max(a, min(b, x)); end
+        %function y = clip(x,a,b), y = max(a, min(b, x)); end
 
         % check if the point, XY, is within limits, XLim and YLim
         function tf = isInLimits(XY,XLim,YLim)
@@ -1042,8 +1576,32 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
 
         % return a placeholder image for startup
         function I = placeholderImage()
-            %I = repmat(linspace(0,1,256),256,1);
-            I = zeros(256);
+            % all black truecolor array
+            I = zeros([256,256,3]);
+        end
+
+        % get colorbar ticks and labels based on CData class
+        function [ticks,labels] = getColorbarTickLabels(valClass,clim,N)
+            arguments
+                valClass (1,:) char {mustBeMember(valClass,{'logical','double','single','uint16','uint8'})}
+                clim (1,2) double
+                N (:,1) = []
+            end
+        
+            if isempty(N)
+                if strcmp(valClass,'logical'); N = 2; else, N = 11; end
+            end
+        
+            ticks = linspace(0,1,N);
+
+            switch valClass
+                case 'logical'
+                    labels = arrayfun(@(v) sprintf('%i',v),ticks,'UniformOutput',false);
+                case {'double','single'}
+                    labels = arrayfun(@(v) sprintf('%.2f',v),linspace(clim(1),clim(2),N),'UniformOutput',false);
+                case {'uint16','uint8'}
+                    labels = arrayfun(@(v) sprintf('%i',v),round(linspace(clim(1),clim(2),N)),'UniformOutput',false);
+            end
         end
 
     end
@@ -1080,24 +1638,54 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
 
         end
 
-        function ax = demo()
+        % return names of allowed channel colors
+        function names = getColorNames()
+            names = {'cyan','magenta','yellow','red','green','blue'};
+        end
+
+
+        function ax = demo(name)
+            arguments
+                name (1,:) char {mustBeMember(name,{'default','multichannel','empty'})}
+            end
 
             fig = uifigure("WindowStyle","alwaysontop",...
                 "Position",[0 0 500 500],...
                 "Visible","off");
 
-            ax = widgets.ImageAxes(fig,...
-                "ToolBox",{'Zoom'},...
-                "ToolBelt",{'Zoom'},...
-                "Units","normalized",...
-                "Position",[0 0 1 1],...
-                "CData",imread("rice.png"));
+            switch name
+                case 'default'
+                    ax = widgets.ImageAxes(fig,...
+                        "ToolBelt",{'Zoom','Colorbar'},...
+                        "Units","normalized",...
+                        "Position",[0 0 1 1],...
+                        "CData",imread("rice.png"),...
+                        "CLim",[0 1],...
+                        "Colormap",gray);
+                case 'empty'
+                    ax = widgets.ImageAxes(fig,...
+                        "CData",[],...
+                        "ToolBelt",{'Zoom','Colorbar'},...
+                        "Units","normalized",...
+                        "Position",[0 0 1 1],...
+                        "CLim",[0 1]);
+                case 'multichannel'
+                    I1 = imread("rice.png");
+                    I2 = imgaussfilt(I1);
+                    cdata = {I1,I2};
+                    ax = widgets.ImageAxes(fig,...
+                        "CData",cdata,...
+                        "ToolBelt",{'Zoom','Colorbar'},...
+                        "Units","normalized",...
+                        "Position",[0 0 1 1]);
+            end
 
             movegui(fig,"center")
 
             fig.Visible = "on";
 
         end
+
 
     end
 

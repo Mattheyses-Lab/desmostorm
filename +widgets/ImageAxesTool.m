@@ -43,6 +43,7 @@ classdef ImageAxesTool < handle
         CapturesMove (1,1) logical = false      % this tool can capture 'Move' events when Enabled=true
         CapturesUp (1,1) logical = false        % this tool can capture 'Up' events when Enabled=true
         CapturesScroll (1,1) logical = false    % this tool can capture 'Scroll' events when Enabled=true
+        CapturesKeyPress (1,1) logical = false  % this tool can capture 'KeyPress' events when Enabled=true
 
         DistractsDown (1,1) logical = false     % this tool will temporarily capture 'Down' events
         DistractsMove (1,1) logical = false     % this tool will temporarily capture 'Move' events
@@ -84,6 +85,7 @@ classdef ImageAxesTool < handle
             p.addParameter('CapturesMove', false, @(x)islogical(x)&&isscalar(x));
             p.addParameter('CapturesUp', false, @(x)islogical(x)&&isscalar(x));
             p.addParameter('CapturesScroll', false, @(x)islogical(x)&&isscalar(x));
+            p.addParameter('CapturesKeyPress', false, @(x)islogical(x)&&isscalar(x));
             p.addParameter('DistractsDown', false, @(x)islogical(x)&&isscalar(x));
             p.addParameter('DistractsMove', false, @(x)islogical(x)&&isscalar(x));
             p.addParameter('DistractsUp', false, @(x)islogical(x)&&isscalar(x));
@@ -97,6 +99,7 @@ classdef ImageAxesTool < handle
             obj.CapturesMove = p.Results.CapturesMove;
             obj.CapturesUp = p.Results.CapturesUp;
             obj.CapturesScroll = p.Results.CapturesScroll;
+            obj.CapturesKeyPress = p.Results.CapturesKeyPress;
             obj.DistractsDown = p.Results.DistractsDown;
             obj.DistractsMove = p.Results.DistractsMove;
             obj.DistractsUp = p.Results.DistractsUp;
@@ -154,11 +157,6 @@ classdef ImageAxesTool < handle
             % register with the Host
             obj.Host.registerTool(obj);
 
-            % % add toolbar button
-            % obj.Host.addToolbarButton(obj);
-            % % add to installed tools struct
-            % obj.Host.Tools.(obj.Name) = obj;
-
             % set Installed status
             obj.Installed = true;
             % forward to subclass hook
@@ -178,11 +176,6 @@ classdef ImageAxesTool < handle
             % remove self from Host registry
             obj.Host.unregisterTool(obj);
 
-            % % remove toolbar button
-            % obj.Host.removeToolbarButton(obj);
-            % % remove from installed tools struct
-            % obj.Host.Tools = rmfield(obj.Host.Tools,obj.Name);
-
             % set Installed status
             obj.Installed = false;
             % forward to subclass hook
@@ -200,10 +193,11 @@ classdef ImageAxesTool < handle
         function onDelete(~),     end
 
         % Pointer routing (only Interceptors get these)
-        function onDown(~,~,~),   end
-        function onMove(~,~,~),   end
-        function onUp(~,~,~),     end
-        function onScroll(~,~,~), end
+        function onDown(~,~,~),     end
+        function onMove(~,~,~),     end
+        function onUp(~,~,~),       end
+        function onScroll(~,~,~),   end
+        function onKeyPress(~,~,~), end
 
         % Pointer routing (only Distractors get these)
         function onDistractDown(~,~,~),   end
@@ -227,7 +221,7 @@ classdef ImageAxesTool < handle
     methods
 
         function value = get.IsInterceptor(obj)
-            value = obj.CapturesDown || obj.CapturesMove || obj.CapturesUp || obj.CapturesScroll;
+            value = obj.CapturesDown || obj.CapturesMove || obj.CapturesUp || obj.CapturesScroll || obj.CapturesKeyPress;
         end
 
         function value = get.IsDistractor(obj)
