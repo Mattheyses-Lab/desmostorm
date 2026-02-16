@@ -3,11 +3,14 @@ classdef GUI < handle
 
     % add Transient and NonCopyable attributes?
     properties (Access=private)
-        % --- window and grids ---
+        % --- window and main grids ---
         Fig matlab.ui.Figure
         Grid matlab.ui.container.GridLayout
         LeftPane matlab.ui.container.GridLayout
         RegionGrid matlab.ui.container.GridLayout
+
+        % --- listbox/settings accordion ---
+        SettingsAccordion guitools.widgets.uiaccordion
 
         % --- listboxes ---
         % images
@@ -20,14 +23,14 @@ classdef GUI < handle
         RegionListBox matlab.ui.control.ListBox
 
         % --- viewers ---
-        % active image
+        % ImageViewer
         ImageViewerPanel matlab.ui.container.Panel
         ImageViewerPanelGrid matlab.ui.container.GridLayout
-        Ax widgets.ImageAxes
-        % active region
+        Ax guitools.widgets.ImageAxes
+        % RegionViewer
         RegionViewerPanel matlab.ui.container.Panel
         RegionViewerPanelGrid matlab.ui.container.GridLayout
-        RegionViewer widgets.ImageAxes
+        RegionViewer guitools.widgets.ImageAxes
 
         % --- region table ---
         RegionSummaryPanel matlab.ui.container.Panel
@@ -42,26 +45,18 @@ classdef GUI < handle
 
     % Settings-related graphics components
     properties (Access=private)
-        SettingsUI struct
-
-        SettingsAccordion widgets.uiaccordion
         ExampleColormapPanel matlab.ui.container.Panel
         ExampleColormapAxes matlab.ui.control.UIAxes
         ExampleColormapImage matlab.graphics.primitive.Image
         ColormapTree matlab.ui.container.Tree
-        IntensitySlider widgets.uirangeslidereditfield
-
+        IntensitySlider guitools.widgets.uirangeslidereditfield
     end
 
-
-    % Menu-related graphics components
+    % Extra graphics handles, stored as struct to reduce clutter
     properties (Access=private)
-
         MenubarUI struct
-
+        SettingsUI struct
     end
-
-
 
     % listeners
     properties (Access=private)
@@ -156,7 +151,7 @@ classdef GUI < handle
 
             %% --- Settings controllers ---
             % create the accordion and parent it to the grid
-            obj.SettingsAccordion = widgets.uiaccordion(obj.LeftPane,...
+            obj.SettingsAccordion = guitools.widgets.uiaccordion(obj.LeftPane,...
                 'ItemSpacing',5,...
                 'BorderWidth',0,...
                 'BorderColor',[.18 .18 .18],...
@@ -268,13 +263,13 @@ classdef GUI < handle
             obj.ColormapTree.Layout.Column = 1;
 
             % populate tree with colormap categories
-            categories = app.colormaps.Registry.categories;
+            categories = guitools.colormaps.Registry.categories;
 
             for i = 1:numel(categories)
                 thisCategory = categories(i);
                 catNode = uitreenode("Parent",obj.ColormapTree,"Text",thisCategory);
 
-                names = app.colormaps.Registry.names(thisCategory);
+                names = guitools.colormaps.Registry.names(thisCategory);
 
                 for j = 1:numel(names)
                     uitreenode("Parent",catNode,"Text",names(j),"NodeData",names(j));
@@ -372,7 +367,7 @@ classdef GUI < handle
                 "ValueChangedFcn",@(o,~) obj.DisplaySettingsChanged(o,"AutoScaleDisplayIntensity"),...
                 "Text","Auto-scale display intensity");
 
-            obj.IntensitySlider = widgets.uirangeslidereditfield(obj.SettingsAccordion.Items(5).Pane,...
+            obj.IntensitySlider = guitools.widgets.uirangeslidereditfield(obj.SettingsAccordion.Items(5).Pane,...
                 "Title",'Adjust display limits',...
                 "FontColor",[1 1 1],...
                 "BackgroundColor",[.18 .18 .18],...
@@ -449,7 +444,7 @@ classdef GUI < handle
                 "Padding",[0 0 0 0]);
 
             % ImageAxes to view active image CData, select Regions
-            obj.Ax = widgets.ImageAxes(obj.ImageViewerPanelGrid,...
+            obj.Ax = guitools.widgets.ImageAxes(obj.ImageViewerPanelGrid,...
                 'Name','ImageViewer',...
                 'CData',[],...
                 'ToolBelt',{'Zoom','Pick','Colorbar'},...
@@ -493,7 +488,7 @@ classdef GUI < handle
                 "Padding",[0 0 0 0]);
 
             % ImageAxes to show active region CData, make region measurements
-            obj.RegionViewer = widgets.ImageAxes(obj.RegionViewerPanelGrid,...
+            obj.RegionViewer = guitools.widgets.ImageAxes(obj.RegionViewerPanelGrid,...
                 'Name','RegionViewer',...
                 'CData',[],...
                 'ToolBelt',{'DrawRectangle'},...
@@ -688,7 +683,6 @@ classdef GUI < handle
             obj.SettingsUI.PeaksPlot.ForegroundColorPicker.Value = S.PeaksPlot.ForegroundColor;
             % Display
             obj.SettingsUI.Display.AutoScaleDisplayIntensityCheckBox.Value = S.Display.AutoScaleDisplayIntensity;
-
             % Sliders
             set(obj.IntensitySlider,'Limits',[0 1],'Value',[0 1]);
         end
@@ -1156,7 +1150,7 @@ classdef GUI < handle
     methods (Access=private)
 
         function onNew(obj)
-            % start a new project
+            % START NEW PROJECT
 
             % --- cleanup before starting new ---
             % delete project
@@ -1168,69 +1162,52 @@ classdef GUI < handle
 
             % --- Settings ---
             obj.Settings = app.config.Settings.load();
-
             % --- Model ---
             obj.Project = model.STORMProject("untitled");
             obj.Project.DefaultPixelSize = obj.Settings.Analysis.getDefaultPixelSize();
 
             % refresh UI
-            obj.refreshUI();  
-
+            obj.refreshUI();
             % refresh listeners
             obj.refreshListeners();
         end
 
         function onOpen(obj)
-            % open existing project from file
-            % hide figure to show file selection dialog
-            obj.Fig.Visible = 'off';
-            % file selection dialog
-            [file, path] = uigetfile('*.mat','Select project file (.mat)','MultiSelect','off');
-            % show figure
-            obj.Fig.Visible = 'on';
-            % if cancelled or no files selected
-            if isequal(file,0)
-                return
-            end
+            % OPEN EXISTING PROJECT
 
+            % --- get project file ---
+            % hide figure -> show file selection dialog -> show figure
+            obj.Fig.Visible = 'off';
+            [file, path] = uigetfile('*.mat','Select project file (.mat)','MultiSelect','off');
+            obj.Fig.Visible = 'on';
+            if isequal(file,0), return; end % cancelled | no files selected -> return
             % get full file name
             fname = fullfile(path, file);
 
-            % create progress dialog
+            % --- set up progress dialog ---
             msg = sprintf('Loading project:\n%s',fname);
             h = uiprogressdlg(obj.Fig,"Message",msg,'Indeterminate','on');
 
-
             % --- cleanup before loading ---
-            % delete project
-            obj.Project.delete();
-            % delete settings
-            obj.Settings.delete();
-            % detach listeners
-            obj.detatchListeners();
+            obj.Project.delete();   % delete project
+            obj.Settings.delete();  % delete settings
+            obj.detatchListeners(); % detach listeners
 
-            % --- load the project ---
+            % --- load Project and Settings ---
             [proj,stgs] = model.STORMProject.load(fname);
 
-            % --- update after load ---
-
-            % valid project and settings returned
+            % valid output from load -> assign and process
             if ~isempty(proj) && ~isempty(stgs)
-                % assign new project and settings
                 obj.Project = proj;
                 obj.Settings = stgs;
-                % run region analysis
-                obj.processAllRegions();
+                obj.processAllRegions(); % run region analysis
             else
-                % empty project
-                obj.Project = model.STORMProject.empty();
-                % use default settings
-                obj.Settings = app.config.Settings.load();
+                obj.Project = model.STORMProject.empty(); % empty project
+                obj.Settings = app.config.Settings.load(); % default settings
             end
 
-            % refresh UI
+            % --- refresh UI/listeners ---
             obj.refreshUI();
-            % refresh listeners
             obj.refreshListeners();
 
             % close progress dialog
@@ -1238,27 +1215,18 @@ classdef GUI < handle
         end
 
         function onClose(obj)
-            % close current project
-
-            % return if empty
-            if isempty(obj.Project)
-                return
-            end
-
-            % --- delete current project and cleanup ---
-            % delete project
-            obj.Project.delete(); obj.Project = model.STORMProject.empty();
-            % detach listeners
+            % CLOSE CURRENT PROJECT
+            % no project -> return
+            if isempty(obj.Project), return; end
+            % --- delete project, detach listeners, refresh UI ---
+            obj.Project.delete(); 
+            obj.Project = model.STORMProject.empty(); % set empty so we do not store old handle
             obj.detatchListeners();
-
-            % --- update ---
-            % refresh view
             obj.refreshUI();
-
         end
 
         function onSave(obj)
-            % save current project
+            % SAVE CURRENT PROJECT
             obj.Fig.Visible = 'off';
 
             if obj.Project.isOnDisk
@@ -1293,8 +1261,7 @@ classdef GUI < handle
         end
 
         function onSaveSettings(obj)
-            % save currently selected settings to default file
-            obj.Settings.save();
+            obj.Settings.save(); % save current settings to default file
         end
 
     end
@@ -1307,22 +1274,12 @@ classdef GUI < handle
             img = obj.Project.ActiveImage;
             if isempty(img), return; end
 
-            % change = max(abs(obj.Ax.CLim-obj.IntensitySlider.Value));
-            % 
-            % if change > img.CDataLimits(2)*0.01
-            %     set([obj.Ax,obj.RegionViewer],'CLim',obj.IntensitySlider.Value);
-            % end
-
-
             % set MaxRenderedResolution for smoother updates in ImageViewer, RegionViewer
-            % obj.Ax.MaxRenderedResolution = 500;
             obj.Ax.MaxRenderedResolution = obj.Ax.CDataSize(1)/4;
             obj.RegionViewer.MaxRenderedResolution = obj.Settings.Analysis.BoxSize/4;
 
-
-            % set the new CLim
+            % set the new CLim for both axes
             set([obj.Ax,obj.RegionViewer],'CLim',obj.IntensitySlider.Value);
-
         end
 
         function onIntensitySliderChanged(obj,~)
@@ -1348,7 +1305,6 @@ classdef GUI < handle
             % reset MaxRenderedResolution
             obj.Ax.MaxRenderedResolution = 'none';
             obj.RegionViewer.MaxRenderedResolution = 'none';
-
         end
 
     end
@@ -1362,11 +1318,8 @@ classdef GUI < handle
             img = obj.Project.ActiveImage; if isempty(img), return; end
             % get the ActiveRegion, exit if empty
             reg = img.ActiveRegion; if isempty(reg), return; end
-
             % process the linescan for this region
             img.processRegionLinescan(reg,app.config.RunConfig.fromSettings(obj.Settings));
-
-
             % update the region linescan plot
             obj.refreshRegionLinescanPlot();
             % update RegionSummaryTable
@@ -1380,7 +1333,6 @@ classdef GUI < handle
             obj.Project.processAll(app.config.RunConfig.fromSettings(obj.Settings))
             % close the progress dialog
             close(h);
-
             % get the ActiveImage, exit if empty
             img = obj.Project.ActiveImage; if isempty(img), return; end
             % get the ActiveRegion, exit if empty
@@ -1605,7 +1557,7 @@ classdef GUI < handle
             p.Layout.Column = 1;
 
             % ImageAxes to show region CData and ROI position
-            ax = widgets.ImageAxes(g,...
+            ax = guitools.widgets.ImageAxes(g,...
                 'Name','RegionViewer',...
                 'ToolBox',{'DrawRectangle'},...
                 'ToolBelt',{'DrawRectangle'},...
