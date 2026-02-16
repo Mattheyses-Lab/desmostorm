@@ -25,7 +25,7 @@ classdef Display < handle
         % ---------- Dependent getters ----------
         function c = get.Colormap(this)
             % Returns Nx3 RGB array; loads from registry as needed.
-            c = app.colormaps.Registry.map(this.ColormapName_, this.ColormapCategory_);
+            c = guitools.colormaps.Registry.map(this.ColormapName_, this.ColormapCategory_);
         end
 
         function s = get.ColormapName(this),     s = this.ColormapName_;     end
