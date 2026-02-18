@@ -10,15 +10,6 @@ classdef Paths
         function p = user(varargin)
             p = fullfile(app.Paths.root(), 'user', varargin{:});
         end
-        function p = assets(varargin)
-            p = fullfile(app.Paths.root(), 'assets', varargin{:});
-        end
-        function p = icons(varargin)
-            p = app.Paths.assets('icons', varargin{:});
-        end
-        function p = colormaps(varargin)
-            p = app.Paths.assets('colormaps', varargin{:});
-        end
         function p = configDir()
             % per-user writable folder for settings.json
             d = fullfile(prefdir, char(app.Info.Name));
