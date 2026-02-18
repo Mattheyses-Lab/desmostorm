@@ -1612,7 +1612,14 @@ classdef GUI < handle
 
                     % update region CData and CLim
                     ax.CData = imgs(i).regionSubimage(regs(j));
-                    ax.CLim = imgs(i).DisplayCLim;
+
+                    % get CLim
+                    switch app.Settings.Display.AutoScaleDisplayIntensity
+                        case true
+                            ax.CLim = imgs(i).AutoDisplayCLim;
+                        case false
+                            ax.CLim = imgs(i).DisplayCLim;
+                    end
 
                     % update linescan ROI position
                     ax.Tools.DrawRectangle.setROIPosition(regs(j).Linescan);
@@ -1621,7 +1628,6 @@ classdef GUI < handle
                     l.Text = regs(j).TextSummaryTable;
 
                     % create a temporary unique name for each PDF
-                    % tempName = fullfile(path,[char(java.util.UUID.randomUUID()),'.pdf']);
                     tempName = fullfile(path,[utils.uniqueID("char"),'.pdf']);
 
                     drawnow
