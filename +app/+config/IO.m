@@ -28,9 +28,10 @@ classdef IO < handle
                 v string
             end
 
-            % Allow empty (user hasn't chosen yet) or existing folder
-            if strlength(v) > 0
-                assert(isfolder(v), 'DefaultFolder must be an existing folder or empty.');
+            % ensure DefaultFolder is an actual folder
+            if ~isfolder(v)
+                warning('%s is not a folder or is not accessible, reverting to default: %s',v,app.Paths.user);
+                v = app.Paths.user;
             end
 
             old = this.DefaultFolder_;
@@ -50,7 +51,9 @@ classdef IO < handle
 
         % Serialization helpers
         function S = toStruct(this)
-            S = struct('DefaultFolder', this.DefaultFolder, 'AutoSave', this.AutoSave);
+            S = struct( ...
+                'DefaultFolder', this.DefaultFolder, ...
+                'AutoSave', this.AutoSave);
         end
 
         function fromStruct(this,S)
