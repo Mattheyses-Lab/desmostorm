@@ -68,7 +68,8 @@ classdef Display < handle
         function S = toStruct(this)
             S = struct( ...
                 'ColormapName',     this.ColormapName, ...
-                'ColormapCategory', this.ColormapCategory);
+                'ColormapCategory', this.ColormapCategory, ...
+                'AutoScaleDisplayIntensity', this.AutoScaleDisplayIntensity);
         end
 
         function fromStruct(this,S)
@@ -88,12 +89,12 @@ classdef Display < handle
 
         function cats = availableCategories()
             % get list of colormap categories
-            cats = app.colormaps.Registry.categories();
+            cats = guitools.colormaps.Registry.categories();
         end
 
         function names = availableNames(category)
             % get list of colormap names for given colormap category
-            names = app.colormaps.Registry.names(category);
+            names = guitools.colormaps.Registry.names(category);
         end
 
     end
