@@ -42,3 +42,4 @@ codegen/
 # macOS
 .DS_Store
 **/.DS_Store
+external/matlabx/**/.DS_Store
