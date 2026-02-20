@@ -125,6 +125,7 @@ classdef GUI < handle
             obj.MenubarUI.File_Export = uimenu(obj.MenubarUI.File,'Text','Export');
             obj.MenubarUI.File_Export_Measurements = uimenu(obj.MenubarUI.File_Export,'Text','Measurements (.xlsx)', 'MenuSelectedFcn',@(~,~) obj.onExportMeasurements());
             obj.MenubarUI.File_Export_PeakPlots    = uimenu(obj.MenubarUI.File_Export,'Text','Peak Plots (.pdf)',    'MenuSelectedFcn',@(~,~) obj.onExportPeakPlots());
+            obj.MenubarUI.File_Export_RegionImages = uimenu(obj.MenubarUI.File_Export,'Text','Region Images (.tif)', 'MenuSelectedFcn',@(~,~) obj.onExportRegionImages());
 
             % --- Run ---
             obj.MenubarUI.Run = uimenu(obj.Fig,'Text','Run');
@@ -1309,7 +1310,6 @@ classdef GUI < handle
 
     end
 
-
     %% Processing hooks
     methods (Access=private)
 
@@ -1662,6 +1662,24 @@ classdef GUI < handle
 
             % close the progress dialog
             close(h);
+
+        end
+
+        function onExportRegionImages(obj, ~, ~)
+
+            obj.Fig.Visible = 'off';
+
+            folderName = uigetdir(obj.Settings.IO.DefaultFolder, 'Export region images');
+
+            obj.Fig.Visible = 'on';
+
+            % invalid folder -> return
+            if ~isfolder(folderName)
+                return
+            end
+
+            % export region images to folderName
+            obj.Project.exportRegionImages(folderName);
 
         end
 

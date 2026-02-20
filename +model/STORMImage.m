@@ -538,6 +538,11 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
             str = sprintf('%s (%ix%i %s)',char(obj.Name),obj.Height,obj.Width,obj.CDataClass);
         end
 
+        function name = shortName(obj)
+            str = strsplit(obj.Name,'.');
+            name = str{1};
+        end
+
     end
 
     %% Friendlier Command Window / Variable Editor display

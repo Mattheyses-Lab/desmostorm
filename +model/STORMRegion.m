@@ -21,7 +21,7 @@ classdef STORMRegion < handle
         BoxSize (1,1) double = NaN
         % Linescan ROI properties
         Linescan struct = struct(...
-            'CenterX',NaN,...           % rectangle center in pixel edge coordinates
+            'CenterX',NaN,...           % rectangle center in pixel center coordinates
             'CenterY',NaN,...
             'Width',NaN,...             % width of the rectangle (px)
             'Height',NaN,...            % height of the rectangle (px)
@@ -48,7 +48,11 @@ classdef STORMRegion < handle
             obj.ID = ID;
             obj.BoxSize = BoxSize;
             obj.Parent = Parent;
-            obj.Center = Center;
+            %obj.Center = Center;
+
+            % clamp the box center to fall within image limits
+            obj.Center = imtools.clampBoxToImage(Center,BoxSize,[obj.Parent.Width obj.Parent.Height]);
+
         end
     end
 
