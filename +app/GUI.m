@@ -71,6 +71,16 @@ classdef GUI < handle
         RegionLinescanPlotAnnotations
     end
 
+
+    properties (Access=private)
+        LabelsTree matlab.ui.container.Tree
+        LabelsUI struct
+        IsSyncingSelection (1,1) logical = false
+
+        CommandRouter guitools.control.CommandRouter
+    end
+
+
     %% Public properties
 
     % Model (Project), processing settings
@@ -94,15 +104,26 @@ classdef GUI < handle
             %% --- Figure ---
             % need to add a more elegant way to set window size once app components are finalized
             s = utils.getScreenSize();
-            s(4) = 0.45*s(3);
+            %s(4) = 0.45*s(3);
             obj.Fig = uifigure('Name','DesmoSTORM',...
                 'Color',[0 0 0],...
-                'Position',s(1,:),...
+                'OuterPosition',s(1,:),...
                 'WindowStyle','alwaysontop',...
                 'Visible','off',...
                 'Theme','dark',...
                 'HandleVisibility','on',...
                 'Tag',app.Info.Name);
+
+
+            %% --- CommandRouter ---
+            % hot-key router for labeling
+            % obj.CommandRouter = app.CommandRouter( ...
+            %     obj.Fig, ...
+            %     "HotkeyFcn", @(~,k) obj.onHotkey(k), ...
+            %     "ModeQueryFcn", @() true);
+
+            obj.CommandRouter = guitools.control.CommandRouter('Parent',obj.Fig);
+
 
             %% --- Menubar ---
 
@@ -202,13 +223,13 @@ classdef GUI < handle
 
             % Region selection listbox
             obj.RegionListBox = uilistbox(obj.SettingsAccordion.Items(2).Pane, ...
-                'Items',string.empty(1,0),...
-                'ItemsData',string.empty(1,0),...
-                'Value',string.empty(1,0),...
+                'Items',{},...
+                'ItemsData',{},...
+                'Multiselect','on',...
+                'Value',{},...
                 'ValueChangedFcn',@(lb,~) obj.onSelectRegion(lb.Value),...
                 'BackgroundColor',[.18 .18 .18],...
                 'FontColor',[.9 .9 .9]);
-
 
             % Set up SettingsUI struct
             obj.SettingsUI = struct(...
@@ -434,6 +455,29 @@ classdef GUI < handle
                 'Value',obj.Settings.PeaksPlot.ForegroundColor,...
                 'ValueChangedFcn',@(o,~) obj.PeaksPlotSettingsChanged(o,"ForegroundColor"));
 
+
+            % add Labels accordion item
+            obj.SettingsAccordion.addItem("Title","Labels",...
+                "BorderColor",[0.49 0.49 0.49],...
+                "TitleBackgroundColor",[.12 .12 .12],...
+                "HoverTitleBackgroundColor",[.3 .3 .3],...
+                "PaneBackgroundColor",[.18 .18 .18],...
+                "FontColor",[0.85 0.85 0.85],...
+                "BorderWidth",1,...
+                "ExpandedBorderWidth",1,...
+                "TitlePadding",1);
+            % set size and spacing of pane grid
+            set(obj.SettingsAccordion.Items(end).Pane,...
+                "RowHeight",{'1x'},...
+                "ColumnWidth",{'1x'},...
+                "Padding",[0 0 0 0]);
+
+            obj.LabelsTree = uitree(...
+                "Parent",obj.SettingsAccordion.Items(end).Pane,...
+                "SelectionChangedFcn",@(~,e) obj.onSelectLabel(e));
+
+
+
             %% --- ImageViewer ---
             obj.ImageViewerPanel = uipanel(obj.Grid,'Title','Image Viewer','BackgroundColor',[0.12 0.12 0.12]);
             obj.ImageViewerPanel.Layout.Column = 2;
@@ -454,12 +498,13 @@ classdef GUI < handle
 
 
             % wire the optimistic callbacks for ImageViewer Pick tool
-            obj.Ax.Tools.Pick.BoxCreatedFcn       = @(~,d) obj.onBoxCreated(d);
-            obj.Ax.Tools.Pick.BoxMoveStartedFcn   = @(~,d) obj.onBoxMoveStarted(d);
-            obj.Ax.Tools.Pick.BoxPreviewMovedFcn  = @(~,d) obj.onBoxPreviewMoved(d);   % optional
-            obj.Ax.Tools.Pick.BoxMoveCommittedFcn = @(~,d) obj.onBoxMoveCommitted(d);
-            obj.Ax.Tools.Pick.BoxDeletedFcn       = @(~,d) obj.onBoxDeleted(d);
-            obj.Ax.Tools.Pick.BoxActivatedFcn     = @(~,d) obj.onBoxActivated(d);
+            obj.Ax.Tools.Pick.BoxCreatedFcn          = @(~,d) obj.onBoxCreated(d);
+            obj.Ax.Tools.Pick.BoxMoveStartedFcn      = @(~,d) obj.onBoxMoveStarted(d);
+            obj.Ax.Tools.Pick.BoxPreviewMovedFcn     = @(~,d) obj.onBoxPreviewMoved(d);   % optional
+            obj.Ax.Tools.Pick.BoxMoveCommittedFcn    = @(~,d) obj.onBoxMoveCommitted(d);
+            obj.Ax.Tools.Pick.BoxDeletedFcn          = @(~,d) obj.onBoxDeleted(d);
+            obj.Ax.Tools.Pick.BoxActivatedFcn        = @(~,d) obj.onBoxActivated(d);
+            obj.Ax.Tools.Pick.BoxSelectionChangedFcn = @(~,d) obj.onBoxSelectionChanged(d);
 
             % set the box size for Pick tool
             obj.Ax.Tools.Pick.BoxSize = obj.Settings.Analysis.BoxSize;
@@ -546,20 +591,6 @@ classdef GUI < handle
             % center the GUI after defining all graphics components and ImageAxesTool settings
             movegui(obj.Fig,"center");
 
-            %% --- Listeners ---
-            % obj.projectL(1) = addlistener(obj.Project,'ImageAdded',          @(~,~) obj.refreshImageList());
-            % obj.projectL(2) = addlistener(obj.Project,'ImageRemoved',        @(~,~) obj.refreshImageList());
-            % obj.projectL(3) = addlistener(obj.Project,'ActiveImageChanged',  @(~,~) obj.syncActiveImageToView());
-            % obj.projectL(4) = addlistener(obj.Project,'RegionAdded',         @(~,~) obj.onRegionAdded());
-            % obj.projectL(5) = addlistener(obj.Project,'RegionRemoved',       @(~,~) obj.refreshRegionList());
-            % obj.projectL(6) = addlistener(obj.Project,'ActiveRegionChanged', @(~,~) obj.syncActiveRegionToView());
-            % 
-            % obj.settingsL(1) = addlistener(obj.Settings,'DisplayChanged',   @(~,e) obj.onDisplayChanged(e));
-            % obj.settingsL(2) = addlistener(obj.Settings,'AnalysisChanged',  @(~,e) obj.onAnalysisChanged(e));
-            % obj.settingsL(3) = addlistener(obj.Settings,'IOChanged',        @(~,e) obj.onIOChanged(e));
-            % obj.settingsL(4) = addlistener(obj.Settings,'PeaksPlotChanged', @(~,e) obj.onPeaksPlotChanged(e));
-            % obj.settingsL(5) = addlistener(obj.Settings,'BoxChanged',       @(~,e) obj.onBoxChanged(e));
-
             %% --- Final cleanup ---
             % Expand Image and Region listbox accordion items
             obj.SettingsAccordion.Items(1).expand();
@@ -616,6 +647,9 @@ classdef GUI < handle
             obj.refreshRegionList();
             obj.syncActiveRegionToView();
 
+            % labels
+            obj.refreshLabelsTree()
+
         end
 
         function clearUI(obj)
@@ -640,9 +674,9 @@ classdef GUI < handle
 
             % RegionListBox
             set(obj.RegionListBox,...
-                "Items",str,...
-                "ItemsData",str,...
-                "Value",str);
+                "Items",{},...
+                "ItemsData",{},...
+                "Value",{});
 
             % RegionViewer
             obj.RegionViewer.CData = [];
@@ -654,6 +688,9 @@ classdef GUI < handle
 
             % RegionSummaryTable
             obj.RegionSummaryTable.Data = [];
+
+            % LabelsTree
+            obj.clearLabelsTree();
 
         end
 
@@ -738,6 +775,7 @@ classdef GUI < handle
                 obj.projectL(4) = addlistener(obj.Project,'RegionAdded',         @(~,~) obj.onRegionAdded());
                 obj.projectL(5) = addlistener(obj.Project,'RegionRemoved',       @(~,~) obj.refreshRegionList());
                 obj.projectL(6) = addlistener(obj.Project,'ActiveRegionChanged', @(~,~) obj.syncActiveRegionToView());
+                obj.projectL(7) = addlistener(obj.Project,'LabelsChanged',       @(~,~) obj.onLabelsChanged());
             end
 
             obj.settingsL(1) = addlistener(obj.Settings,'DisplayChanged',   @(~,e) obj.onDisplayChanged(e));
@@ -745,6 +783,11 @@ classdef GUI < handle
             obj.settingsL(3) = addlistener(obj.Settings,'IOChanged',        @(~,e) obj.onIOChanged(e));
             obj.settingsL(4) = addlistener(obj.Settings,'PeaksPlotChanged', @(~,e) obj.onPeaksPlotChanged(e));
             obj.settingsL(5) = addlistener(obj.Settings,'BoxChanged',       @(~,e) obj.onBoxChanged(e));
+        end
+
+        function refreshHotkeys(obj)
+            % refresh hotkeys for label selection
+            obj.onLabelsChanged();
         end
 
     end
@@ -819,10 +862,12 @@ classdef GUI < handle
         function syncActiveImageToView(obj)
             % refresh ImageViewer CData and CLim
             obj.refreshImageViewer();
-            % refresh region boxes
-            obj.refreshRegionBoxes();
+
             % refresh RegionListBox
             obj.refreshRegionList();
+            % refresh region boxes
+            obj.refreshRegionBoxes();
+
             obj.syncActiveRegionToView();
         end
 
@@ -854,14 +899,8 @@ classdef GUI < handle
     methods (Access=private)
 
         function onRegionAdded(obj)
-            % refresh region boxes
-            obj.refreshRegionBoxes();
-
             % refresh region listbox
             obj.refreshRegionList();
-
-            % sync view to active region
-            %obj.syncActiveRegionToView();
         end
 
         function refreshRegionList(obj)
@@ -874,9 +913,9 @@ classdef GUI < handle
             end
 
             if isempty(ids)
-                obj.RegionListBox.Items = string.empty(1,0);
-                obj.RegionListBox.ItemsData = string.empty(1,0);
-                obj.RegionListBox.Value = string.empty(1,0);
+                obj.RegionListBox.Items = {};
+                obj.RegionListBox.ItemsData = {};
+                obj.RegionListBox.Value = {};
                 return
             end
 
@@ -886,46 +925,58 @@ classdef GUI < handle
             obj.RegionListBox.Items     = names;
             obj.RegionListBox.ItemsData = ids;
 
-            % Keep selection synced
-            if strlength(img.ActiveRegionID) > 0
-                obj.RegionListBox.Value = img.ActiveRegionID;
-            else
-                obj.RegionListBox.Value = ids(1);
-            end
-
-            % forward value to ValueChangedFcn of RegionListBox
-            obj.onSelectRegion(obj.RegionListBox.Value);
         end
 
         function refreshRegionBoxes(obj)
-            % clear overlays
             obj.Ax.Tools.Pick.clearBoxes();
 
-            % get the active image
             img = obj.Project.ActiveImage;
-            % if empty -> return
             if isempty(img), return; end
 
-            % get the region array
             regs = img.RegionArray;
-            % if empty -> return
             if isempty(regs), return; end
+
+            bank = obj.Project.LabelBank;
 
             for k = 1:numel(regs)
                 r = regs(k);
-                % bs = r.BoxSize;
-                % if ~isfinite(bs) || bs<=0
-                %     bs = obj.Settings.Analysis.BoxSize;
-                % end
-                % obj.Ax.Tools.Pick.addBox(r.ID, r.Center, bs);
-                obj.Ax.Tools.Pick.addBox(r.ID, r.Center, r.BoxSize);
-            end
 
+                boxColor = [1 1 1];
+
+                if strlength(r.LabelID) > 0
+                    L = bank.getByID(r.LabelID);
+                    if ~isempty(L)
+                        boxColor = L.Color;
+                    end
+                end
+
+                obj.Ax.Tools.Pick.addBox(r.ID, r.Center, r.BoxSize, ...
+                    "EdgeColor", boxColor, "FaceColor", boxColor, "Label", r.Name);
+            end
         end
 
-        function onSelectRegion(obj, regionID)
-            if isempty(regionID), return; end
-            obj.Project.ActiveImage.setActiveRegion(regionID);
+        function onSelectRegion(obj, regionIDs)
+            if obj.IsSyncingSelection
+                return
+            end
+
+            img = obj.Project.ActiveImage;
+            if isempty(img), return; end
+
+            ids = string(regionIDs);
+            ids = ids(strlength(ids)>0);
+
+            % push selection into Pick WITHOUT re-emitting to controller
+            obj.IsSyncingSelection = true;
+            obj.Ax.Tools.Pick.setSelectedBoxIDs(ids);
+            obj.IsSyncingSelection = false;
+
+            % active region = first selected
+            if ~isempty(ids)
+                img.setActiveRegion(ids(1));
+            else
+                img.setActiveRegion("");
+            end
         end
 
         function syncActiveRegionToView(obj)
@@ -939,9 +990,9 @@ classdef GUI < handle
 
             if ~isempty(reg)
                 % update RegionListBox selection
-                obj.RegionListBox.Value = reg.ID;
-                % update ROI box selection highlight
-                obj.Ax.Tools.Pick.setActiveBoxByID(reg.ID);
+                % obj.RegionListBox.Value = reg.ID;
+                % % update ROI box selection highlight
+                % obj.Ax.Tools.Pick.setActiveBoxByID(reg.ID);
             end
 
             % refresh RegionViewer CData and CLim
@@ -1028,6 +1079,128 @@ classdef GUI < handle
             obj.RegionViewer.Tools.DrawRectangle.setROIPosition(reg.Linescan);
 
         end
+
+    end
+
+    %% Callbacks / UI sync (Labels)
+    methods (Access=private)
+
+        function onLabelsChanged(obj)
+
+            labels = obj.Project.LabelBank.labels;
+
+            for i = 1:numel(labels)
+                % add a hotkey for each label
+                obj.CommandRouter.addHotkey(labels(i).Hotkey,@(~,k) obj.onLabelHotkeyPressed(k));
+            end
+        end
+
+        function onLabelHotkeyPressed(obj,key)
+            if isempty(obj.Project), return; end
+
+            % get label matching hotkey
+            L = obj.Project.LabelBank.getByHotkey(key);
+
+            % no match -> return
+            if isempty(L), return; end
+
+            % set it as active
+            obj.Project.LabelBank.setActiveByID(L.ID);
+
+            % reflect in tree selection if present
+            if ~isempty(obj.LabelsTree) && isvalid(obj.LabelsTree)
+                n = obj.LabelsTree.findobj("NodeData", L.ID);
+                if ~isempty(n), obj.LabelsTree.SelectedNodes = n(1); end
+            end
+
+            obj.applyActiveLabelToSelection();
+            return
+
+        end
+
+        function refreshLabelsTree(obj)
+            if isempty(obj.Project) || isempty(obj.LabelsTree) || ~isvalid(obj.LabelsTree)
+                return
+            end
+
+            delete(obj.LabelsTree.Children);
+
+            bank = obj.Project.LabelBank;
+            arr = bank.labels();
+
+            for k = 1:numel(arr)
+                L = arr(k);
+                txt = string(L.Name);
+                if strlength(L.Hotkey) > 0
+                    txt = txt + "  [" + L.Hotkey + "]";
+                end
+                uitreenode("Parent",obj.LabelsTree,...
+                    "Text",txt,...
+                    "NodeData",L.ID);
+            end
+
+            % select active label node if possible
+            if strlength(bank.ActiveLabelID) > 0
+                n = obj.LabelsTree.findobj("NodeData", bank.ActiveLabelID);
+                if ~isempty(n)
+                    obj.LabelsTree.SelectedNodes = n(1);
+                end
+            end
+        end
+
+        function clearLabelsTree(obj)
+            delete(obj.LabelsTree.Children);
+        end
+
+        function onSelectLabel(obj, evt)
+            if isempty(obj.Project), return; end
+            node = evt.SelectedNodes;
+            if isempty(node) || isempty(node.NodeData)
+                return
+            end
+            obj.Project.LabelBank.setActiveByID(string(node.NodeData));
+        end
+
+        function applyActiveLabelToSelection(obj)
+            img = obj.Project.ActiveImage;
+            if isempty(img), return; end
+
+            ids = obj.Ax.Tools.Pick.getSelectedBoxIDs();
+            if isempty(ids), return; end
+
+            bank = obj.Project.LabelBank;
+            L = bank.active();
+            if isempty(L), return; end
+
+            for i = 1:numel(ids)
+                r = img.getRegion(ids(i));
+                if ~isempty(r)
+                    r.LabelID = L.ID;
+                end
+            end
+
+            % recolor overlays
+            obj.Ax.Tools.Pick.setBoxesColorByIDs(ids, L.Color);
+        end
+
+        function clearLabelOnSelection(obj)
+            img = obj.Project.ActiveImage;
+            if isempty(img), return; end
+
+            ids = obj.Ax.Tools.Pick.getSelectedBoxIDs();
+            if isempty(ids), return; end
+
+            for i = 1:numel(ids)
+                r = img.getRegion(ids(i));
+                if ~isempty(r)
+                    r.LabelID = "";
+                end
+            end
+
+            obj.Ax.Tools.Pick.setBoxesEdgeColorByIDs(ids, 'w');
+        end
+
+
 
     end
 
@@ -1167,6 +1340,8 @@ classdef GUI < handle
             obj.Project = model.STORMProject("untitled");
             obj.Project.DefaultPixelSize = obj.Settings.Analysis.getDefaultPixelSize();
 
+            % refresh hotkeys
+            obj.refreshHotkeys();
             % refresh UI
             obj.refreshUI();
             % refresh listeners
@@ -1207,7 +1382,8 @@ classdef GUI < handle
                 obj.Settings = app.config.Settings.load(); % default settings
             end
 
-            % --- refresh UI/listeners ---
+            % --- refresh hotkeys/UI/listeners ---
+            obj.refreshHotkeys();
             obj.refreshUI();
             obj.refreshListeners();
 
@@ -1375,12 +1551,21 @@ classdef GUI < handle
     methods (Access=private)
 
         function onBoxCreated(obj, data)
-            % Widget drew a new box -> create a STORMRegion and set it as active
-            % get the ActiveImage, exit if empty
+            % Get active image
             img = obj.Project.ActiveImage; if isempty(img), return; end
-            % create a new STORMRegion
-            img.addRegion(data.ID, data.CenterPx, obj.Settings.Analysis.BoxSize);
-            % set new region as the ActiveRegion
+
+            % Get current active label
+            L = obj.Project.LabelBank.active();
+
+            % Create a new STORMRegion in the active image with the active label
+            img.addRegion(data.ID, data.CenterPx, obj.Settings.Analysis.BoxSize, L.ID);
+            %reg = img.getRegion(data.ID);
+
+            % Apply active label color to the newly created box
+            obj.Ax.Tools.Pick.setBoxColorByID(data.ID, L.Color);
+            obj.Ax.Tools.Pick.setBoxLabelByID(data.ID, img.getRegion(data.ID).Name);
+
+            % Make it active (this will drive downstream sync)
             img.setActiveRegion(data.ID);
         end
 
@@ -1447,6 +1632,30 @@ classdef GUI < handle
                 img.setActiveRegion(string.empty(1,0));
             end
         end
+
+        function onBoxSelectionChanged(obj, data)
+            if obj.IsSyncingSelection
+                return
+            end
+
+            ids = string(data.IDs);
+            img = obj.Project.ActiveImage;
+            if isempty(img), return; end
+
+            obj.IsSyncingSelection = true;
+
+            if isempty(ids)
+                obj.RegionListBox.Value = {};
+                img.setActiveRegion("");
+            else
+                obj.RegionListBox.Value = ids;        % multi-select
+                img.setActiveRegion(ids(end));        % last in selection is active
+            end
+
+            obj.IsSyncingSelection = false;
+        end
+
+
 
     end
 
@@ -1694,7 +1903,6 @@ classdef GUI < handle
             % more than one found -> return first
             if numel(h) > 1, h = h(1); end
         end
-
 
     end
 

@@ -11,6 +11,11 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
         isOnDisk (1,1) logical = false
     end
 
+    %% Label bank
+    properties
+        LabelBank model.LabelRegistry = model.LabelRegistry.default()
+    end
+
     %% Images (dictionary + order) and active selection
     properties (Access=private)
         ImagesDict = dictionary   % string ID -> model.STORMImage
@@ -53,12 +58,13 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
         RegionAdded
         RegionRemoved
         ActiveRegionChanged
+        LabelsChanged
     end
-
 
     properties
         ActiveImageListener event.listener
         RegionListeners event.listener
+        LabelsChangedListener event.listener
     end
 
     %% Dependent getters 
@@ -115,6 +121,9 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
 
             % add a listener for the ActiveImageChanged event
             obj.ActiveImageListener = addlistener(obj,'ActiveImageChanged',@(~,~) obj.onActiveImageChanged());
+
+            % add a listener for the LabelsChanged event
+            obj.LabelsChangedListener = addlistener(obj.LabelBank,'LabelsChanged',@(~,~) notify(obj,'LabelsChanged'));
         end
 
     end
@@ -233,8 +242,6 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             end
         end
 
-
-
         function detectRegions(obj, config, progressdlg)
             arguments
                 obj (1,1) model.STORMProject
@@ -266,9 +273,6 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             end
 
         end
-
-
-
 
     end
 
@@ -589,6 +593,12 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
                 proj.DefaultPixelSize = model.units.PixelSize(ps.Value, ps.Unit);
             end
 
+            if isfield(P.Project,'LabelBank') && ~isempty(P.Project.LabelBank)
+                proj.LabelBank = model.LabelRegistry.fromStruct(P.Project.LabelBank);
+            else
+                proj.LabelBank = model.LabelRegistry.default();
+            end
+
             % Resolve image paths
             resolved = model.STORMProject.resolveImagePaths(P.Images, projectFolder);
 
@@ -739,6 +749,9 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             P.Project.Version      = obj.Version;
             P.Project.SourcePath   = obj.SourcePath;
             P.Project.DefaultPixelSize = struct('Value', obj.DefaultPixelSize.Value, 'Unit', obj.DefaultPixelSize.Unit);
+
+            % Label bank
+            P.Project.LabelBank = obj.LabelBank.toStruct();
 
             % Settings snapshot (portable)
             P.Settings = settings.toStruct();

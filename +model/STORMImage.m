@@ -19,8 +19,6 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
     %% Regions (dictionary + order) and active selection
     properties (Access=private)
         RegionsDict = dictionary   % string id -> model.STORMRegion
-
-
     end
 
     properties
@@ -42,9 +40,6 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
     properties (Dependent)
         RegionNames
     end
-
-
-
 
     %% Image data (LAZY) and display settings
     properties (Dependent)
@@ -294,10 +289,10 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
             arr = obj.RegionsDict(obj.RegionOrder);
         end
 
-        function addRegion(obj, ID, Center, BoxSize)
+        function addRegion(obj, ID, Center, BoxSize, LabelID)
             if ~isKey(obj.RegionsDict, ID)
                 % create new STORMRegion
-                reg = model.STORMRegion(obj,ID,Center,BoxSize);
+                reg = model.STORMRegion(obj,ID,Center,BoxSize,LabelID);
                 % add it to the Regions dictionary
                 obj.RegionsDict(ID) = reg;
                 % add its ID to RegionOrder array
@@ -615,6 +610,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
                 I.Regions(r).Center  = reg.Center;
                 I.Regions(r).BoxSize = reg.BoxSize;
                 I.Regions(r).Linescan = reg.Linescan;
+                I.Regions(r).LabelId = reg.LabelId;
             end
         end
 
@@ -637,15 +633,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
                 img.PixelSizeOverride = model.units.PixelSize(S.PixelSizeOverride.Value, S.PixelSizeOverride.Unit);
             end
 
-            % if isfield(S,'DisplayCLim') && ~isempty(S.DisplayCLim) && all(~isnan(S.DisplayCLim))
-            %     img.DisplayCLim = S.DisplayCLim;
-            % end
-
             img.DisplayCLim = S.DisplayCLim;
-
-            % if isfield(S,'NextRegionOrdinal')
-            %     img.NextRegionOrdinal = S.NextRegionOrdinal;
-            % end
 
             img.NextRegionOrdinal = S.NextRegionOrdinal;
 
@@ -659,8 +647,17 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
                     img.addRegionSilent(string(R.ID), R.Center, R.BoxSize);
                     reg = img.getRegion(string(R.ID));
                     reg.Name = string(R.Name);
+
+                    if isfield(R,'CreatedAt') && ~isempty(R.CreatedAt)
+                        reg.CreatedAt = R.CreatedAt;
+                    end
+
                     if isfield(R,'Linescan') && ~isempty(R.Linescan)
                         reg.Linescan = R.Linescan;
+                    end
+
+                    if isfield(R,'LabelId') && ~isempty(R.LabelId)
+                        reg.LabelId = string(R.LabelId);
                     end
                 end
                 % restore region order exactly

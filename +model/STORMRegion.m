@@ -7,6 +7,9 @@ classdef STORMRegion < handle
         Parent (1,1) model.STORMImage
         Name (1,1) string = ""
         CreatedAt datetime = datetime('now')
+
+        % Labeling (for ML training/export)
+        LabelID (1,1) string = "unlabeled"
     end
 
     % props derived from parent
@@ -38,17 +41,18 @@ classdef STORMRegion < handle
     %% Lifecycle
     methods
         % Constructor
-        function obj = STORMRegion(Parent, ID, Center, BoxSize)
+        function obj = STORMRegion(Parent, ID, Center, BoxSize, LabelID)
             arguments
                 Parent (1,1) model.STORMImage
                 ID (1,1) string
                 Center (1,2) double
                 BoxSize (1,1) double
+                LabelID (1,1) string = "unlabeled"
             end
             obj.ID = ID;
             obj.BoxSize = BoxSize;
             obj.Parent = Parent;
-            %obj.Center = Center;
+            obj.LabelID = LabelID;
 
             % clamp the box center to fall within image limits
             obj.Center = imtools.clampBoxToImage(Center,BoxSize,[obj.Parent.Width obj.Parent.Height]);
@@ -117,6 +121,7 @@ classdef STORMRegion < handle
             % variable names to act as row names when the table is rotated
             VariableNames = {...
                 'Name';...
+                'Label';...
                 'Region center (x,y)';...
                 'Region width';...
                 'Region height';...
@@ -141,6 +146,7 @@ classdef STORMRegion < handle
             % the actual table data (with distance measurements formatted according to PixelSize)
             T = table(...
                 {char(obj.Name)},...
+                {char(obj.LabelID)},...
                 {sprintf('(%.1f, %.1f)',obj.Center(1),obj.Center(2))},...
                 {sprintf('%i px',obj.BoxSize)},...
                 {sprintf('%i px',obj.BoxSize)},...
@@ -192,6 +198,9 @@ classdef STORMRegion < handle
             row.ImageName     = string(obj.Parent.Name);
             row.RegionName    = string(obj.Name);
             row.PixelSize     = ps.stringDisplay;
+
+            % Label
+            row.LabelID       = string(obj.LabelID);
 
             % Region position/geometry
             row.RegionCenter        = string(sprintf('(%.1f, %.1f)',obj.Center(1),obj.Center(2)));
