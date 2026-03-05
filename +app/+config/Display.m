@@ -25,7 +25,7 @@ classdef Display < handle
         % ---------- Dependent getters ----------
         function c = get.Colormap(this)
             % Returns Nx3 RGB array; loads from registry as needed.
-            c = guitools.colormaps.Registry.map(this.ColormapName_, this.ColormapCategory_);
+            c = matlabx.colors.maps.Registry.map(this.ColormapName_, this.ColormapCategory_);
         end
 
         function s = get.ColormapName(this),     s = this.ColormapName_;     end
@@ -41,7 +41,7 @@ classdef Display < handle
             category = string(category);
 
             % make sure colormap with given name exists in the current category
-            assert(app.colormaps.Registry.has(name, category), ...
+            assert(matlabx.colors.maps.Registry.has(name, category), ...
                 'Colormap "%s" not found in category "%s".', name, category);
 
             if name == this.ColormapName_ && category == this.ColormapCategory_
@@ -89,12 +89,12 @@ classdef Display < handle
 
         function cats = availableCategories()
             % get list of colormap categories
-            cats = guitools.colormaps.Registry.categories();
+            cats = matlabx.colors.maps.Registry.categories();
         end
 
         function names = availableNames(category)
             % get list of colormap names for given colormap category
-            names = guitools.colormaps.Registry.names(category);
+            names = matlabx.colors.maps.Registry.names(category);
         end
 
     end

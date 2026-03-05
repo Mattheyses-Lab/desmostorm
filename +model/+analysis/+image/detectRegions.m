@@ -34,7 +34,7 @@ function [out,clustData] = detectRegions(I,opts)
     %% preprocess image for blob detection - TESTING
 
     if opts.Preprocess
-        I = utils.suppressHotPuncta(I);
+        I = matlabx.image.process.suppressHotPuncta(I);
     end
 
     %% start by detecting blobs using SURF

@@ -3,7 +3,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
 
     %% Identity/metadata
     properties
-        ID (1,1) string = utils.uniqueID()
+        ID (1,1) string = matlabx.utils.text.uniqueID()
         Name (1,1) string = "untitled"
         SourcePath (1,1) string = ""
         CreatedAt datetime = datetime('now')
@@ -135,7 +135,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             % get file name and extension
             [~,name,ext] = fileparts(filePath);
             % create a STORMImage object with new unique ID
-            img = model.STORMImage(obj, string(name)+string(ext), string(filePath), utils.uniqueID());  % NO imread
+            img = model.STORMImage(obj, string(name)+string(ext), string(filePath), matlabx.utils.text.uniqueID());  % NO imread
 
             % bind to dictionary and emit ImageAdded
             obj.ImagesDict(img.ID) = img;
@@ -401,7 +401,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
                     % save each region image
                     switch img.CDataClass
                         case 'uint16'
-                            imtools.write16BitTiff(img.regionSubimage(reg),fullName);
+                            matlabx.image.io.write16BitTiff(img.regionSubimage(reg),fullName);
                         otherwise
                             error('Could not export region images')
                     end

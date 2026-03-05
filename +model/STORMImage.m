@@ -3,7 +3,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
 
     %% Identity/ownership/meta
     properties
-        ID (1,1) string = utils.uniqueID()
+        ID (1,1) string = matlabx.utils.text.uniqueID()
         Parent (:,1) model.STORMProject
         Name (1,1) string = ""
         SourcePath (1,1) string = ""
@@ -93,7 +93,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
                 obj.ID = ID;
             else
                 %obj.ID = model.STORMImage.newID();
-                obj.ID = utils.uniqueID();
+                obj.ID = matlabx.utils.text.uniqueID();
             end
 
             obj.Parent = parent;

@@ -10,7 +10,7 @@ classdef GUI < handle
         RegionGrid matlab.ui.container.GridLayout
 
         % --- listbox/settings accordion ---
-        SettingsAccordion guitools.widgets.uiaccordion
+        SettingsAccordion matlabx.ui.widgets.uiaccordion
 
         % --- listboxes ---
         % images
@@ -26,11 +26,11 @@ classdef GUI < handle
         % ImageViewer
         ImageViewerPanel matlab.ui.container.Panel
         ImageViewerPanelGrid matlab.ui.container.GridLayout
-        Ax guitools.widgets.ImageAxes
+        Ax matlabx.ui.widgets.ImageAxes
         % RegionViewer
         RegionViewerPanel matlab.ui.container.Panel
         RegionViewerPanelGrid matlab.ui.container.GridLayout
-        RegionViewer guitools.widgets.ImageAxes
+        RegionViewer matlabx.ui.widgets.ImageAxes
 
         % --- region table ---
         RegionSummaryPanel matlab.ui.container.Panel
@@ -49,7 +49,7 @@ classdef GUI < handle
         ExampleColormapAxes matlab.ui.control.UIAxes
         ExampleColormapImage matlab.graphics.primitive.Image
         ColormapTree matlab.ui.container.Tree
-        IntensitySlider guitools.widgets.uirangeslidereditfield
+        IntensitySlider matlabx.ui.widgets.uirangeslidereditfield
     end
 
     % Extra graphics handles, stored as struct to reduce clutter
@@ -77,7 +77,7 @@ classdef GUI < handle
         LabelsUI struct
         IsSyncingSelection (1,1) logical = false
 
-        CommandRouter guitools.control.CommandRouter
+        CommandRouter matlabx.ui.control.CommandRouter
     end
 
 
@@ -103,7 +103,7 @@ classdef GUI < handle
 
             %% --- Figure ---
             % need to add a more elegant way to set window size once app components are finalized
-            s = utils.getScreenSize();
+            s = matlabx.ui.calibration.getScreenSize();
             %s(4) = 0.45*s(3);
             obj.Fig = uifigure('Name','DesmoSTORM',...
                 'Color',[0 0 0],...
@@ -122,7 +122,7 @@ classdef GUI < handle
             %     "HotkeyFcn", @(~,k) obj.onHotkey(k), ...
             %     "ModeQueryFcn", @() true);
 
-            obj.CommandRouter = guitools.control.CommandRouter('Parent',obj.Fig);
+            obj.CommandRouter = matlabx.ui.control.CommandRouter('Parent',obj.Fig);
 
 
             %% --- Menubar ---
@@ -173,7 +173,7 @@ classdef GUI < handle
 
             %% --- Settings controllers ---
             % create the accordion and parent it to the grid
-            obj.SettingsAccordion = guitools.widgets.uiaccordion(obj.LeftPane,...
+            obj.SettingsAccordion = matlabx.ui.widgets.uiaccordion(obj.LeftPane,...
                 'ItemSpacing',5,...
                 'BorderWidth',0,...
                 'BorderColor',[.18 .18 .18],...
@@ -285,13 +285,13 @@ classdef GUI < handle
             obj.ColormapTree.Layout.Column = 1;
 
             % populate tree with colormap categories
-            categories = guitools.colormaps.Registry.categories;
+            categories = matlabx.colors.maps.Registry.categories;
 
             for i = 1:numel(categories)
                 thisCategory = categories(i);
                 catNode = uitreenode("Parent",obj.ColormapTree,"Text",thisCategory);
 
-                names = guitools.colormaps.Registry.names(thisCategory);
+                names = matlabx.colors.maps.Registry.names(thisCategory);
 
                 for j = 1:numel(names)
                     uitreenode("Parent",catNode,"Text",names(j),"NodeData",names(j));
@@ -389,7 +389,7 @@ classdef GUI < handle
                 "ValueChangedFcn",@(o,~) obj.DisplaySettingsChanged(o,"AutoScaleDisplayIntensity"),...
                 "Text","Auto-scale display intensity");
 
-            obj.IntensitySlider = guitools.widgets.uirangeslidereditfield(obj.SettingsAccordion.Items(5).Pane,...
+            obj.IntensitySlider = matlabx.ui.widgets.uirangeslidereditfield(obj.SettingsAccordion.Items(5).Pane,...
                 "Title",'Adjust display limits',...
                 "FontColor",[1 1 1],...
                 "BackgroundColor",[.18 .18 .18],...
@@ -489,7 +489,7 @@ classdef GUI < handle
                 "Padding",[0 0 0 0]);
 
             % ImageAxes to view active image CData, select Regions
-            obj.Ax = guitools.widgets.ImageAxes(obj.ImageViewerPanelGrid,...
+            obj.Ax = matlabx.ui.widgets.ImageAxes(obj.ImageViewerPanelGrid,...
                 'Name','ImageViewer',...
                 'CData',[],...
                 'ToolBelt',{'Zoom','Pick','Colorbar'},...
@@ -534,7 +534,7 @@ classdef GUI < handle
                 "Padding",[0 0 0 0]);
 
             % ImageAxes to show active region CData, make region measurements
-            obj.RegionViewer = guitools.widgets.ImageAxes(obj.RegionViewerPanelGrid,...
+            obj.RegionViewer = matlabx.ui.widgets.ImageAxes(obj.RegionViewerPanelGrid,...
                 'Name','RegionViewer',...
                 'CData',[],...
                 'ToolBelt',{'DrawRectangle'},...
@@ -928,6 +928,9 @@ classdef GUI < handle
         end
 
         function refreshRegionBoxes(obj)
+            disp('refreshRegionBoxes()')
+
+
             obj.Ax.Tools.Pick.clearBoxes();
 
             img = obj.Project.ActiveImage;
@@ -949,6 +952,8 @@ classdef GUI < handle
                         boxColor = L.Color;
                     end
                 end
+
+                fprintf('Adding region: %s\n',r.Name)
 
                 obj.Ax.Tools.Pick.addBox(r.ID, r.Center, r.BoxSize, ...
                     "EdgeColor", boxColor, "FaceColor", boxColor, "Label", r.Name);
@@ -1059,7 +1064,7 @@ classdef GUI < handle
 
             obj.RegionLinescanPlot.XLabel = sprintf("Distance (%s)",img.PixelSize.Unit);
             obj.RegionLinescanPlot.Data = reg.LinescanResults;
-            obj.RegionLinescanPlot.Title = utils.texFriendly(img.Name) + " | " + reg.Name;
+            obj.RegionLinescanPlot.Title = matlabx.utils.text.texFriendly(img.Name) + " | " + reg.Name;
 
         end
 
@@ -1551,6 +1556,9 @@ classdef GUI < handle
     methods (Access=private)
 
         function onBoxCreated(obj, data)
+
+            disp('onBoxCreated()')
+
             % Get active image
             img = obj.Project.ActiveImage; if isempty(img), return; end
 
@@ -1766,7 +1774,7 @@ classdef GUI < handle
             p.Layout.Column = 1;
 
             % ImageAxes to show region CData and ROI position
-            ax = guitools.widgets.ImageAxes(g,...
+            ax = matlabx.ui.widgets.ImageAxes(g,...
                 'Name','RegionViewer',...
                 'ToolBox',{'DrawRectangle'},...
                 'ToolBelt',{'DrawRectangle'},...
@@ -1817,7 +1825,7 @@ classdef GUI < handle
 
                     % update region linescan plot and title
                     p.Data = regs(j).LinescanResults;
-                    p.Title = utils.texFriendly(imgs(i).Name) + " | " + regs(j).Name;
+                    p.Title = matlabx.utils.text.texFriendly(imgs(i).Name) + " | " + regs(j).Name;
 
                     % update region CData and CLim
                     ax.CData = imgs(i).regionSubimage(regs(j));
@@ -1837,7 +1845,7 @@ classdef GUI < handle
                     l.Text = regs(j).TextSummaryTable;
 
                     % create a temporary unique name for each PDF
-                    tempName = fullfile(path,[utils.uniqueID("char"),'.pdf']);
+                    tempName = fullfile(path,[matlabx.utils.text.uniqueID("char"),'.pdf']);
 
                     drawnow
                     if i==1 && j==1

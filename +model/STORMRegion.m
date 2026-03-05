@@ -55,7 +55,7 @@ classdef STORMRegion < handle
             obj.LabelID = LabelID;
 
             % clamp the box center to fall within image limits
-            obj.Center = imtools.clampBoxToImage(Center,BoxSize,[obj.Parent.Width obj.Parent.Height]);
+            obj.Center = matlabx.image.roi.clampBoxToImage(Center,BoxSize,[obj.Parent.Width obj.Parent.Height]);
 
         end
     end
@@ -159,7 +159,7 @@ classdef STORMRegion < handle
                 {obj.formatLength(PeakWidth2)},...
                 'VariableNames',VariableNames);
             % rotate the table before returning
-            T = utils.rotateTable(T,'ColumnNames',{'Values'});
+            T = matlabx.utils.table.rotate(T,'ColumnNames',{'Values'});
         end
 
         function ps = get.PixelSize(obj)
@@ -175,7 +175,7 @@ classdef STORMRegion < handle
             T = obj.SummaryTable;
             names = T.Properties.RowNames;
             vals = T.Values;
-            out = utils.formatKeyValueText(names,vals);
+            out = matlabx.utils.text.formatKeyValueText(names,vals);
         end
 
     end
