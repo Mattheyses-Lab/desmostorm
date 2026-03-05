@@ -928,9 +928,6 @@ classdef GUI < handle
         end
 
         function refreshRegionBoxes(obj)
-            disp('refreshRegionBoxes()')
-
-
             obj.Ax.Tools.Pick.clearBoxes();
 
             img = obj.Project.ActiveImage;
@@ -952,9 +949,7 @@ classdef GUI < handle
                         boxColor = L.Color;
                     end
                 end
-
-                fprintf('Adding region: %s\n',r.Name)
-
+                
                 obj.Ax.Tools.Pick.addBox(r.ID, r.Center, r.BoxSize, ...
                     "EdgeColor", boxColor, "FaceColor", boxColor, "Label", r.Name);
             end
