@@ -10,11 +10,17 @@ classdef STORMRegion < handle
 
         % Labeling (for ML training/export)
         LabelID (1,1) string = "unlabeled"
+        LabelSource (1,1) string = "user"
     end
 
     % props derived from parent
     properties (Dependent=true)
         PixelSize (1,1) model.units.PixelSize
+    end
+
+    %% Classification/auto-detection
+    properties
+        Score (1,1) = NaN
     end
 
     %% Geometry/measurements
@@ -41,18 +47,22 @@ classdef STORMRegion < handle
     %% Lifecycle
     methods
         % Constructor
-        function obj = STORMRegion(Parent, ID, Center, BoxSize, LabelID)
+        function obj = STORMRegion(Parent, ID, Center, BoxSize, LabelID, LabelSource, Score)
             arguments
-                Parent (1,1) model.STORMImage
-                ID (1,1) string
-                Center (1,2) double
-                BoxSize (1,1) double
-                LabelID (1,1) string = "unlabeled"
+                Parent      (1,1) model.STORMImage
+                ID          (1,1) string
+                Center      (1,2) double
+                BoxSize     (1,1) double
+                LabelID     (1,1) string = "unlabeled"
+                LabelSource (1,1) string = "user"
+                Score       (1,1) double = NaN
             end
             obj.ID = ID;
             obj.BoxSize = BoxSize;
             obj.Parent = Parent;
             obj.LabelID = LabelID;
+            obj.LabelSource = LabelSource;
+            obj.Score = Score;
 
             % clamp the box center to fall within image limits
             obj.Center = matlabx.image.roi.clampBoxToImage(Center,BoxSize,[obj.Parent.Width obj.Parent.Height]);
@@ -122,6 +132,8 @@ classdef STORMRegion < handle
             VariableNames = {...
                 'Name';...
                 'Label';...
+                'LabelSource';...
+                'Score';...
                 'Region center (x,y)';...
                 'Region width';...
                 'Region height';...
@@ -147,6 +159,8 @@ classdef STORMRegion < handle
             T = table(...
                 {char(obj.Name)},...
                 {char(obj.LabelID)},...
+                {char(obj.LabelSource)},...
+                {sprintf('%.2f',obj.Score)},...
                 {sprintf('(%.1f, %.1f)',obj.Center(1),obj.Center(2))},...
                 {sprintf('%i px',obj.BoxSize)},...
                 {sprintf('%i px',obj.BoxSize)},...
@@ -201,6 +215,10 @@ classdef STORMRegion < handle
 
             % Label
             row.LabelID       = string(obj.LabelID);
+            row.LabelSource   = string(obj.LabelSource);
+
+            % Score
+            row.Score         = sprintf('%.2f',obj.Score);
 
             % Region position/geometry
             row.RegionCenter        = string(sprintf('(%.1f, %.1f)',obj.Center(1),obj.Center(2)));
