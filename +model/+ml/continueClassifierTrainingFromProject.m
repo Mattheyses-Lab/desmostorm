@@ -1,0 +1,111 @@
+function [pkgNew, out] = continueClassifierTrainingFromProject(project, classifierFile, opts)
+%continueClassifierTrainingFromProject Continue training from an existing
+% classifier package using current project labels.
+%
+% Workflow:
+%   - load existing package
+%   - build project patch table from current project
+%   - merge old training table with current project table (new wins)
+%   - continue training from old net
+%   - auto-save next version in same folder (default)
+
+    arguments
+        project (1,1) model.STORMProject
+        classifierFile (1,1) string
+    
+        opts.PositiveLabel (1,1) string = "object"
+        opts.NegativeLabel (1,1) string = "background"
+        opts.RequiredLabelSource (1,1) string = "user"
+    
+        opts.NegPerPos (1,1) double {mustBeNonnegative} = 6
+        opts.IoUMax (1,1) double {mustBeGreaterThanOrEqual(opts.IoUMax,0), mustBeLessThanOrEqual(opts.IoUMax,1)} = 0.05
+        opts.ValFrac (1,1) double {mustBeGreaterThan(opts.ValFrac,0), mustBeLessThan(opts.ValFrac,1)} = 0.2
+    
+        opts.SaveDir (1,1) string = ""
+        opts.MaxEpochs (1,1) double {mustBePositive} = 5
+        opts.MiniBatchSize (1,1) double {mustBePositive} = 8
+        opts.InitialLearnRate (1,1) double {mustBePositive} = 1e-4
+        opts.ExecutionEnvironment (1,1) string = "cpu"
+        opts.Augment (1,1) logical = true
+        opts.ValidationFrequency (1,1) double {mustBePositive} = 50
+    
+        opts.Notes (1,1) string = ""
+    end
+    
+    pkgOld = model.ml.loadClassifierPackage(classifierFile);
+    
+    if opts.SaveDir == ""
+        saveDir = string(fileparts(classifierFile));
+    else
+        saveDir = opts.SaveDir;
+    end
+    matlabx.utils.files.ensureDir(saveDir);
+    
+    baseName = model.ml.classifierBaseNameFromFile(classifierFile);
+    
+    % Build project patch table from current project
+    patchTableProject = model.ml.buildPatchTableFromProject(project, ...
+        BoxSize=pkgOld.BoxSize, ...
+        NegPerPos=opts.NegPerPos, ...
+        IoUMax=opts.IoUMax, ...
+        PositiveLabel=opts.PositiveLabel, ...
+        NegativeLabel=opts.NegativeLabel, ...
+        RequiredLabelSource=opts.RequiredLabelSource);
+    
+    % Merge old training table with new project table
+    patchTableTraining = model.ml.mergePatchTables(pkgOld.PatchTable, patchTableProject);
+    
+    [Ptrain, Pval] = model.ml.splitByImage(patchTableTraining, opts.ValFrac);
+    
+    trainOpts = pkgOld.TrainOpts;
+    trainOpts.BaseNet = pkgOld.Net;
+    trainOpts.ContinueTraining = true;
+    trainOpts.MaxEpochs = opts.MaxEpochs;
+    trainOpts.MiniBatchSize = opts.MiniBatchSize;
+    trainOpts.InitialLearnRate = opts.InitialLearnRate;
+    trainOpts.ExecutionEnvironment = opts.ExecutionEnvironment;
+    trainOpts.Augment = opts.Augment;
+    trainOpts.ValidationFrequency = opts.ValidationFrequency;
+    
+    % netNew = model.ml.trainPatchClassifier(Ptrain, Pval, pkgOld.BoxSize, trainOpts);
+
+    netNew = model.ml.trainPatchClassifier(Ptrain, Pval, pkgOld.BoxSize, ...
+        "BaseNet",trainOpts.BaseNet,...
+        "ContinueTraining",trainOpts.ContinueTraining,...
+        "MaxEpochs",trainOpts.MaxEpochs,...
+        "MiniBatchSize",trainOpts.MiniBatchSize,...
+        "InitialLearnRate",trainOpts.InitialLearnRate,...
+        "ExecutionEnvironment",trainOpts.ExecutionEnvironment,...
+        "Augment",trainOpts.Augment,...
+        "ValidationFrequency",trainOpts.ValidationFrequency);
+    
+    propOpts = pkgOld.PropOpts;
+    propOpts.PositiveClass = opts.PositiveLabel;
+    
+    [nextVersion, stem] = model.ml.nextClassifierVersion(saveDir, baseName);
+    
+    pkgNew = model.ml.makeClassifierPackage( ...
+        netNew, pkgOld.BoxSize, trainOpts, propOpts, patchTableTraining, ...
+        PositiveClass=opts.PositiveLabel, ...
+        SourceModel=string(classifierFile), ...
+        Notes=opts.Notes);
+    
+    classifierOut = fullfile(saveDir, sprintf("classifier_%s_v%03d.mat", stem, nextVersion));
+    projectPatchOut = fullfile(saveDir, sprintf("patchTable_%s_v%03d_project.csv", stem, nextVersion));
+    trainingPatchOut = fullfile(saveDir, sprintf("patchTable_%s_v%03d_training.csv", stem, nextVersion));
+    
+    model.ml.saveClassifierPackage(classifierOut, pkgNew);
+    writetable(patchTableProject, projectPatchOut);
+    writetable(patchTableTraining, trainingPatchOut);
+    
+    out = struct();
+    out.ClassifierFile = string(classifierOut);
+    out.ProjectPatchFile = string(projectPatchOut);
+    out.TrainingPatchFile = string(trainingPatchOut);
+    out.SaveDir = string(saveDir);
+    out.Version = nextVersion;
+    out.BaseName = stem;
+    out.SourceClassifierFile = string(classifierFile);
+    out.NumProjectPatches = height(patchTableProject);
+    out.NumTrainingPatches = height(patchTableTraining);
+end
