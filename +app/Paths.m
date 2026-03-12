@@ -20,6 +20,12 @@ classdef Paths
             % full path to settings.json
             p = fullfile(app.Paths.configDir(), 'settings.json');
         end
+        function p = assets()
+            p = fullfile(app.Paths.root, 'assets');
+        end
+        function p = ml()
+            p = fullfile(app.Paths.assets,'ml');
+        end
     end
 
 end
