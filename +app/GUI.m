@@ -1607,14 +1607,18 @@ classdef GUI < handle
                 {'NmsIoU','NmsIoU','double',propOpts.NmsIoU, @(x) x>=0 && x<=1, 'NmsIoU must be between 0 and 1'},...
                 {'BatchSize','BatchSize','choice',propOpts.BatchSize,{64,128,256,512,1024}});
 
+            % show figure
+            obj.Fig.Visible = 'on';
+            pause(0.5)
+
+            if isempty(params)
+                return
+            end
+
             propOpts.Stride         = params.Stride;
             propOpts.ScoreThreshold = params.ScoreThreshold;
             propOpts.NmsIoU         = params.NmsIoU;
             propOpts.BatchSize      = str2double(params.BatchSize);
-
-            % show figure
-            obj.Fig.Visible = 'on';
-            pause(0.5)
 
             % create progress dialog
             h = uiprogressdlg(obj.Fig,"Message",'Please wait...','Indeterminate','on');
