@@ -80,6 +80,11 @@ classdef GUI < handle
         CommandRouter matlabx.ui.control.CommandRouter
     end
 
+    %% Logging
+    properties
+        Log (1,1) matlabx.logging.Logger
+    end
+
 
     %% Public properties
 
@@ -94,14 +99,75 @@ classdef GUI < handle
 
         function obj = GUI()
 
-            % %% --- Settings ---
-            obj.Settings = app.config.Settings.load();
+            % --- Log ---
+            obj.Log = app.Log.get();
 
-            % %% --- Model ---
-            % obj.Project = model.STORMProject("untitled");
-            % obj.Project.DefaultPixelSize = obj.Settings.Analysis.getDefaultPixelSize();
+            app.Log.INFO("Starting DesmoSTORM...");
 
-            %% --- Figure ---
+            % --- Settings ---
+            app.Log.INFO("Loading settings...");
+            try
+                obj.Settings = app.config.Settings.load();
+            catch ME
+                app.Log.ERROR(ME); rethrow(ME);
+            end
+
+            % --- Build GUI ---
+            app.Log.INFO("Building GUI...");
+            try obj.buildGUI(); catch ME, app.Log.ERROR(ME); rethrow(ME); end
+
+            % --- Initial UI sync ---
+            app.Log.INFO("Refreshing UI...");
+            try obj.refreshUI(); catch ME, app.Log.ERROR(ME); rethrow(ME); end
+
+            % --- Show figure ---
+            app.Log.INFO("Opening...");
+            obj.Fig.Visible = 'on';
+
+        end
+
+        function buildGUI(obj)
+            % --- Figure ---
+            app.Log.INFO("Setting up main figure window...");
+            try obj.setupFigure(); catch ME, app.Log.ERROR(ME); rethrow(ME); end
+
+            % --- CommandRouter ---
+            app.Log.INFO("Setting up CommandRouter...");
+            try obj.setupCommandRouter(); catch ME, app.Log.ERROR(ME); rethrow(ME); end
+
+            % --- Menubar ---
+            app.Log.INFO("Setting up Menubar...");
+            try obj.setupMenubar(); catch ME, app.Log.ERROR(ME); rethrow(ME); end
+
+            % --- Grids ---
+            app.Log.INFO("Setting up main grid layout managers...");
+            try obj.setupGrids(); catch ME, app.Log.ERROR(ME); rethrow(ME); end
+
+            % --- Settings controllers ---
+            app.Log.INFO("Setting up settings controllers...");
+            try obj.setupSettingsControllers(); catch ME, app.Log.ERROR(ME); rethrow(ME); end
+
+            % --- ImageViewer ---
+            app.Log.INFO("Setting up ImageViewer...");
+            try obj.setupImageViewer(); catch ME, app.Log.ERROR(ME); rethrow(ME); end
+
+            % --- RegionViewer ---
+            app.Log.INFO("Setting up RegionViewer...");
+            try obj.setupRegionViewer(); catch ME, app.Log.ERROR(ME); rethrow(ME); end
+
+            % --- RegionSummaryTable ---
+            app.Log.INFO("Setting up RegionSummaryTable...");
+            try obj.setupRegionSummaryTable(); catch ME, app.Log.ERROR(ME); rethrow(ME); end
+
+            % --- RegionLinescanPlot ---
+            app.Log.INFO("Setting up RegionSummaryTable...");
+            try obj.setupRegionLinescanPlot(); catch ME, app.Log.ERROR(ME); rethrow(ME); end
+
+            % center the GUI after defining all graphics components
+            movegui(obj.Fig,"center");
+        end
+
+        function setupFigure(obj)
             % need to add a more elegant way to set window size once app components are finalized
             s = matlabx.ui.calibration.getScreenSize();
             %s(4) = 0.45*s(3);
@@ -113,20 +179,13 @@ classdef GUI < handle
                 'Theme','dark',...
                 'HandleVisibility','on',...
                 'Tag',app.Info.Name);
+        end
 
-
-            %% --- CommandRouter ---
-            % hot-key router for labeling
-            % obj.CommandRouter = app.CommandRouter( ...
-            %     obj.Fig, ...
-            %     "HotkeyFcn", @(~,k) obj.onHotkey(k), ...
-            %     "ModeQueryFcn", @() true);
-
+        function setupCommandRouter(obj)
             obj.CommandRouter = matlabx.ui.control.CommandRouter('Parent',obj.Fig);
+        end
 
-
-            %% --- Menubar ---
-
+        function setupMenubar(obj)
             % Set up MenubarUI struct
             obj.MenubarUI = struct(...
                 "File",struct(),...
@@ -150,9 +209,15 @@ classdef GUI < handle
 
             % --- Run ---
             obj.MenubarUI.Run = uimenu(obj.Fig,'Text','Run');
-            obj.MenubarUI.Run_Autopick = uimenu(obj.MenubarUI.Run,'Text','Auto-pick Regions (experimental)...','MenuSelectedFcn',@(~,~) obj.onAutopickRegions());
+            %obj.MenubarUI.Run_Autopick = uimenu(obj.MenubarUI.Run,'Text','Auto-pick Regions (experimental)...','MenuSelectedFcn',@(~,~) obj.onAutopickRegions());
 
-            %% --- Layout ---
+            obj.MenubarUI.Run_Classifier = uimenu(obj.MenubarUI.Run,'Text','Run classifier...','MenuSelectedFcn',@(~,~) obj.onRunClassifier());
+
+            obj.MenubarUI.Run_TrainNewClassifier = uimenu(obj.MenubarUI.Run,'Text','Train new classifier...','MenuSelectedFcn',@(~,~) obj.onTrainNewClassifier());
+            obj.MenubarUI.Run_ContinueTrainingClassifier = uimenu(obj.MenubarUI.Run,'Text','Continue training existing classifier...','MenuSelectedFcn',@(~,~) obj.onContinueTrainingClassifier());
+        end
+
+        function setupGrids(obj)
             % Main Grid
             obj.Grid = uigridlayout(obj.Fig,[2 3], ...
                 'ColumnWidth',{'fit','1x'}, ...
@@ -170,8 +235,9 @@ classdef GUI < handle
                 "Scrollable","on");
             obj.LeftPane.Layout.Row = [1 2];
             obj.LeftPane.Layout.Column = 1;
+        end
 
-            %% --- Settings controllers ---
+        function setupSettingsControllers(obj)
             % create the accordion and parent it to the grid
             obj.SettingsAccordion = matlabx.ui.widgets.uiaccordion(obj.LeftPane,...
                 'ItemSpacing',5,...
@@ -227,7 +293,7 @@ classdef GUI < handle
                 'ItemsData',{},...
                 'Multiselect','on',...
                 'Value',{},...
-                'ValueChangedFcn',@(lb,~) obj.onSelectRegion(lb.Value),...
+                'ValueChangedFcn',@(lb,evt) obj.onSelectRegion(lb,evt),...
                 'BackgroundColor',[.18 .18 .18],...
                 'FontColor',[.9 .9 .9]);
 
@@ -478,7 +544,13 @@ classdef GUI < handle
 
 
 
-            %% --- ImageViewer ---
+            % Expand Image and Region listbox accordion items
+            obj.SettingsAccordion.Items(1).expand();
+            obj.SettingsAccordion.Items(2).expand();
+        end
+
+        function setupImageViewer(obj)
+            % uipanel to hold the viewer
             obj.ImageViewerPanel = uipanel(obj.Grid,'Title','Image Viewer','BackgroundColor',[0.12 0.12 0.12]);
             obj.ImageViewerPanel.Layout.Column = 2;
             obj.ImageViewerPanel.Layout.Row = [1 2];
@@ -496,11 +568,10 @@ classdef GUI < handle
                 'Colormap',obj.Settings.Display.Colormap,...
                 'CLim',[0 1]);
 
-
             % wire the optimistic callbacks for ImageViewer Pick tool
             obj.Ax.Tools.Pick.BoxCreatedFcn          = @(~,d) obj.onBoxCreated(d);
             obj.Ax.Tools.Pick.BoxMoveStartedFcn      = @(~,d) obj.onBoxMoveStarted(d);
-            obj.Ax.Tools.Pick.BoxPreviewMovedFcn     = @(~,d) obj.onBoxPreviewMoved(d);   % optional
+            obj.Ax.Tools.Pick.BoxPreviewMovedFcn     = @(~,d) obj.onBoxPreviewMoved(d);
             obj.Ax.Tools.Pick.BoxMoveCommittedFcn    = @(~,d) obj.onBoxMoveCommitted(d);
             obj.Ax.Tools.Pick.BoxDeletedFcn          = @(~,d) obj.onBoxDeleted(d);
             obj.Ax.Tools.Pick.BoxActivatedFcn        = @(~,d) obj.onBoxActivated(d);
@@ -508,9 +579,9 @@ classdef GUI < handle
 
             % set the box size for Pick tool
             obj.Ax.Tools.Pick.BoxSize = obj.Settings.Analysis.BoxSize;
+        end
 
-            %% --- RegionViewer ---
-
+        function setupRegionViewer(obj)
             % separate gridlayout object for the Region area
             obj.RegionGrid = uigridlayout(obj.Grid,[1 1],...
                 "ColumnWidth",{'1x'},...
@@ -521,7 +592,7 @@ classdef GUI < handle
             obj.RegionGrid.Layout.Column = 3;
             obj.RegionGrid.Layout.Row = [1 2];
 
-            % --- RegionViewer ---
+            % uipanel to hold the RegionViewer
             obj.RegionViewerPanel = uipanel(obj.RegionGrid,...
                 'Title','Region Viewer',...
                 'BackgroundColor',[0.12 0.12 0.12]);
@@ -541,15 +612,15 @@ classdef GUI < handle
                 'Colormap',obj.Settings.Display.Colormap,...
                 'CLim',[0 1]);
 
-
             % wire the callbacks for RegionViewer DrawRectangle tool
             obj.RegionViewer.Tools.DrawRectangle.ROIPreviewMovedFcn    = @(~,d) obj.onROIPreviewMoved(d);
             obj.RegionViewer.Tools.DrawRectangle.ROIMoveCommittedFcn   = @(~,d) obj.onROIMoveCommitted(d);
             obj.RegionViewer.Tools.DrawRectangle.ROIDeletedFcn         = @(~,~) obj.onROIDeleted();
             % set options for RegionViewer DrawRectangle tool
             obj.RegionViewer.Tools.DrawRectangle.RotationAngleMode = 'half-circle';
+        end
 
-            %% --- RegionSummaryTable ---
+        function setupRegionSummaryTable(obj)
             obj.RegionSummaryPanel = uipanel(obj.RegionGrid,...
                 'Title','Region Summary',...
                 'BackgroundColor',[.12 .12 .12]);
@@ -565,8 +636,9 @@ classdef GUI < handle
                 "ColumnName",{});
             obj.RegionSummaryTable.Layout.Row = 1;
             obj.RegionSummaryTable.Layout.Column = 1;
+        end
 
-            %% --- RegionSummaryPlot ---
+        function setupRegionLinescanPlot(obj)
             obj.RegionLinescanPanel = uipanel(obj.RegionGrid,...
                 'Title','Region Linescan',...
                 'BackgroundColor',[.12 .12 .12]);
@@ -587,22 +659,10 @@ classdef GUI < handle
                 "ForegroundColor",obj.Settings.PeaksPlot.ForegroundColor, ...
                 "XLabel",sprintf("Distance (%s)",obj.Settings.Analysis.PixelSizeUnit), ...
                 "YLabel","Normalized Intensity");
-
-            % center the GUI after defining all graphics components and ImageAxesTool settings
-            movegui(obj.Fig,"center");
-
-            %% --- Final cleanup ---
-            % Expand Image and Region listbox accordion items
-            obj.SettingsAccordion.Items(1).expand();
-            obj.SettingsAccordion.Items(2).expand();
-
-            % Show figure
-            obj.Fig.Visible = 'on';
-
-            % Initial UI sync
-            obj.refreshUI();
-
         end
+
+
+
 
         function delete(obj)
             % if ~isempty(obj.L), delete(obj.L(isvalid(obj.L))); end
@@ -769,13 +829,14 @@ classdef GUI < handle
 
         function refreshListeners(obj)
             if ~isempty(obj.Project)
-                obj.projectL(1) = addlistener(obj.Project,'ImageAdded',          @(~,~) obj.refreshImageList());
-                obj.projectL(2) = addlistener(obj.Project,'ImageRemoved',        @(~,~) obj.refreshImageList());
-                obj.projectL(3) = addlistener(obj.Project,'ActiveImageChanged',  @(~,~) obj.syncActiveImageToView());
-                obj.projectL(4) = addlistener(obj.Project,'RegionAdded',         @(~,~) obj.onRegionAdded());
-                obj.projectL(5) = addlistener(obj.Project,'RegionRemoved',       @(~,~) obj.refreshRegionList());
-                obj.projectL(6) = addlistener(obj.Project,'ActiveRegionChanged', @(~,~) obj.syncActiveRegionToView());
-                obj.projectL(7) = addlistener(obj.Project,'LabelsChanged',       @(~,~) obj.onLabelsChanged());
+                obj.projectL(1) = addlistener(obj.Project,'ImageAdded',             @(~,~) obj.refreshImageList());
+                obj.projectL(2) = addlistener(obj.Project,'ImageRemoved',           @(~,~) obj.refreshImageList());
+                obj.projectL(3) = addlistener(obj.Project,'ActiveImageChanged',     @(~,~) obj.syncActiveImageToView());
+                obj.projectL(4) = addlistener(obj.Project,'RegionAdded',            @(~,~) obj.onRegionAdded());
+                obj.projectL(5) = addlistener(obj.Project,'RegionRemoved',          @(~,~) obj.refreshRegionList());
+                obj.projectL(6) = addlistener(obj.Project,'ActiveRegionChanged',    @(~,~) obj.syncActiveRegionToView());
+                obj.projectL(7) = addlistener(obj.Project,'RegionSelectionChanged', @(~,~) obj.onRegionSelectionChanged());
+                obj.projectL(8) = addlistener(obj.Project,'LabelsChanged',          @(~,~) obj.onLabelsChanged());
             end
 
             obj.settingsL(1) = addlistener(obj.Settings,'DisplayChanged',   @(~,e) obj.onDisplayChanged(e));
@@ -899,185 +960,158 @@ classdef GUI < handle
     methods (Access=private)
 
         function onRegionAdded(obj)
-            % refresh region listbox
+            obj.refreshRegionList();
+            app.Log.INFO("Region added.")
+        end
+
+        function onRegionSelectionChanged(obj)
             obj.refreshRegionList();
         end
 
         function refreshRegionList(obj)
-            img = obj.Project.ActiveImage;
-            if isempty(img)
-                ids = [];
-            else
-                % string array of region IDs
-                ids = img.RegionOrder;
-            end
 
-            if isempty(ids)
-                obj.RegionListBox.Items = {};
-                obj.RegionListBox.ItemsData = {};
-                obj.RegionListBox.Value = {};
+            img = obj.Project.ActiveImage;
+            if isempty(img) || isempty(img.RegionOrder)
+                obj.clearRegionListBox();
                 return
             end
 
-            % string array of image names
-            names = img.RegionNames;         
-
-            obj.RegionListBox.Items     = names;
-            obj.RegionListBox.ItemsData = ids;
+            % --- multi-select ---
+            set(obj.RegionListBox,"Items",img.RegionNames,"ItemsData",img.RegionOrder,"Value",img.SelectedRegionIDs);
 
         end
+
+        function clearRegionListBox(obj), set(obj.RegionListBox,"Items",{},"ItemsData",{},"Value",{}); end
 
         function refreshRegionBoxes(obj)
             obj.Ax.Tools.Pick.clearBoxes();
 
             img = obj.Project.ActiveImage;
-            if isempty(img), return; end
 
-            regs = img.RegionArray;
-            if isempty(regs), return; end
-
-            bank = obj.Project.LabelBank;
-
-            for k = 1:numel(regs)
-                r = regs(k);
-
-                boxColor = [1 1 1];
-
-                if strlength(r.LabelID) > 0
-                    L = bank.getByID(r.LabelID);
-                    if ~isempty(L)
-                        boxColor = L.Color;
-                    end
-                end
-                
-                obj.Ax.Tools.Pick.addBox(r.ID, r.Center, r.BoxSize, ...
-                    "EdgeColor", boxColor, "FaceColor", boxColor, "Label", r.Name);
-            end
-        end
-
-        function onSelectRegion(obj, regionIDs)
-            if obj.IsSyncingSelection
+            if isempty(img) || isempty(img.RegionArray)
                 return
             end
 
+            % add a box for each region, colored according to its label
+            for r = img.RegionArray
+                boxColor = obj.Project.LabelBank.getByID(r.LabelID).Color;
+                obj.Ax.Tools.Pick.addBox(r.ID, r.Center, r.BoxSize, ...
+                    "EdgeColor", boxColor, "FaceColor", boxColor, "Label", r.Name);
+            end
+
+            % apply selection status to region boxes
+            obj.Ax.Tools.Pick.setSelectedBoxIDs(img.SelectedRegionIDs);
+
+            % set active box
+            obj.Ax.Tools.Pick.setActiveBoxID(img.ActiveRegionID);
+
+        end
+
+        % RegionListBox ValueChangedFcn
+        function onSelectRegion(obj, ~, evt)
+
             img = obj.Project.ActiveImage;
             if isempty(img), return; end
+
+            regionIDs = evt.Value;
 
             ids = string(regionIDs);
             ids = ids(strlength(ids)>0);
 
-            % push selection into Pick WITHOUT re-emitting to controller
-            obj.IsSyncingSelection = true;
-            obj.Ax.Tools.Pick.setSelectedBoxIDs(ids);
-            obj.IsSyncingSelection = false;
-
-            % active region = first selected
+            % set active/selected region
             if ~isempty(ids)
+                obj.Ax.Tools.Pick.setSelectedBoxIDs(ids);
+                obj.Ax.Tools.Pick.setActiveBoxID(ids(1));
+                img.setRegionSelection(ids);
                 img.setActiveRegion(ids(1));
             else
+                obj.Ax.Tools.Pick.clearBoxSelection();
+                obj.Ax.Tools.Pick.setActiveBoxID("");
+                obj.Ax.Tools.Pick.clearBoxSelection();
                 img.setActiveRegion("");
             end
+
         end
 
+        % function regionListBoxClicked(obj,src,evt)
+        % 
+        %     disp('listbox clicked')
+        % 
+        %     % img = obj.Project.ActiveImage;
+        %     % if isempty(img), return; end
+        %     % 
+        %     % itemIdx = evt.InteractionInformation.Item;
+        %     % 
+        %     % if isempty(itemIdx)
+        %     %     obj.Ax.Tools.Pick.setActiveBoxID("");
+        %     %     img.setActiveRegion("");
+        %     %     return
+        %     % end
+        %     % 
+        %     % regionID = src.ItemsData(itemIdx);
+        %     % 
+        %     % obj.Ax.Tools.Pick.setActiveBoxID(regionID);
+        %     % img.setActiveRegion(regionID);
+        % 
+        % end
+
         function syncActiveRegionToView(obj)
-            % get the active region
-            img = obj.Project.ActiveImage;
-            if isempty(img)
-                reg = [];
-            else
-                reg = img.ActiveRegion;
-            end
-
-            if ~isempty(reg)
-                % update RegionListBox selection
-                % obj.RegionListBox.Value = reg.ID;
-                % % update ROI box selection highlight
-                % obj.Ax.Tools.Pick.setActiveBoxByID(reg.ID);
-            end
-
             % refresh RegionViewer CData and CLim
             obj.refreshRegionViewer();
-
             % update RegionSummaryTable
             obj.refreshRegionSummaryTable();
-
             % update linescan
             obj.refreshRegionLinescanROI();
             obj.refreshRegionLinescanPlot();
-
         end
 
         function refreshRegionViewer(obj)
             img = obj.Project.ActiveImage;
-            if isempty(img)
-                reg = [];
-            else
-                reg = img.ActiveRegion;
-            end
             % if empty, clear view and return
-            if isempty(reg), obj.RegionViewer.CData = []; return, end
-            % get CData
-            cdata = img.regionSubimage(reg);
-            % get CLim
-            switch obj.Settings.Display.AutoScaleDisplayIntensity
-                case true
-                    clim = img.AutoDisplayCLim;
-                case false
-                    clim = img.DisplayCLim;
+            if isempty(img) || isempty(img.ActiveRegion)
+                obj.RegionViewer.CData = []; return
             end
             % update ImageViewer CData and CLim
-            set(obj.RegionViewer,'CData',cdata,'CLim',clim);
+            switch obj.Settings.Display.AutoScaleDisplayIntensity
+                case true
+                    set(obj.RegionViewer,'CData',img.regionSubimage(img.ActiveRegion),'CLim',img.AutoDisplayCLim);
+                case false
+                    set(obj.RegionViewer,'CData',img.regionSubimage(img.ActiveRegion),'CLim',img.DisplayCLim);
+            end
         end
 
         function refreshRegionSummaryTable(obj)
-            img = obj.Project.ActiveImage;
-            if isempty(img)
-                reg = [];
-            else
-                reg = img.ActiveRegion;
-            end
-
-            if isempty(reg)
+            if isempty(obj.Project.ActiveImage) || isempty(obj.Project.ActiveImage.ActiveRegion)
                 obj.RegionSummaryTable.Data = [];
             else
-                obj.RegionSummaryTable.Data = reg.SummaryTable;
+                obj.RegionSummaryTable.Data = obj.Project.ActiveImage.ActiveRegion.SummaryTable;
             end
         end
 
         function refreshRegionLinescanPlot(obj)
-
-            % get the ActiveImage, exit if empty
-            img = obj.Project.ActiveImage; if isempty(img), return; end
-
-            % get the ActiveRegion, exit if empty
-            reg = img.ActiveRegion; 
-            if isempty(reg)
+            img = obj.Project.ActiveImage;
+            % if empty, clear plot and return
+            if isempty(img) || isempty(img.ActiveRegion)
                 obj.RegionLinescanPlot.Data = model.analysis.PeaksData.empty();
                 obj.RegionLinescanPlot.Title = '';
                 return
             end
-
+            reg = img.ActiveRegion;
+            % update plot data and labels
             obj.RegionLinescanPlot.XLabel = sprintf("Distance (%s)",img.PixelSize.Unit);
             obj.RegionLinescanPlot.Data = reg.LinescanResults;
             obj.RegionLinescanPlot.Title = matlabx.utils.text.texFriendly(img.Name) + " | " + reg.Name;
-
         end
 
         function refreshRegionLinescanROI(obj)
-            % get the ActiveImage, exit if empty
-            img = obj.Project.ActiveImage; if isempty(img), return; end
-
-            % get the ActiveRegion, exit if empty
-            reg = img.ActiveRegion;
-            if isempty(reg)
-                % clear linescan position
+            img = obj.Project.ActiveImage;
+            % if empty, clear linescan position and return
+            if isempty(img) || isempty(img.ActiveRegion)
                 obj.RegionViewer.Tools.DrawRectangle.setROIPosition(model.STORMRegion.LinescanTemplate);
                 return
             end
-
             % update linescan ROI position
-            obj.RegionViewer.Tools.DrawRectangle.setROIPosition(reg.Linescan);
-
+            obj.RegionViewer.Tools.DrawRectangle.setROIPosition(img.ActiveRegion.Linescan);
         end
 
     end
@@ -1176,6 +1210,7 @@ classdef GUI < handle
                 r = img.getRegion(ids(i));
                 if ~isempty(r)
                     r.LabelID = L.ID;
+                    r.LabelSource = "user";
                 end
             end
 
@@ -1520,19 +1555,7 @@ classdef GUI < handle
         end
 
         function onAutopickRegions(obj)
-            % % get the ActiveImage, exit if empty
-            % img = obj.Project.ActiveImage; if isempty(img), return; end
-            % 
-            % % create progress dialog
-            % h = uiprogressdlg(obj.Fig,"Message",'Please wait...','Indeterminate','on');
-            % 
-            % % detect regions for the active image
-            % img.detectRegions(app.config.RunConfig.fromSettings(obj.Settings));
-            % 
-            % % close the progress dialog
-            % close(h);
-
-
+            %% OLD METHOD
 
             % create progress dialog
             h = uiprogressdlg(obj.Fig,"Message",'Please wait...','Indeterminate','on');
@@ -1543,7 +1566,149 @@ classdef GUI < handle
             % close the progress dialog
             close(h);
 
+            %% NEW METHOD
+
+
         end
+
+        function onRunClassifier(obj)
+            imgs = obj.Project.ImageArray;
+            if isempty(imgs), return; end
+
+            % --- get file ---
+            % hide figure to show file selection dialog
+            obj.Fig.Visible = 'off';
+            % file selection dialog
+            [file, path] = uigetfile( ...
+                {'*.mat'}, ...
+                'Select classifier file', ...
+                app.Paths.ml, ...
+                'MultiSelect','off');
+
+            % cancelled -> return
+            if isequal(file,0)
+                obj.Fig.Visible = 'on';
+                return
+            end
+            % build full file path
+            classifierFile = fullfile(path,file);
+
+            % --- load ---
+            app.Log.INFO(sprintf("Loading classifier file: %s",classifierFile));
+            pkg = model.ml.loadClassifierPackage(classifierFile);
+            net = pkg.Net;
+            propOpts = pkg.PropOpts;
+
+            % get proposal options
+            params = matlabx.app.ParamsDialog.prompt( ...
+                'Class proposal options', ...
+                {'Stride','Stride','double',propOpts.Stride, @(x) x>=1, 'Stride must be >= 1'},...
+                {'ScoreThreshold','ScoreThreshold','double',propOpts.ScoreThreshold, @(x) x<=1 && x>=0, 'ScoreThreshold must be between 0 and 1'},...
+                {'NmsIoU','NmsIoU','double',propOpts.NmsIoU, @(x) x>=0 && x<=1, 'NmsIoU must be between 0 and 1'},...
+                {'BatchSize','BatchSize','choice',propOpts.BatchSize,{64,128,256,512,1024}});
+
+            propOpts.Stride         = params.Stride;
+            propOpts.ScoreThreshold = params.ScoreThreshold;
+            propOpts.NmsIoU         = params.NmsIoU;
+            propOpts.BatchSize      = str2double(params.BatchSize);
+
+            % show figure
+            obj.Fig.Visible = 'on';
+            pause(0.5)
+
+            % create progress dialog
+            h = uiprogressdlg(obj.Fig,"Message",'Please wait...','Indeterminate','on');
+
+            % --- run ---
+            N = numel(imgs);
+            for i = 1:N
+                app.Log.INFO(sprintf("Running classifier on image (%i/%i): %s",i,N,imgs(i).Name));
+                imgs(i).runClassifier(net,propOpts);
+            end
+
+
+            % --- sync UI ---
+            obj.syncActiveImageToView();
+
+            % close the progress dialog
+            close(h);
+
+        end
+
+        function onTrainNewClassifier(obj)
+            % --- get params ---
+            % hide figure to show params dialog
+            obj.Fig.Visible = 'off';
+
+            % get initial training options
+            params = matlabx.app.ParamsDialog.prompt( ...
+                'Initial training options', ...
+                {'BaseName','Classifier name','char','new_classifier', @(x) ~contains(x,' '), 'Name cannot contain spaces'},...
+                {'MaxEpochs','MaxEpochs','double',15, @(x) x>=1, 'MaxEpochs must be >= 1'},...
+                {'InitialLearnRate','InitialLearnRate','double',0.0003, @(x) x>0, 'InitialLearnRate must be > 0'},...
+                {'IoUMax','IoUMax','double',0.05, @(x) x>=0 && x<=1, 'IoUMax must be between 0 and 1'});
+
+            % show figure
+            obj.Fig.Visible = 'on';
+            pause(0.5)
+
+            if isempty(params), return; end
+
+            % --- train a new classifier ---
+            app.Log.INFO(sprintf("Training new classifier: %s",params.BaseName));
+            model.ml.trainNewClassifierFromProject(obj.Project,...
+                "BaseName",         params.BaseName, ...
+                "MaxEpochs",        params.MaxEpochs, ...
+                "InitialLearnRate", params.InitialLearnRate, ...
+                "IoUMax",           params.IoUMax)
+
+
+            app.Log.INFO("Initial training complete.");
+
+        end
+
+        function onContinueTrainingClassifier(obj)
+            % --- get file ---
+            % hide figure to show file selection dialog
+            obj.Fig.Visible = 'off';
+            % file selection dialog
+            [file, path] = uigetfile( ...
+                {'*.mat'}, ...
+                'Select classifier file', ...
+                app.Paths.ml, ...
+                'MultiSelect','off');
+
+            % cancelled -> return
+            if isequal(file,0)
+                obj.Fig.Visible = 'on';
+                return
+            end
+            % build full file path
+            classifierFile = fullfile(path,file);
+
+            % get continued training options
+            params = matlabx.app.ParamsDialog.prompt( ...
+                'Continued training options', ...
+                {'MaxEpochs','MaxEpochs','double',5, @(x) x>=1, 'MaxEpochs must be >= 1'},...
+                {'InitialLearnRate','InitialLearnRate','double',0.0001, @(x) x>0, 'InitialLearnRate must be > 0'},...
+                {'IoUMax','IoUMax','double',0.05, @(x) x>=0 && x<=1, 'IoUMax must be between 0 and 1'});
+
+            % show figure
+            obj.Fig.Visible = 'on';
+            pause(0.5)
+
+            if isempty(params), return; end
+
+            % --- continue training classifier ---
+            app.Log.INFO(sprintf("Continuing training from: %s",classifierFile));
+            model.ml.continueClassifierTrainingFromProject(obj.Project,classifierFile, ...
+                "MaxEpochs",            params.MaxEpochs, ...
+                "InitialLearnRate",     params.InitialLearnRate, ...
+                "IoUMax",               params.IoUMax)
+
+            app.Log.INFO("Continued training complete.");
+        end
+
 
     end
 
@@ -1561,15 +1726,15 @@ classdef GUI < handle
             L = obj.Project.LabelBank.active();
 
             % Create a new STORMRegion in the active image with the active label
-            img.addRegion(data.ID, data.CenterPx, obj.Settings.Analysis.BoxSize, L.ID);
+            img.addRegion(data.ID, data.CenterPx, obj.Settings.Analysis.BoxSize, L.ID, "user");
             %reg = img.getRegion(data.ID);
 
             % Apply active label color to the newly created box
             obj.Ax.Tools.Pick.setBoxColorByID(data.ID, L.Color);
             obj.Ax.Tools.Pick.setBoxLabelByID(data.ID, img.getRegion(data.ID).Name);
 
-            % Make it active (this will drive downstream sync)
-            img.setActiveRegion(data.ID);
+            % % Make it active (this will drive downstream sync)
+            % img.setActiveRegion(data.ID);
         end
 
         function onBoxMoveStarted(obj, data)
@@ -1647,18 +1812,20 @@ classdef GUI < handle
 
             obj.IsSyncingSelection = true;
 
+
+
             if isempty(ids)
                 obj.RegionListBox.Value = {};
+                img.clearRegionSelection();
                 img.setActiveRegion("");
             else
                 obj.RegionListBox.Value = ids;        % multi-select
-                img.setActiveRegion(ids(end));        % last in selection is active
+                img.setRegionSelection(ids);
+                %img.setActiveRegion(ids(end));        % last in selection is active
             end
 
             obj.IsSyncingSelection = false;
         end
-
-
 
     end
 

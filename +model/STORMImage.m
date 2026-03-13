@@ -24,6 +24,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
     properties
         RegionOrder (1,:) string = string.empty(1,0)
         ActiveRegionID (1,1) string = ""
+        SelectedRegionIDs (1,:) string = string.empty(1,0)
     end
 
     properties (Dependent, GetAccess=public, SetAccess=private)
@@ -76,6 +77,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
         RegionAdded
         RegionRemoved
         ActiveRegionChanged
+        RegionSelectionChanged
     end
 
     %% Constructor
@@ -281,18 +283,23 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
     %% Region management (find, add, remove, set active, etc.)
     methods
 
-        function arr = get.RegionArray(obj)
-            if numel(obj.RegionOrder)==0
-                arr = model.STORMRegion.empty();
-                return
-            end
-            arr = obj.RegionsDict(obj.RegionOrder);
-        end
+        function addRegion(obj, ID, Center, BoxSize, LabelID, LabelSource, opts)
 
-        function addRegion(obj, ID, Center, BoxSize, LabelID)
+            arguments
+                obj             (1,1) model.STORMImage
+                ID              (1,1) string
+                Center          (1,2) double
+                BoxSize         (1,1) double
+                LabelID         (1,1) string = "unlabeled"
+                LabelSource     (1,1) string = "user"
+                opts.Score      (1,1) double = NaN
+                opts.Notify     (1,1) logical = true
+            end
+
+
             if ~isKey(obj.RegionsDict, ID)
                 % create new STORMRegion
-                reg = model.STORMRegion(obj,ID,Center,BoxSize,LabelID);
+                reg = model.STORMRegion(obj,ID,Center,BoxSize,LabelID,LabelSource,opts.Score);
                 % add it to the Regions dictionary
                 obj.RegionsDict(ID) = reg;
                 % add its ID to RegionOrder array
@@ -302,14 +309,14 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
                 % increment the counter
                 obj.NextRegionOrdinal = obj.NextRegionOrdinal + 1;
                 % notify self -> RegionAdded
-                notify(obj,'RegionAdded');
+                if opts.Notify, notify(obj,'RegionAdded'); end
             end
         end
 
         function addRegionSilent(obj, ID, Center, BoxSize)
             if ~isKey(obj.RegionsDict, ID)
                 % create new STORMRegion
-                reg = model.STORMRegion(obj,ID,Center,BoxSize);
+                reg = model.STORMRegion(obj,ID,Center,BoxSize,"unlabeled","classifier");
                 % add it to the Regions dictionary
                 obj.RegionsDict(ID) = reg;
                 % add its ID to RegionOrder array
@@ -362,6 +369,14 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
             end
         end
 
+
+
+
+
+
+        % --- retrieve ---
+
+
         function tf = hasRegion(obj, regionID)
             tf = isKey(obj.RegionsDict, string(regionID));
         end
@@ -370,6 +385,35 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
             regionID = string(regionID);
             if isKey(obj.RegionsDict, regionID), r = obj.RegionsDict(regionID); else, r = []; end
         end
+
+        function arr = get.RegionArray(obj)
+            if numel(obj.RegionOrder)==0
+                arr = model.STORMRegion.empty();
+                return
+            end
+            arr = obj.RegionsDict(obj.RegionOrder);
+        end
+
+
+
+
+
+
+
+        % --- select ---
+
+        function setRegionSelection(obj,IDs)
+            validIDs = IDs(obj.hasRegion(IDs));
+            obj.SelectedRegionIDs = validIDs;
+            notify(obj,'RegionSelectionChanged');
+        end
+
+
+        function clearRegionSelection(obj)
+            obj.SelectedRegionIDs = string.empty(1,0);
+            notify(obj,'RegionSelectionChanged');
+        end
+
 
     end
 
@@ -461,6 +505,44 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
 
             % notify self -> RegionAdded
             notify(obj,'RegionAdded');
+
+        end
+
+
+        function runClassifier(obj, net, propOpts)
+
+            % remove any existing regions first
+            obj.removeAllRegions();
+
+            [ctrs,scores] = model.ml.proposePatchCenters(obj.SourcePath,net,...
+                "BoxSize",          propOpts.BoxSize, ...
+                "Stride",           propOpts.Stride, ...
+                "ScoreThreshold",   propOpts.ScoreThreshold, ...
+                "BatchSize",        propOpts.BatchSize, ...
+                "NmsIoU",           propOpts.NmsIoU);
+
+            % number of positive patches detected
+            nFound = size(ctrs,1);
+
+            app.Log.INFO(sprintf("Detected %d region(s) containing class: %s",nFound,propOpts.PositiveClass));
+
+            % return if none found
+            if isempty(ctrs)
+                return
+            end
+
+            % add a new region for each location
+            for i = 1:size(ctrs,1)
+                ctr = ctrs(i,:);
+                obj.addRegion(...
+                    matlabx.utils.text.uniqueID(), ...
+                    ctr, ...
+                    propOpts.BoxSize, ...
+                    "unlabeled", ...
+                    "classifier", ...
+                    "Notify", false, ...
+                    "Score", scores(i));
+            end
 
         end
 
@@ -604,13 +686,15 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
             I.Regions = repmat(struct(), 1, numel(regs));
             for r = 1:numel(regs)
                 reg = regs(r);
-                I.Regions(r).ID      = reg.ID;
-                I.Regions(r).Name    = reg.Name;
-                I.Regions(r).CreatedAt = reg.CreatedAt;
-                I.Regions(r).Center  = reg.Center;
-                I.Regions(r).BoxSize = reg.BoxSize;
-                I.Regions(r).Linescan = reg.Linescan;
-                I.Regions(r).LabelId = reg.LabelId;
+                I.Regions(r).ID             = reg.ID;
+                I.Regions(r).Name           = reg.Name;
+                I.Regions(r).CreatedAt      = reg.CreatedAt;
+                I.Regions(r).Center         = reg.Center;
+                I.Regions(r).BoxSize        = reg.BoxSize;
+                I.Regions(r).Linescan       = reg.Linescan;
+                I.Regions(r).LabelID        = reg.LabelID;
+                I.Regions(r).LabelSource    = reg.LabelSource;
+                I.Regions(r).Score          = reg.Score;
             end
         end
 
@@ -656,9 +740,19 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
                         reg.Linescan = R.Linescan;
                     end
 
-                    if isfield(R,'LabelId') && ~isempty(R.LabelId)
-                        reg.LabelId = string(R.LabelId);
+                    if isfield(R,'LabelID') && ~isempty(R.LabelID)
+                        reg.LabelID = string(R.LabelID);
                     end
+
+                    if isfield(R,'LabelSource') && ~isempty(R.LabelSource)
+                        reg.LabelSource = string(R.LabelSource);
+                    end
+
+                    if isfield(R,'Score') && ~isempty(R.Score)
+                        reg.Score = R.Score;
+                    end
+
+
                 end
                 % restore region order exactly
                 if isfield(S,'RegionOrder')

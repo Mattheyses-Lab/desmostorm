@@ -58,6 +58,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
         RegionAdded
         RegionRemoved
         ActiveRegionChanged
+        RegionSelectionChanged
         LabelsChanged
     end
 
@@ -227,6 +228,17 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
 
     end
 
+    %% Label management
+    methods
+
+
+
+
+
+
+    end
+
+
     %% Processing hooks
     methods
 
@@ -321,9 +333,11 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             if isempty(img), return; end
 
             % add new set of region listeners for the current ActiveImage
-            obj.RegionListeners(1) = addlistener(img,'RegionAdded',@(~,~) notify(obj,'RegionAdded'));
-            obj.RegionListeners(2) = addlistener(img,'RegionRemoved',@(~,~) notify(obj,'RegionRemoved'));
-            obj.RegionListeners(3) = addlistener(img,'ActiveRegionChanged',@(~,~) notify(obj,'ActiveRegionChanged'));
+            obj.RegionListeners(1) = addlistener(img,'RegionAdded',             @(~,~) notify(obj,'RegionAdded'));
+            obj.RegionListeners(2) = addlistener(img,'RegionRemoved',           @(~,~) notify(obj,'RegionRemoved'));
+            obj.RegionListeners(3) = addlistener(img,'ActiveRegionChanged',     @(~,~) notify(obj,'ActiveRegionChanged'));
+
+            obj.RegionListeners(4) = addlistener(img,'RegionSelectionChanged',  @(~,~) notify(obj,'RegionSelectionChanged'));
 
         end
 
@@ -348,7 +362,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
 
     end
 
-    % Export data
+    %% Export data
     methods
 
         function T = imagesTable(obj)
@@ -412,6 +426,140 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
 
 
         end
+
+        function P = buildPatchTable(project, boxSize, negPerPos, iouMax)
+            %buildPatchTable Build patch classification table from annotated regions.
+            %
+            % P schema:
+            %   imageFilename : string
+            %   centerX       : double (full-image coords)
+            %   centerY       : double (full-image coords)
+            %   label         : categorical ("object","background")
+            %
+            % Positives: region centers from each STORMImage.RegionArray
+            % Negatives: random centers in valid range, rejected if IoU > iouMax w/ any positive
+
+            arguments
+                project (1,1) model.STORMProject
+                boxSize (1,1) double {mustBePositive} = 300
+                negPerPos (1,1) double {mustBeNonnegative} = 6
+                iouMax (1,1) double {mustBeGreaterThanOrEqual(iouMax,0), mustBeLessThanOrEqual(iouMax,1)} = 0.05
+            end
+
+            imgs = project.ImageArray;
+            if isempty(imgs)
+                P = table(strings(0,1), zeros(0,1), zeros(0,1), categorical(strings(0,1)), ...
+                    'VariableNames', {'imageFilename','centerX','centerY','label'});
+                return
+            end
+
+            rows = cell(0,4);
+
+            s = boxSize;
+
+            for i = 1:numel(imgs)
+                img = imgs(i);
+                fn = string(img.SourcePath);
+
+                regs = img.RegionArray;
+                if isempty(regs)
+                    continue
+                end
+
+                % --- positives ---
+                Cpos = vertcat(regs.Center);          % Nx2 [x y]
+                nPos = size(Cpos,1);
+
+                % filter any weird empties
+                if nPos == 0
+                    continue
+                end
+
+                rowsPos = [repmat({fn}, nPos, 1), ...
+                    num2cell(Cpos(:,1)), num2cell(Cpos(:,2)), repmat({"object"}, nPos, 1)];
+                rows = [rows; rowsPos];
+
+                % --- negatives ---
+                nNegTarget = round(negPerPos * nPos);
+                if nNegTarget <= 0
+                    continue
+                end
+
+                % Valid center range so crop fits using your ceil/floor convention:
+                % c1 = ceil(cx - s/2) >= 1 and c2 = floor(cx + s/2) <= W
+                xMin = 1 + (s-1)/2;
+                xMax = img.Width  - (s-1)/2;
+                yMin = 1 + (s-1)/2;
+                yMax = img.Height - (s-1)/2;
+
+                if xMax < xMin || yMax < yMin
+                    error("buildPatchTable:BoxTooLarge", ...
+                        "BoxSize=%d does not fit inside image (%dx%d): %s", s, img.Height, img.Width, fn);
+                end
+
+                Bpos = centerToBBox(Cpos, s);  % Nx4
+
+                Cneg = zeros(0,2);
+                tries = 0;
+                maxTries = nNegTarget * 80; % conservative; increases chance to find valid negatives
+
+                while size(Cneg,1) < nNegTarget && tries < maxTries
+                    tries = tries + 1;
+
+                    cx = xMin + (xMax - xMin) * rand();
+                    cy = yMin + (yMax - yMin) * rand();
+
+                    b = centerToBBox([cx cy], s); % 1x4
+
+                    if all(bboxIoU(b, Bpos) <= iouMax)
+                        Cneg(end+1,:) = [cx cy];
+                    end
+                end
+
+                if ~isempty(Cneg)
+                    nNeg = size(Cneg,1);
+                    rowsNeg = [repmat({fn}, nNeg, 1), ...
+                        num2cell(Cneg(:,1)), num2cell(Cneg(:,2)), repmat({"background"}, nNeg, 1)];
+                    rows = [rows; rowsNeg];
+                end
+            end
+
+            P = cell2table(rows, 'VariableNames', {'imageFilename','centerX','centerY','label'});
+            P.imageFilename = string(P.imageFilename);
+            P.label = categorical(string(P.label));
+
+            % enforce class order
+            P.label = reordercats(P.label, ["object","background"]);
+
+            % -------- helpers --------
+
+            function B = centerToBBox(C, s)
+                % C: Nx2 [x y] -> B: Nx4 [x y w h] top-left (pixel-edge style)
+                x = C(:,1) - s/2;
+                y = C(:,2) - s/2;
+                B = [x y repmat([s s], size(C,1), 1)];
+            end
+
+            function iou = bboxIoU(b1, B)
+                % b1: 1x4, B: Nx4, IoU computed in continuous coords
+                x1 = max(b1(1), B(:,1));
+                y1 = max(b1(2), B(:,2));
+                x2 = min(b1(1)+b1(3), B(:,1)+B(:,3));
+                y2 = min(b1(2)+b1(4), B(:,2)+B(:,4));
+
+                w = max(0, x2 - x1);
+                h = max(0, y2 - y1);
+                inter = w .* h;
+
+                a1 = b1(3) * b1(4);
+                a2 = B(:,3) .* B(:,4);
+
+                iou = inter ./ (a1 + a2 - inter + eps);
+            end
+
+        end
+
+
 
         function T = exportDetectorLabelTable(obj, opts)
             %exportDetectorLabelTable  Build training labels table for MATLAB object detectors.
