@@ -107,9 +107,12 @@ function net = trainPatchClassifier(Ptrain, Pval, boxSize, opts)
     netInputSize = inputLayer.InputSize(1:2);
     
     % ---- Datastores ----
+    app.Log.INFO("Building training datastore...")
     dsTrain = model.ml.patchDatastore(Ptrain, boxSize, netInputSize);
+    app.Log.INFO("Building validation datastore...")
     dsVal   = model.ml.patchDatastore(Pval,   boxSize, netInputSize);
     
+    app.Log.INFO("Augmenting training data...")
     if opts.Augment
         dsTrain = transform(dsTrain, @model.ml.augmentPatch);
     end
@@ -218,6 +221,24 @@ function net = trainPatchClassifier(Ptrain, Pval, boxSize, opts)
         Plots="training-progress", ...
         ExecutionEnvironment=opts.ExecutionEnvironment);
     
+    fprintf('\n');
+    fprintf('Training options\n');
+    fprintf('----------------\n');
+    fprintf('BaseNet            : %s\n', string(opts.BaseNet));
+    fprintf('ContinueTraining   : %s\n', string(opts.ContinueTraining));
+    fprintf('BoxSize            : %d\n', boxSize);
+    fprintf('MaxEpochs          : %d\n', opts.MaxEpochs);
+    fprintf('MiniBatchSize      : %d\n', opts.MiniBatchSize);
+    fprintf('InitialLearnRate   : %.3g\n', opts.InitialLearnRate);
+    fprintf('ExecutionEnv       : %s\n', opts.ExecutionEnvironment);
+    fprintf('Augment            : %s\n', string(opts.Augment));
+    fprintf('ValidationFreq     : %d\n', opts.ValidationFrequency);
+    fprintf('NumTrainPatches    : %d\n', height(Ptrain));
+    fprintf('NumValPatches      : %d\n', height(Pval));
+    fprintf('TrainClasses       : %s\n', strjoin(string(categories(Ptrain.label)), ', '));
+    fprintf('ValClasses         : %s\n', strjoin(string(categories(Pval.label)), ', '));
+    fprintf('\n');
+
     % ---- Train ----
     net = trainNetwork(dsTrain, lgraph, options);
 
