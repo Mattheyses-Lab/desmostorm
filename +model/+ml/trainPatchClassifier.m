@@ -218,20 +218,6 @@ function net = trainPatchClassifier(Ptrain, Pval, boxSize, opts)
         Plots="training-progress", ...
         ExecutionEnvironment=opts.ExecutionEnvironment);
     
-% testing below
-
-disp("Network classes:")
-disp(string(lgraph.Layers(end).Classes))
-
-disp("Train categories:")
-disp(string(categories(Ptrain.label)))
-
-disp("Val categories:")
-disp(string(categories(Pval.label)))
-
-% end testing
-
-
     % ---- Train ----
     net = trainNetwork(dsTrain, lgraph, options);
 
