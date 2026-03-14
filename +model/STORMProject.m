@@ -704,14 +704,29 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             end
 
             % load the mat file
-            S = load(file, 'Project', '-mat');
+            app.Log.INFO(sprintf("Loading project file: %s",file))
+            saveStruct = load(file, 'Project', '-mat');
 
             % ensure file contains a variable named "Project"
-            if ~isfield(S,'Project')
+            if ~isfield(saveStruct,'Project')
                 error('STORMProject:InvalidProjectFile', 'Cannot load project file: no variable named "Project" found')
+            else
+                S = saveStruct.Project;
             end
 
-            [proj, settings] = model.STORMProject.fromStruct(S.Project, file);
+
+            % warn on version mismatch
+            if app.Version.compare(S.Project.Version, app.Info.Version) < 0
+                app.Log.WARN(sprintf("Project version (%s) does not match current app version (%s)",S.Project.Version,app.Info.Version));
+            end
+
+            app.Log.INFO("Rebuilding project...")
+            try
+                [proj, settings] = model.STORMProject.fromStruct(S, file);
+            catch ME
+                app.Log.ERROR(ME);
+                rethrow(ME);
+            end
         end
 
         function [proj, settings] = fromStruct(P, file)
@@ -719,15 +734,8 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             projectFolder = string(fileparts(file));
 
             % Settings restore
-            % (migrations handled in Settings.load, here we restore directly from struct)
             settings = app.config.Settings();
-            if isfield(P,'Settings') && ~isempty(P.Settings)
-                settings.Analysis.fromStruct(P.Settings.Analysis);
-                settings.Display.fromStruct(P.Settings.Display);
-                settings.IO.fromStruct(P.Settings.IO);
-                settings.PeaksPlot.fromStruct(P.Settings.PeaksPlot);
-                settings.Box.fromStruct(P.Settings.Box);
-            end
+            settings.fromStruct(P.Settings);
 
             % Project
             proj = model.STORMProject(P.Project.Name);
@@ -748,6 +756,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             end
 
             % Resolve image paths
+            app.Log.INFO("Resolving image paths...")
             resolved = model.STORMProject.resolveImagePaths(P.Images, projectFolder);
 
             % If resolved comes back empty -> return empty, load fails
@@ -761,7 +770,10 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             proj.ImagesDict = dictionary(string.empty(1,0), model.STORMImage.empty(1,0));
             proj.ImageOrder = string.empty(1,0);
 
-            for k = 1:numel(resolved)
+            app.Log.INFO("Rebuilding images...")
+            nResolved = numel(resolved);
+            for k = 1:nResolved
+                app.Log.INFO(sprintf("Image (%i/%i): %s",k,nResolved,resolved(k).Name))
                 img = model.STORMImage.fromStruct(resolved(k),proj);
                 proj.ImagesDict(img.ID) = img;
                 proj.ImageOrder(end+1) = img.ID;
@@ -894,7 +906,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             P.Project.ID           = obj.ID;
             P.Project.Name         = obj.Name;
             P.Project.CreatedAt    = obj.CreatedAt;
-            P.Project.Version      = obj.Version;
+            P.Project.Version      = app.Info.Version;
             P.Project.SourcePath   = obj.SourcePath;
             P.Project.DefaultPixelSize = struct('Value', obj.DefaultPixelSize.Value, 'Unit', obj.DefaultPixelSize.Unit);
 

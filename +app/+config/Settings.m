@@ -78,8 +78,14 @@ classdef Settings < handle
             S.Box       = obj.Box.toStruct();
         end
 
-
-
+        function fromStruct(obj,S)
+            [S,~] = app.config.Settings.migrate(S);
+            obj.Analysis.fromStruct(S.Analysis);
+            obj.Display.fromStruct(S.Display);
+            obj.IO.fromStruct(S.IO);
+            obj.PeaksPlot.fromStruct(S.PeaksPlot);
+            obj.Box.fromStruct(S.Box);
+        end
 
     end
 
@@ -140,6 +146,20 @@ classdef Settings < handle
             %         migrated = true;
             %     end
             % end
+
+            old = string(S.Version);
+
+            if app.Version.compare(old, "1.1.0") < 0
+                app.Log.WARN("Migrating settings to v1.1.0")
+                % Box settings
+                defaultBox = app.config.Box;
+                S.Box.FaceColor     = S.Box.BoxFaceColor;
+                S.Box.EdgeColor     = S.Box.BoxEdgeColor;
+                S.Box.ShowTitle     = defaultBox.ShowTitle;
+                S.Box.TitleContent  = defaultBox.TitleContent;
+
+                migrated = true;
+            end
 
         end
 
