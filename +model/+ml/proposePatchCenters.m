@@ -15,7 +15,7 @@ function [centers, scores] = proposePatchCenters(imgOrPath, net, opts)
         opts.BatchSize (1,1) double {mustBePositive} = 64
         opts.PositiveClass (1,1) string = "object"
     end
-    
+
     % Network input size (e.g. [224 224])
     netInputSize = net.Layers(1).InputSize(1:2);
     Hn = netInputSize(1);

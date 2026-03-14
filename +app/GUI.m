@@ -1623,6 +1623,17 @@ classdef GUI < handle
             % create progress dialog
             h = uiprogressdlg(obj.Fig,"Message",'Please wait...','Indeterminate','on');
 
+            fprintf('\n');
+            fprintf('Proposal options\n');
+            fprintf('----------------\n');
+            fprintf('BoxSize            : %d\n',    propOpts.BoxSize);
+            fprintf('Stride             : %d\n',    propOpts.Stride);
+            fprintf('ScoreThreshold     : %.2f\n',  propOpts.ScoreThreshold);
+            fprintf('NmsIoU             : %.2f\n',  propOpts.NmsIoU);
+            fprintf('BatchSize          : %d\n',    propOpts.BatchSize);
+            fprintf('PositiveClass      : %s\n',    propOpts.PositiveClass);
+            fprintf('\n');
+
             % --- run ---
             N = numel(imgs);
             for i = 1:N

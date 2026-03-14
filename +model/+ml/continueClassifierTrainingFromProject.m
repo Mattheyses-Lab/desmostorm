@@ -32,6 +32,7 @@ function [pkgNew, out] = continueClassifierTrainingFromProject(project, classifi
         opts.Notes (1,1) string = ""
     end
     
+    app.Log.INFO(sprintf("Loading classifier package: %s",classifierFile))
     pkgOld = model.ml.loadClassifierPackage(classifierFile);
     
     if opts.SaveDir == ""
@@ -44,6 +45,7 @@ function [pkgNew, out] = continueClassifierTrainingFromProject(project, classifi
     baseName = model.ml.classifierBaseNameFromFile(classifierFile);
     
     % Build project patch table from current project
+    app.Log.INFO("Building patch table from current project...")
     patchTableProject = model.ml.buildPatchTableFromProject(project, ...
         BoxSize=pkgOld.BoxSize, ...
         NegPerPos=opts.NegPerPos, ...
@@ -53,8 +55,10 @@ function [pkgNew, out] = continueClassifierTrainingFromProject(project, classifi
         RequiredLabelSource=opts.RequiredLabelSource);
     
     % Merge old training table with new project table
+    app.Log.INFO("Merging patch table with existing training data...")
     patchTableTraining = model.ml.mergePatchTables(pkgOld.PatchTable, patchTableProject);
     
+    app.Log.INFO("Splitting patch table into training and validation sets...")
     [Ptrain, Pval] = model.ml.splitByImage(patchTableTraining, opts.ValFrac);
     
     trainOpts = pkgOld.TrainOpts;
@@ -84,6 +88,7 @@ function [pkgNew, out] = continueClassifierTrainingFromProject(project, classifi
     
     [nextVersion, stem] = model.ml.nextClassifierVersion(saveDir, baseName);
     
+    app.Log.INFO("Packaging classifier and saving files...")
     pkgNew = model.ml.makeClassifierPackage( ...
         netNew, pkgOld.BoxSize, trainOpts, propOpts, patchTableTraining, ...
         PositiveClass=opts.PositiveLabel, ...
@@ -95,8 +100,11 @@ function [pkgNew, out] = continueClassifierTrainingFromProject(project, classifi
     trainingPatchOut = fullfile(saveDir, sprintf("patchTable_%s_v%03d_training.csv", stem, nextVersion));
     
     model.ml.saveClassifierPackage(classifierOut, pkgNew);
+    app.Log.INFO(sprintf("Saved classifier package: %s",classifierOut))
     writetable(patchTableProject, projectPatchOut);
+    app.Log.INFO(sprintf("Saved project patch table: %s",projectPatchOut))
     writetable(patchTableTraining, trainingPatchOut);
+    app.Log.INFO(sprintf("Saved training patch table: %s",trainingPatchOut))
     
     out = struct();
     out.ClassifierFile = string(classifierOut);

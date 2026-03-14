@@ -36,6 +36,7 @@ function [pkg, out] = trainNewClassifierFromProject(project, opts)
     matlabx.utils.files.ensureDir(opts.SaveDir);
     
     % Build current project patch table
+    app.Log.INFO("Building patch table from current project...")
     patchTableProject = model.ml.buildPatchTableFromProject(project, ...
         BoxSize=opts.BoxSize, ...
         NegPerPos=opts.NegPerPos, ...
@@ -47,6 +48,7 @@ function [pkg, out] = trainNewClassifierFromProject(project, opts)
     % For fresh training, project table == training table
     patchTableTraining = patchTableProject;
     
+    app.Log.INFO("Splitting patch table into training and validation sets...")
     [Ptrain, Pval] = model.ml.splitByImage(patchTableTraining, opts.ValFrac);
     
     % Training options
@@ -84,6 +86,7 @@ function [pkg, out] = trainNewClassifierFromProject(project, opts)
     [nextVersion, stem] = model.ml.nextClassifierVersion(opts.SaveDir, opts.BaseName);
     
     % Package everything for saving
+    app.Log.INFO("Packaging classifier and saving files...")
     pkg = model.ml.makeClassifierPackage( ...
         net, opts.BoxSize, trainOpts, propOpts, patchTableTraining, ...
         PositiveClass=opts.PositiveLabel, ...
@@ -97,8 +100,11 @@ function [pkg, out] = trainNewClassifierFromProject(project, opts)
     
     % Save files
     model.ml.saveClassifierPackage(classifierFile, pkg);
+    app.Log.INFO(sprintf("Saved classifier package: %s",classifierFile))
     writetable(patchTableProject, projectPatchFile);
+    app.Log.INFO(sprintf("Saved project patch table: %s",projectPatchFile))
     writetable(patchTableTraining, trainingPatchFile);
+    app.Log.INFO(sprintf("Saved training patch table: %s",trainingPatchFile))
     
     % Collect struct output
     out = struct();

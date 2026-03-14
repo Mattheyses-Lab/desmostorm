@@ -112,7 +112,7 @@ function net = trainPatchClassifier(Ptrain, Pval, boxSize, opts)
     app.Log.INFO("Building validation datastore...")
     dsVal   = model.ml.patchDatastore(Pval,   boxSize, netInputSize);
     
-    app.Log.INFO("Augmenting training data...")
+    app.Log.INFO("Building augmentation datastore...")
     if opts.Augment
         dsTrain = transform(dsTrain, @model.ml.augmentPatch);
     end
@@ -224,7 +224,6 @@ function net = trainPatchClassifier(Ptrain, Pval, boxSize, opts)
     fprintf('\n');
     fprintf('Training options\n');
     fprintf('----------------\n');
-    fprintf('BaseNet            : %s\n', string(opts.BaseNet));
     fprintf('ContinueTraining   : %s\n', string(opts.ContinueTraining));
     fprintf('BoxSize            : %d\n', boxSize);
     fprintf('MaxEpochs          : %d\n', opts.MaxEpochs);
@@ -240,6 +239,7 @@ function net = trainPatchClassifier(Ptrain, Pval, boxSize, opts)
     fprintf('\n');
 
     % ---- Train ----
+    app.Log.INFO("Training network...")
     net = trainNetwork(dsTrain, lgraph, options);
 
 end
