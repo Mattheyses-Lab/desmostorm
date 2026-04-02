@@ -26,5 +26,19 @@ classdef Analyzer
                 "MinPeakHeight",rc.MinPeakHeight, ...
                 "PeakSmoothing",rc.PeakSmoothing);
         end
+
+
+        function out = autofitRegionROI(I, rc)
+            arguments
+                % image to analyze
+                I (:,:) double
+                % Analysis settings snapshot
+                rc (1,1) app.config.RunConfig
+            end
+            % automatically fit rectangular ROI
+            out = model.analysis.image.fitPlaquePairROI(I);
+        end
+
+
     end
 end
