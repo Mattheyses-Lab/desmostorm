@@ -194,9 +194,9 @@ classdef GUI < handle
             % --- File ---
             obj.MenubarUI.File       = uimenu(obj.Fig,'Text','File');
             obj.MenubarUI.File_New   = uimenu(obj.MenubarUI.File,'Text','New',  'MenuSelectedFcn',@(~,~) obj.onNew());
-            obj.MenubarUI.File_Open  = uimenu(obj.MenubarUI.File,'Text','Open', 'MenuSelectedFcn',@(~,~) obj.onOpen());
+            obj.MenubarUI.File_Open  = uimenu(obj.MenubarUI.File,'Text','Open...', 'MenuSelectedFcn',@(~,~) obj.onOpen());
             obj.MenubarUI.File_Close = uimenu(obj.MenubarUI.File,'Text','Close','MenuSelectedFcn',@(~,~) obj.onClose());
-            obj.MenubarUI.File_Save  = uimenu(obj.MenubarUI.File,'Text','Save', 'MenuSelectedFcn',@(~,~) obj.onSave(),'Separator','on');
+            obj.MenubarUI.File_Save  = uimenu(obj.MenubarUI.File,'Text','Save...', 'MenuSelectedFcn',@(~,~) obj.onSave(),'Separator','on');
             % --- separator ---
             obj.MenubarUI.File_SaveSettings = uimenu(obj.MenubarUI.File,'Text','Save Settings','MenuSelectedFcn',@(~,~) obj.onSaveSettings(),'Separator','on');
             % --- separator ---
@@ -209,13 +209,21 @@ classdef GUI < handle
 
             % --- Run ---
             obj.MenubarUI.Run = uimenu(obj.Fig,'Text','Run');
-            %obj.MenubarUI.Run_Autopick = uimenu(obj.MenubarUI.Run,'Text','Auto-pick Regions (experimental)...','MenuSelectedFcn',@(~,~) obj.onAutopickRegions());
 
             obj.MenubarUI.Run_Classifier = uimenu(obj.MenubarUI.Run,'Text','Run classifier...','MenuSelectedFcn',@(~,~) obj.onRunClassifier());
-
             obj.MenubarUI.Run_TrainNewClassifier = uimenu(obj.MenubarUI.Run,'Text','Train new classifier...','MenuSelectedFcn',@(~,~) obj.onTrainNewClassifier());
             obj.MenubarUI.Run_ContinueTrainingClassifier = uimenu(obj.MenubarUI.Run,'Text','Continue training existing classifier...','MenuSelectedFcn',@(~,~) obj.onContinueTrainingClassifier());
-        end
+
+            obj.MenubarUI.Run_AutoFitROIs = uimenu(obj.MenubarUI.Run,'Text','Auto-fit ROIs (experimental)','MenuSelectedFcn',@(~,~) obj.onAutoFitROIs());
+
+
+            % --- Test ---
+            obj.MenubarUI.Test = uimenu(obj.Fig,'Text','Test');
+
+            obj.MenubarUI.Test_Cluster = uimenu(obj.MenubarUI.Test,'Text','Cluster','MenuSelectedFcn',@(~,~) obj.onTestRegion());
+
+
+        end 
 
         function setupGrids(obj)
             % Main Grid
@@ -673,9 +681,6 @@ classdef GUI < handle
                 "YLabel","Normalized Intensity");
         end
 
-
-
-
         function delete(obj)
             % if ~isempty(obj.L), delete(obj.L(isvalid(obj.L))); end
             if ~isempty(obj.projectL), delete(obj.projectL(isvalid(obj.projectL))); end
@@ -687,6 +692,32 @@ classdef GUI < handle
         end
 
     end
+
+
+    %% Development/testing
+
+    methods
+
+        function onTestRegion(obj)
+            img = obj.Project.ActiveImage;
+            % if empty, return
+            if isempty(img) || isempty(img.ActiveRegion)
+                return
+            end
+
+            % get active region CData
+            I = img.regionSubimage(img.ActiveRegion);
+
+            model.analysis.image.detectPlaques(I,"DisplayClusterOutput",true);
+        end
+
+    end
+
+
+
+
+
+
 
     %% Global UI sync
     methods (Access=private)
@@ -1044,28 +1075,6 @@ classdef GUI < handle
             end
 
         end
-
-        % function regionListBoxClicked(obj,src,evt)
-        % 
-        %     disp('listbox clicked')
-        % 
-        %     % img = obj.Project.ActiveImage;
-        %     % if isempty(img), return; end
-        %     % 
-        %     % itemIdx = evt.InteractionInformation.Item;
-        %     % 
-        %     % if isempty(itemIdx)
-        %     %     obj.Ax.Tools.Pick.setActiveBoxID("");
-        %     %     img.setActiveRegion("");
-        %     %     return
-        %     % end
-        %     % 
-        %     % regionID = src.ItemsData(itemIdx);
-        %     % 
-        %     % obj.Ax.Tools.Pick.setActiveBoxID(regionID);
-        %     % img.setActiveRegion(regionID);
-        % 
-        % end
 
         function syncActiveRegionToView(obj)
             % refresh RegionViewer CData and CLim
@@ -1551,19 +1560,36 @@ classdef GUI < handle
 
         function processAllRegions(obj)
             % create progress dialog
-            h = uiprogressdlg(obj.Fig,"Message",'Please wait...','Indeterminate','on');
+            h = uiprogressdlg(obj.Fig,"Message",'Analyzing ROIs. Please wait...','Indeterminate','on');
             % re-process everything
             obj.Project.processAll(app.config.RunConfig.fromSettings(obj.Settings))
             % close the progress dialog
             close(h);
-            % get the ActiveImage, exit if empty
-            img = obj.Project.ActiveImage; if isempty(img), return; end
-            % get the ActiveRegion, exit if empty
-            reg = img.ActiveRegion; if isempty(reg), return; end
-            % update the region linescan plot
-            obj.refreshRegionLinescanPlot();
-            % update RegionSummaryTable
-            obj.RegionSummaryTable.Data = reg.SummaryTable;
+            % % get the ActiveImage, exit if empty
+            % img = obj.Project.ActiveImage; if isempty(img), return; end
+            % % get the ActiveRegion, exit if empty
+            % reg = img.ActiveRegion; if isempty(reg), return; end
+            % % update the region linescan plot
+            % obj.refreshRegionLinescanPlot();
+            % % update RegionSummaryTable
+            % obj.RegionSummaryTable.Data = reg.SummaryTable;
+
+
+            obj.syncActiveImageToView();
+        end
+
+        function onAutoFitROIs(obj)
+            % create progress dialog
+            h = uiprogressdlg(obj.Fig,"Message",'Fitting ROIs. Please wait...','Indeterminate','on');
+            % re-process everything
+            obj.Project.autofitAllRegionROIs(app.config.RunConfig.fromSettings(obj.Settings))
+            % close the progress dialog
+            close(h);
+
+            % reprocess region measurements
+            obj.processAllRegions();
+            % 
+            % obj.syncActiveRegionToView();
         end
 
         function onAutopickRegions(obj)
