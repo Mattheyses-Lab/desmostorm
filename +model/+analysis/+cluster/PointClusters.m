@@ -12,10 +12,11 @@ classdef PointClusters < handle
 
     % clustering input
     properties
+
         % whether to refine the points included in each cluster
         RefinePoints (1,1) logical = false
         % whether to recluster after refining points
-        Recluster (1,1) logical = true
+        Recluster (1,1) logical = false
         % whether to refine the clusters after reclustering
         RefineClusters (1,1) logical = false
 
@@ -23,6 +24,9 @@ classdef PointClusters < handle
         MaxClusterConvexHullArea (1,1) = Inf
         MaxEccentricity (1,1) = 0.98
         MinPointDensity (1,1) = 0.001
+
+        % kmeans only
+        k (1,1) = 2
     end
 
     %% clustering output
@@ -55,12 +59,16 @@ classdef PointClusters < handle
             arguments
                 coords (:,2) = []
 
+                opts.ClusterMethod (1,:) char {mustBeMember(opts.ClusterMethod,{'dbscan','kmeans'})} = 'dbscan'
+
                 opts.RefinePoints (1,1) logical = false
                 opts.Recluster (1,1) logical = true
                 opts.RefineClusters (1,1) logical = false
                 opts.MinPointsPerCluster (1,1) double = 3
                 opts.MaxClusterConvexHullArea (1,1) double = 100
                 opts.MaxEccentricity (1,1) double = 1
+
+                opts.k (1,1) {mustBeGreaterThanOrEqual(opts.k,2)} = 2
             end
 
             if isempty(coords)
@@ -75,11 +83,9 @@ classdef PointClusters < handle
             obj.MaxClusterConvexHullArea = opts.MaxClusterConvexHullArea;
             obj.MaxEccentricity = opts.MaxEccentricity;
 
-
             obj.L = addlistener(obj,'ClusterDeleted',@(~,evt) obj.onClusterDeleted(evt));
 
-
-            obj.process();
+            obj.cluster("ClusterMethod",opts.ClusterMethod);
 
             if obj.RefinePoints
                 obj.refinePoints();
@@ -104,13 +110,24 @@ classdef PointClusters < handle
     % processing
     methods
 
-        function process(obj)
+        function cluster(obj,opts)
+            arguments
+                obj (1,1) model.analysis.cluster.PointClusters
+                opts.ClusterMethod (1,:) char {mustBeMember(opts.ClusterMethod,{'dbscan','kmeans'})} = 'dbscan'
+            end
+
             fprintf('Building initial clusters...\n')
-            % cluster points with DBSCAN
-            obj.buildClusters(obj.OriginalPoints);
+
+            switch opts.ClusterMethod
+                case 'dbscan'
+                    obj.dbscan(obj.OriginalPoints,obj.MinPointsPerCluster);
+                case 'kmeans'
+                    obj.kmeans(obj.OriginalPoints,obj.k);
+            end
+
         end
 
-        function buildClusters(obj,pts,minPts)
+        function dbscan(obj,pts,minPts)
             arguments
                 obj (1,1) model.analysis.cluster.PointClusters
                 % points to cluster
@@ -119,6 +136,7 @@ classdef PointClusters < handle
                 minPts (1,1) double {mustBeGreaterThanOrEqual(minPts,3)} = 5
             end
 
+            fprintf('Clustering points using DBSCAN...\n');
             % number of points
             n = size(pts,1);
             % adjust minPts if needed
@@ -129,12 +147,38 @@ classdef PointClusters < handle
             epsilon = model.analysis.cluster.chooseDbscanEpsilonKnee(pts,minPts,"SmoothFrac",0.01);
             fprintf('DBSCAN: Optimal epsilon: %f\n',epsilon);
             % cluster with DBSCAN (Density-based spatial clustering of applications with noise)
-            clusterIdxs = dbscan(D,epsilon,5,"Distance","precomputed");
+            clusterIdxs = dbscan(D,epsilon,minPts,"Distance","precomputed");
             % number of clusters
             N = max(clusterIdxs);
             % number of noise points rejected (outliers)
             nOutliers = numel(find(clusterIdxs==-1));
             fprintf('DBSCAN: %i points grouped into %i clusters (%i outliers rejected)\n',n,N,nOutliers);
+            % create a PointCluster object to hold the data for each cluster
+            obj.Clusters = arrayfun(@(i) ...
+                model.analysis.cluster.PointCluster(...
+                    obj,...
+                    pts(clusterIdxs==i, :),...
+                    i),...
+                    1:N, 'UniformOutput', true);
+        end
+
+        function kmeans(obj,pts,k)
+            arguments
+                obj (1,1) model.analysis.cluster.PointClusters
+                % points to cluster
+                pts (:,2) double
+                % number of clusters
+                k (1,1) double {mustBeGreaterThanOrEqual(k,2)} = 2
+            end
+
+            fprintf('Clustering points using kmeans...\n');
+            % number of points
+            n = size(pts,1);
+            % cluster with kmeans
+            [clusterIdxs, ~] = kmeans(pts, k, "Replicates", 5);
+            % number of clusters
+            N = max(clusterIdxs);
+            fprintf('KMEANS: %i points grouped into %i clusters\n',n,N);
             % create a PointCluster object to hold the data for each cluster
             obj.Clusters = arrayfun(@(i) ...
                 model.analysis.cluster.PointCluster(...
@@ -202,14 +246,26 @@ classdef PointClusters < handle
 
 
 
-        function recluster(obj)
+        function recluster(obj,opts)
+            % recluster only those points currently in a cluster
+            arguments
+                obj (1,1) model.analysis.cluster.PointClusters
+                opts.ClusterMethod (1,:) char {mustBeMember(opts.ClusterMethod,{'dbscan','kmeans'})} = 'dbscan'
+            end
+
             fprintf('Reclustering...\n')
             % get points
             pts = obj.Points;
             % randomly shuffle the points
             pts = pts(randperm(size(pts,1)),:);
             % build new clusters
-            obj.buildClusters(pts);
+            switch opts.ClusterMethod
+                case 'dbscan'
+                    obj.dbscan(pts,obj.MinPointsPerCluster);
+                case 'kmeans'
+                    obj.kmeans(pts,obj.k);
+            end
+
         end
 
 
@@ -480,23 +536,23 @@ classdef PointClusters < handle
             NNMedian            = nan(n,1);
             NNDispersion        = nan(n,1);
 
-            for k = 1:n
-                ck = C(k);
+            for i = 1:n
+                ck = C(i);
 
-                N(k)             = ck.nPoints;
-                HullArea(k)      = ck.HullArea;
-                HullPerimeter(k) = ck.HullPerimeter;
-                PointDensity(k)  = ck.PointDensity;
+                N(i)             = ck.nPoints;
+                HullArea(i)      = ck.HullArea;
+                HullPerimeter(i) = ck.HullPerimeter;
+                PointDensity(i)  = ck.PointDensity;
 
-                DistanceSD(k)    = ck.DistanceSD;
-                DistTailRatio(k) = ck.DistTailRatio;
+                DistanceSD(i)    = ck.DistanceSD;
+                DistTailRatio(i) = ck.DistTailRatio;
 
-                Anisotropy(k)    = ck.Anisotropy;
-                Eccentricity(k)  = ck.Eccentricity;
-                Compactness(k)   = ck.Compactness;
+                Anisotropy(i)    = ck.Anisotropy;
+                Eccentricity(i)  = ck.Eccentricity;
+                Compactness(i)   = ck.Compactness;
 
-                NNMedian(k)      = ck.NNMedian;
-                NNDispersion(k)  = ck.NNDispersion;
+                NNMedian(i)      = ck.NNMedian;
+                NNDispersion(i)  = ck.NNDispersion;
 
             end
 
