@@ -20,7 +20,9 @@ function [out,clustData] = detectRegions(I,opts)
         % whether to preprocess input image prior to SURF detection
         opts.Preprocess (1,1) logical = true
         % whether to show SURF detection and cluster results
-        opts.DisplayClusterOutput (1,1) logical = false
+        opts.DisplayClusterOutput (1,1) logical = true
+
+        opts.MergeClusters (1,1) logical = true
     end
 
     %% fix input
@@ -53,7 +55,9 @@ function [out,clustData] = detectRegions(I,opts)
         "RefineClusters",false);
 
     % merge nearby clusters
-    clustData.mergeClustersByDistance(opts.BoxSize/3);
+    if opts.MergeClusters
+        clustData.mergeClustersByDistance(opts.BoxSize/3);
+    end
 
     % filter by property
     % --- nPoints
@@ -69,7 +73,7 @@ function [out,clustData] = detectRegions(I,opts)
             "Position",[200 200 700 700],...
             "Visible","off");
     
-        ax = widgets.ImageAxes(fH,...
+        ax = matlabx.ui.widgets.ImageAxes(fH,...
             "Units","normalized",...
             "Position",[0 0 1 1],...
             "CData",I,...
