@@ -133,6 +133,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
     methods
 
         function imageID = addImageFromPath(obj, filePath)
+            %ADDIMAGEFROMPATH Add a new STORMImage for the image specified by filePath
             % get file name and extension
             [~,name,ext] = fileparts(filePath);
             % create a STORMImage object with new unique ID
@@ -151,6 +152,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
 
         % add a new model.STORMImage for each of the images located at the paths in the cell array, filePaths
         function addImagesFromPaths(obj, filePaths)
+            %ADDIMAGESFROMPATHS Add a new STORMImage for each of the images specified by filePath
             % convert char/string to cell if not already cell
             if ~iscell(filePaths)
                 filePaths = cellstr(filePaths);
@@ -162,6 +164,8 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
         end
 
         function removeImage(obj, imageID)
+            %REMOVEIMAGE Remove image by ID
+
             imageID = string(imageID);
             if ~isKey(obj.ImagesDict, imageID), return; end
 
@@ -177,6 +181,8 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
         end
 
         function setActiveImage(obj, imageID)
+            %SETACTIVEIMAGE Set image as active by ID
+
             imageID = string(imageID);
 
             % prevent unnecessary updates, return if image is already active
@@ -189,25 +195,36 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             end
             if isKey(obj.ImagesDict, imageID)
                 obj.ActiveImageID = imageID;
+
+                % if no active region, set first in region array as active
+                img = obj.getImage(imageID);
+                if isempty(img.ActiveRegion) && numel(img.RegionArray)>0
+                    img.ActiveRegionID = img.RegionArray(1).ID;
+                end
+
                 notify(obj,'ActiveImageChanged');
             end
         end
 
         function tf = hasImage(obj, imageID)
+            %HASIMAGE Check if image exists by ID
             tf = isKey(obj.ImagesDict, string(imageID));
         end
 
         function im = getImage(obj, imageID)
+            %GETIMAGE Retrieve image by ID
             imageID = string(imageID);
             if isKey(obj.ImagesDict, imageID), im = obj.ImagesDict(imageID);
             else, im = []; end
         end
 
         function n = numImages(obj)
+            %NUMIMAGES Return number of images in the project
             n = numEntries(obj.ImagesDict);
         end
 
         function IDs = imageIDs(obj)
+            %IMAGEIDS Return list of image IDs
             IDs = keys(obj.ImagesDict);
         end
 
@@ -217,8 +234,8 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
     methods
 
         function removeAllRegions(obj)
+            %REMOVEALLREGIONS Remove all regions from all images
             arr = obj.ImageArray;
-
             if isempty(arr), return; end
             % remove all Regions from each Image one by one
             for i = 1:numel(arr)
@@ -284,6 +301,18 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
                 arr(i).detectRegions(config);
             end
 
+        end
+
+        % process all Regions (compute and analyze linescans from drawn ROIs)
+        function autofitAllRegionROIs(obj, config)
+            % get Image array
+            arr = obj.ImageArray;
+            % return if empty
+            if isempty(arr), return; end
+            % otherwise, process each image
+            for i = 1:numel(arr)
+                arr(i).autofitAllRegionROIs(config);
+            end
         end
 
     end
@@ -941,6 +970,15 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
                 'ImageArray', obj.ImageArray);   % editor-friendly
             groups = matlab.mixin.util.PropertyGroup(summary, 'STORMProject');
         end
+    end
+
+    methods
+
+        function groups = getPropGroups(obj)
+
+            groups = obj.getPropertyGroups();
+        end
+
     end
 
 end

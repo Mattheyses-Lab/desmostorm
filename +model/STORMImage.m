@@ -461,6 +461,43 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
             reg.resetLinescan();
         end
 
+
+
+        function autofitAllRegionROIs(obj, config)
+            % get Region array
+            arr = obj.RegionArray;
+            % return if empty
+            if isempty(arr), return; end
+
+            % otherwise, process each region
+            for i = 1:numel(arr)
+                obj.autofitRegionROI(arr(i),config);
+            end
+        end
+
+
+        function autofitRegionROI(obj, reg, config)
+            arguments
+                obj model.STORMImage
+                reg model.STORMRegion
+                config app.config.RunConfig
+            end
+
+            if isempty(reg), return; end
+
+            % get region CData
+            I = obj.regionSubimage(reg);
+            % get linescan info
+            ROIData = model.analysis.Analyzer.autofitRegionROI(I, config);
+
+            if isempty(ROIData)
+                return
+            end
+
+            reg.updateLinescan(ROIData);
+        end
+
+
         function I = regionSubimage(obj,reg)
             if isempty(reg), I = []; return; end
             % region box size and center coordinates
