@@ -16,6 +16,201 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
         PixelSize model.units.PixelSize
     end
 
+    %% Image Data properties
+
+    
+    properties (Dependent)
+        % 5D image container, note: assume all slices have same class and kind
+        ImageData (1,1) matlabx.image.Image5D
+    end
+
+
+    properties (Access=private)
+        % small internal view state
+        ViewState_ struct = struct( ...
+            'C', 1)
+        % image data structure
+        ImageData_ (:,1) matlabx.image.Image5D = matlabx.image.Image5D.empty()
+        % per-channel info store
+        Channels_ (1,:) struct = struct( ...
+            'Size', {}, ...
+            'Class', {}, ...
+            'NativeDisplayRange', {}, ...
+            'AutoDisplayRange', {}, ...
+            'DisplayRange', {}, ...
+            'DataRange', {})
+    end
+
+
+    properties (Dependent, SetAccess=private)
+        isLoaded (1,1) logical
+        SizeY (1,1) double
+        SizeX (1,1) double
+        SizeC (1,1) double
+    end
+
+    properties (Access=private)
+        % YXCZT
+        ImageSize_ (1,5) double = [NaN NaN NaN NaN NaN]
+    end
+
+    methods
+
+        % --- ImageData ---
+        function v = get.ImageData(obj), v = obj.ImageData_; end
+    
+        function set.ImageData(obj, val)
+            arguments
+                obj
+                val (1,1) matlabx.image.Image5D
+            end
+    
+            obj.ImageData_ = val;
+            obj.cacheImageInfoFromFile_();
+        end
+
+
+        % --- isLoaded ---
+        function tf = get.isLoaded(obj), tf = obj.ImageData_.IsLoaded; end
+        % --- SizeY ---
+        function sizeY = get.SizeY(obj), sizeY = obj.ImageData_.SizeY; end
+        % --- SizeX ---
+        function sizeX = get.SizeX(obj), sizeX = obj.ImageData_.SizeX; end
+        % --- SizeC ---
+        function sizeC = get.SizeC(obj), sizeC = obj.ImageData_.NumComponents; end
+
+        % --- getPlane ---
+        function I = getPlane(obj, c)
+            I = obj.ImageData_.getPlane(c);
+        end
+
+        % --- getDisplayRange ---
+        function val = getDisplayRange(obj, c)
+            if isempty(obj.Channels_(c).DisplayRange)
+                obj.cacheImageInfoFromBuffer_();
+            end
+            val = obj.Channels_(c).DisplayRange;
+        end
+
+        function setDisplayRange(obj, val, c)
+            arguments
+                obj
+                val (1,2) double
+                c (1,1)
+            end
+
+            val = sort(val);
+            nativeRange = obj.Channels_(c).NativeDisplayRange;
+
+            % If NativeDisplayRange known, clamp; otherwise accept as-is.
+            if ~any(isnan(nativeRange))
+                val(1) = max(val(1), nativeRange(1));
+                val(2) = min(val(2), nativeRange(2));
+            end
+
+            obj.Channels_(c).DisplayRange = val;
+        end
+
+        function val = getAutoDisplayRange(obj, c)
+            if isempty(obj.Channels_(c).AutoDisplayRange)
+                obj.cacheImageInfoFromBuffer_();
+            end
+            val = obj.Channels_(c).AutoDisplayRange;
+        end
+
+        function val = getDataRange(obj, c)
+            if isempty(obj.Channels_(c).DataRange)
+                obj.cacheImageInfoFromBuffer_();
+            end
+            val = obj.Channels_(c).DataRange;
+        end
+
+    end
+
+    % temporary wrappers during migration to Image5D
+    properties (Dependent)
+        CData
+        CDataCell
+        CDataClass
+        CDataRange
+        DisplayRange
+        AutoDisplayRange
+        Height (1,1) double
+        Width (1,1) double
+    end
+
+    %% Temporary legacy getters during transition to Image5D
+    methods
+
+        function val = get.Height(obj)
+            if any(isnan(obj.ImageSize_))
+                obj.cacheImageInfoFromFile_();
+            end
+            val = obj.ImageData_.SizeY;
+        end
+
+        function val = get.Width(obj)
+            if any(isnan(obj.ImageSize_))
+                obj.cacheImageInfoFromFile_();
+            end
+            val = obj.ImageData_.SizeX;
+        end
+
+        function val = get.CDataClass(obj)
+            if obj.SizeC < 1
+                val = [];
+                return
+            end
+            val = obj.ImageData_.Components(1).Class;
+        end
+
+        % first channel only
+        function val = get.CData(obj)
+            if obj.SizeC < 1
+                val = [];
+                return
+            end
+            val = obj.getPlane(1);
+        end
+
+        function val = get.CDataCell(obj)
+            if obj.SizeC < 1
+                val = {};
+                return
+            end
+            val = cell(1,obj.SizeC);
+            for c = 1:obj.SizeC
+                val{c} = obj.getPlane(c);
+            end
+        end
+
+        function val = get.CDataRange(obj)
+            if obj.SizeC < 1
+                val = [];
+                return
+            end
+            val = obj.Channels_(1).DataRange;
+        end
+
+        function val = get.DisplayRange(obj)
+            if obj.SizeC < 1
+                val = [];
+                return
+            end
+            val = obj.getDisplayRange(1);
+        end
+
+        function val = get.AutoDisplayRange(obj)
+            if obj.SizeC < 1
+                val = [];
+                return
+            end
+            val = obj.getAutoDisplayRange(1);
+        end
+
+    end
+
+
     %% Regions (dictionary + order) and active selection
     properties (Access=private)
         RegionsDict = dictionary   % string id -> model.STORMRegion
@@ -23,14 +218,14 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
 
     properties
         RegionOrder (1,:) string = string.empty(1,0)
-        ActiveRegionID (1,1) string = ""
+        % ActiveRegionID (1,1) string = ""
+        ActiveRegionID (1,:) string = string.empty(1,0)
         SelectedRegionIDs (1,:) string = string.empty(1,0)
     end
 
     properties (Dependent, GetAccess=public, SetAccess=private)
-        % SelfIdx % index in Parent's order
-        RegionArray % [1×M model.STORMRegion] in RegionOrder
-        ActiveRegion  % model.STORMRegion or []
+        RegionArray     % [1×M model.STORMRegion] in RegionOrder
+        ActiveRegion    % model.STORMRegion or []
     end
 
     properties(Access=?model.STORMProject)
@@ -40,36 +235,6 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
 
     properties (Dependent)
         RegionNames
-    end
-
-    %% Image data (LAZY) and display settings
-    properties (Dependent)
-        CData                  % numeric image array (lazy-loaded)
-        Height (1,1) double
-        Width (1,1) double
-    end
-
-    properties
-        CLim (1,2) double
-        CDataRange (1,2) = [NaN NaN]     % filled after first load
-        CDataLimits (1,2) = [NaN NaN]    % filled after first load
-        CDataClass (1,:) char = ''       % filled after first load
-    end
-
-    properties (Access=private)
-        CDataBuffer = []                % backing store
-        CDataState (1,1) string = "unloaded"  % "unloaded"|"loaded"|"failed"
-        CDataLoadError = []             % store last exception, if failed
-
-        ImageSize_ (1,2) double = [NaN NaN]   % [H W] from imfinfo (cheap), if available
-
-        DisplayCLim_ (1,2) double = [NaN NaN]  % backing store
-        AutoDisplayCLim_ (1,2) double = [NaN NaN]
-    end
-
-    properties (Dependent)
-        DisplayCLim
-        AutoDisplayCLim
     end
 
     %% Events for UI sync
@@ -94,7 +259,6 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
             if strlength(ID) > 0
                 obj.ID = ID;
             else
-                %obj.ID = model.STORMImage.newID();
                 obj.ID = matlabx.utils.text.uniqueID();
             end
 
@@ -110,174 +274,61 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
             obj.RegionsDict = dictionary(string.empty(1,0), model.STORMRegion.empty(1,0));
             obj.RegionOrder = string.empty(1,0);
 
-            % cache image size from file
-            obj.cacheImageSizeFromFile();
-
+            % create Image5D object from file
+            obj.ImageData = matlabx.image.Image5D.fromFile(obj.SourcePath,"LoadOnCreate",false);
         end
 
     end
-
-
 
     %% CData lazy access + buffer management
     methods
-        function I = get.CData(obj)
-            % Lazy-load raw image data on first access.
-            if obj.CDataState == "loaded"
-                I = obj.CDataBuffer;
-                return
-            end
-            if obj.CDataState == "failed"
-                rethrow(obj.CDataLoadError);
-            end
 
-            % Attempt load
-            try
-                if strlength(obj.SourcePath)==0
-                    error('STORMImage:CDataMissingPath', 'Cannot load CData: SourcePath is empty.');
-                end
-                if ~isfile(obj.SourcePath)
-                    error('STORMImage:CDataMissingFile', 'Cannot load CData: file not found: %s', obj.SourcePath);
-                end
-
-                obj.CDataBuffer = imread(obj.SourcePath);
-                obj.CDataState = "loaded";
-                obj.updateCDataStatsFromBuffer();
-                I = obj.CDataBuffer;
-
-            catch ME
-                obj.CDataState = "failed";
-                obj.CDataLoadError = ME;
-                rethrow(ME);
-            end
+        function clearImageDataBuffer(obj)
+            obj.ImageData_.unload();
         end
 
-        function clearCDataBuffer(obj)
-            obj.CDataBuffer = [];
-            obj.CDataState = "unloaded";
-            obj.CDataLoadError = [];
-            % Keep cached ImageSize_ (so Height/Width still cheap)
-        end
-
-        function bufferCData(obj)
-            obj.CDataBuffer = imread(obj.SourcePath);
-            obj.CDataState = "loaded";
-        end
-
-        function updateCDataStats(obj)
-            switch obj.CDataState
-                case "loaded"
-                    obj.updateCDataStatsFromBuffer();
-                case "unloaded"
-                    obj.updateCDataStatsFromFile();
-                case "failed"
-                    rethrow(obj.CDataLoadError);
-            end
+        function bufferImageData(obj)
+            obj.ImageData_.load();
+            obj.cacheImageInfoFromBuffer_();
         end
 
     end
 
-    %% Dependent getters/setters related to CData
-    methods
 
-        function val = get.Height(obj)
-            if ~any(isnan(obj.ImageSize_))
-                val = obj.ImageSize_(1);
-            elseif obj.CDataState == "loaded"
-                val = size(obj.CDataBuffer,1);
-            else
-                obj.cacheImageSizeFromFile();
-                val = obj.ImageSize_(1);
-            end
-        end
-
-        function val = get.Width(obj)
-            if ~any(isnan(obj.ImageSize_))
-                val = obj.ImageSize_(2);
-            elseif obj.CDataState == "loaded"
-                val = size(obj.CDataBuffer,2);
-            else
-                obj.cacheImageSizeFromFile();
-                val = obj.ImageSize_(2);
-            end
-        end
-
-        function clim = get.DisplayCLim(obj)
-            if any(isnan(obj.DisplayCLim_))
-                clim = obj.CDataRange;  % if still NaN, UI can decide how to handle
-            else
-                clim = obj.DisplayCLim_;
-            end
-        end
-
-        function set.DisplayCLim(obj, clim)
-
-            arguments
-                obj
-                clim (1,2) double
-            end
-
-            clim = sort(clim);
-
-            % If CDataRange known, clamp; otherwise accept as-is.
-            if ~any(isnan(obj.CDataRange))
-                clim(1) = max(clim(1), obj.CDataRange(1));
-                clim(2) = min(clim(2), obj.CDataRange(2));
-            end
-
-            obj.DisplayCLim_ = clim;
-        end
-
-        function clim = get.AutoDisplayCLim(obj)
-
-            if any(isnan(obj.AutoDisplayCLim_))
-                obj.updateCDataStats();
-            end
-
-            clim = obj.AutoDisplayCLim_;
-        end
-
-    end
-
-    %% Private helpers
+    %% Image data cache management
     methods (Access=private)
-        
-        function cacheImageSizeFromFile(obj)
-            if strlength(obj.SourcePath)==0 || ~isfile(obj.SourcePath)
-                return
-            end
-            try
-                info = imfinfo(obj.SourcePath);
-                obj.ImageSize_ = [info(1).Height, info(1).Width];
-            catch
-                % leave as NaN; worst case size forces a load later
-            end
-        end
 
-        function updateCDataStatsFromBuffer(obj)
-            if isempty(obj.CDataBuffer)
-                obj.CDataRange = [NaN NaN];
-                obj.CDataClass = '';
-                obj.CDataLimits = [NaN NaN];
+        function cacheImageInfoFromFile_(obj)
+
+            if obj.ImageData_.IsLoaded
+                obj.cacheImageInfoFromBuffer_();
                 return
             end
 
-            % store image info
-            obj.ImageSize_ = [size(obj.CDataBuffer,1), size(obj.CDataBuffer,2)];
-            obj.CDataClass = class(obj.CDataBuffer);
-            obj.CDataLimits = getrangefromclass(obj.CDataBuffer);
-            obj.CDataRange = [min(obj.CDataBuffer(:)), max(obj.CDataBuffer(:))];
-
-            % store display autolimits
-            obj.AutoDisplayCLim_ = stretchlim(obj.CDataBuffer,[0.1 0.9999])*obj.CDataLimits(2);
+            for c = 1:obj.SizeC
+                obj.Channels_(c).Size = obj.ImageData_.Components(c).Size;
+                obj.Channels_(c).Class = obj.ImageData_.Components(c).Class;
+                obj.Channels_(c).NativeDisplayRange = obj.ImageData_.Components(c).NativeDisplayRange;
+            end
+            % assume same size per channel
+            obj.ImageSize_ = obj.ImageData_.Components(1).Size;
         end
 
-        function updateCDataStatsFromFile(obj)
-            obj.bufferCData();
-            obj.updateCDataStatsFromBuffer();
-            obj.clearCDataBuffer();
+        function cacheImageInfoFromBuffer_(obj)
+            for c = 1:obj.SizeC
+                obj.Channels_(c).Size = obj.ImageData_.Components(c).Size;
+                obj.Channels_(c).Class = obj.ImageData_.Components(c).Class;
+                obj.Channels_(c).NativeDisplayRange = obj.ImageData_.Components(c).NativeDisplayRange;
+                I = obj.getPlane(c);
+                obj.Channels_(c).AutoDisplayRange = stretchlim(I,[0.1 0.9999])*obj.Channels_(c).NativeDisplayRange(2)';
+                obj.Channels_(c).DataRange = [min(I(:)) max(I(:))];
+                if isempty(obj.Channels_(c).DisplayRange)
+                    obj.Channels_(c).DisplayRange = obj.Channels_(c).DataRange;
+                end
+            end
+            % assume same size per channel
+            obj.ImageSize_ = obj.ImageData_.Components(1).Size;
         end
-
     end
 
     %% Region management (find, add, remove, set active, etc.)
@@ -333,12 +384,13 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
             if isKey(obj.RegionsDict, regionID)
                 % Clear active if removing it
                 if obj.ActiveRegionID == regionID
-                    obj.ActiveRegionID = "";
+                    obj.ActiveRegionID = strings(1,0);
                     notify(obj,'ActiveRegionChanged');
                 end
 
                 remove(obj.RegionsDict, regionID);
                 obj.RegionOrder = obj.RegionOrder(obj.RegionOrder ~= regionID);
+                obj.SelectedRegionIDs = obj.SelectedRegionIDs(obj.SelectedRegionIDs ~= regionID);
                 % notify app that region was removed *after* mutating RegionOrder
                 notify(obj,'RegionRemoved');
             end
@@ -353,30 +405,38 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
             end
         end
 
+        % function setActiveRegion(obj, regionID)
+        %     regionID = string(regionID);
+        %     % return if region is already active
+        %     if regionID == obj.ActiveRegionID, return; end
+        % 
+        %     if strlength(regionID)==0
+        %         obj.ActiveRegionID = "";
+        %         notify(obj,'ActiveRegionChanged');
+        %         return
+        %     end
+        %     if isKey(obj.RegionsDict, regionID)
+        %         obj.ActiveRegionID = regionID;
+        %         notify(obj,'ActiveRegionChanged');
+        %     end
+        % end
+
         function setActiveRegion(obj, regionID)
             regionID = string(regionID);
             % return if region is already active
             if regionID == obj.ActiveRegionID, return; end
-
-            if strlength(regionID)==0
-                obj.ActiveRegionID = "";
-                notify(obj,'ActiveRegionChanged');
-                return
+            % invalid ID -> set empty
+            if ~isKey(obj.RegionsDict, regionID)
+                regionID = strings(1,0);
             end
-            if isKey(obj.RegionsDict, regionID)
-                obj.ActiveRegionID = regionID;
-                notify(obj,'ActiveRegionChanged');
-            end
+            % set active and notify
+            obj.ActiveRegionID = regionID;
+            notify(obj,'ActiveRegionChanged');
         end
 
 
 
-
-
-
         % --- retrieve ---
-
-
         function tf = hasRegion(obj, regionID)
             tf = isKey(obj.RegionsDict, string(regionID));
         end
@@ -395,19 +455,13 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
         end
 
 
-
-
-
-
-
         % --- select ---
-
         function setRegionSelection(obj,IDs)
+            if isempty(IDs), obj.clearRegionSelection(); return; end
             validIDs = IDs(obj.hasRegion(IDs));
             obj.SelectedRegionIDs = validIDs;
             notify(obj,'RegionSelectionChanged');
         end
-
 
         function clearRegionSelection(obj)
             obj.SelectedRegionIDs = string.empty(1,0);
@@ -419,6 +473,8 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
 
     %% Region-level processing
     methods
+
+        % --- process Region linescans ---
 
         function processAll(obj, config)
             % get Region array
@@ -441,8 +497,8 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
 
             if isempty(reg), return; end
 
-            % get region CData
-            I = obj.regionSubimage(reg);
+            % get region CData cell
+            I = obj.regionSubimageCell(reg);
             % get linescan info
             data = reg.Linescan;
 
@@ -461,7 +517,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
             reg.resetLinescan();
         end
 
-
+        % --- autofit Region ROIs ---
 
         function autofitAllRegionROIs(obj, config)
             % get Region array
@@ -474,7 +530,6 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
                 obj.autofitRegionROI(arr(i),config);
             end
         end
-
 
         function autofitRegionROI(obj, reg, config)
             arguments
@@ -497,11 +552,13 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
             reg.updateLinescan(ROIData);
         end
 
+        % --- retrieve Region subimage ---
 
         function I = regionSubimage(obj,reg)
             if isempty(reg), I = []; return; end
             % region box size and center coordinates
             s = reg.BoxSize; XY = reg.Center;
+
             % preallocate array of zeros, type matched to raw intensity class
             I = zeros(s,obj.CDataClass);
             % columns
@@ -512,11 +569,30 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
             I(:,:) = obj.CData(r1:r2,c1:c2);
         end
 
+        function I = regionSubimageCell(obj,reg)
+            if isempty(reg), I = []; return; end
+            % region box size and center coordinates
+            s = reg.BoxSize; XY = reg.Center;
+            % cell array of channels
+            I = cell(1,obj.SizeC);
+            % columns
+            c1 = ceil(XY(1)-s/2); c2 = floor(XY(1) + s/2);
+            % rows
+            r1 = ceil(XY(2)-s/2); r2 = floor(XY(2) + s/2);
+            % extract region ROI per channel
+            for c = 1:obj.SizeC
+                I{c} = zeros(s,obj.Channels_(c).Class);
+                cPlane = obj.ImageData_.getPlane(c);
+                I{c}(:,:) = cPlane(r1:r2,c1:c2);
+            end
+        end
+
     end
 
     %% Image-level processing
     methods
 
+        %!!! DEPRECATED !!!
         function detectRegions(obj, config)
             arguments
                 obj model.STORMImage
@@ -544,7 +620,6 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
             notify(obj,'RegionAdded');
 
         end
-
 
         function runClassifier(obj, net, propOpts)
 
@@ -588,13 +663,22 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
     %% Dependent getters/setters
     methods
 
+        % function reg = get.ActiveRegion(obj)
+        %     reg = [];
+        %     if strlength(obj.ActiveRegionID)==0, return; end
+        %     if isKey(obj.RegionsDict, obj.ActiveRegionID)
+        %         reg = obj.RegionsDict(obj.ActiveRegionID);
+        %     end
+        % end
+
         function reg = get.ActiveRegion(obj)
             reg = [];
-            if strlength(obj.ActiveRegionID)==0, return; end
+            if isempty(obj.ActiveRegionID), return; end
             if isKey(obj.RegionsDict, obj.ActiveRegionID)
                 reg = obj.RegionsDict(obj.ActiveRegionID);
             end
         end
+
 
         function names = get.RegionNames(obj)
             arr = obj.RegionArray;
@@ -669,7 +753,6 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
                 'FileType', obj.FileType, ...
                 'PixelSize', obj.PixelSize.stringDisplay(), ...
                 'Size', obj.ImageSize_, ...
-                'CDataState', obj.CDataState, ...
                 'NumRegions', numEntries(obj.RegionsDict), ...
                 'RegionOrder', obj.RegionOrder, ...
                 'RegionArray', obj.RegionArray );
@@ -682,28 +765,24 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
     methods(Access=?model.STORMProject)
 
         function I = toStruct(obj)
+
+            if ~isfile(obj.SourcePath)
+                error("model:STORMImage:toStruct:InvalidFile","Cannot find file: %s",obj.SourcePath)
+            end
+
             I.ID         = obj.ID;
             I.Name       = obj.Name;
             I.SourcePath = obj.SourcePath;
             I.FileType   = obj.FileType;
             I.CreatedAt  = obj.CreatedAt;
 
-            % Fingerprint hints
-            I.FileName = string.empty;
-            I.Ext = string.empty;
-            I.FileSizeBytes = NaN;
-            I.ModifiedDatenum = NaN;
-
-            if strlength(obj.SourcePath) > 0
-                [~,nm,ex] = fileparts(obj.SourcePath);
-                I.FileName = string(nm);
-                I.Ext = string(ex);
-                if isfile(obj.SourcePath)
-                    d = dir(obj.SourcePath);
-                    I.FileSizeBytes = d.bytes;
-                    I.ModifiedDatenum = d.datenum;
-                end
-            end
+            % Fingerprint hints in case we need to locate missing image files on load
+            [~,nm,ex] = fileparts(obj.SourcePath);
+            d = dir(obj.SourcePath);
+            I.FileName          = string(nm);
+            I.Ext               = string(ex);
+            I.FileSizeBytes     = d.bytes;
+            I.ModifiedDatenum   = d.datenum;
 
             % Pixel size override (if set)
             if ~isempty(obj.PixelSizeOverride)
@@ -712,27 +791,20 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
                 I.PixelSizeOverride = [];
             end
 
-            % Display limits
-            I.DisplayCLim = obj.DisplayCLim;
-
-            % Regions / naming counter
+            % Regions
             I.NextRegionOrdinal = obj.NextRegionOrdinal;
             I.RegionOrder = obj.RegionOrder;
 
+            % get Region objects
             regs = obj.RegionArray;
-            I.Regions = repmat(struct(), 1, numel(regs));
+            % initialize empty Regions struct
+            %I.Regions = repmat(struct(), 1, numel(regs));
+            % populate with struct for each Region
             for r = 1:numel(regs)
                 reg = regs(r);
-                I.Regions(r).ID             = reg.ID;
-                I.Regions(r).Name           = reg.Name;
-                I.Regions(r).CreatedAt      = reg.CreatedAt;
-                I.Regions(r).Center         = reg.Center;
-                I.Regions(r).BoxSize        = reg.BoxSize;
-                I.Regions(r).Linescan       = reg.Linescan;
-                I.Regions(r).LabelID        = reg.LabelID;
-                I.Regions(r).LabelSource    = reg.LabelSource;
-                I.Regions(r).Score          = reg.Score;
+                I.Regions(r) = reg.toStruct();
             end
+
         end
 
     end
@@ -754,42 +826,23 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
                 img.PixelSizeOverride = model.units.PixelSize(S.PixelSizeOverride.Value, S.PixelSizeOverride.Unit);
             end
 
-            img.DisplayCLim = S.DisplayCLim;
-
             img.NextRegionOrdinal = S.NextRegionOrdinal;
-
-            % update CData stats
-            img.updateCDataStats();
 
             % rebuild regions
             if isfield(S,'Regions') && ~isempty(S.Regions)
-                for r = 1:numel(S.Regions)
+                app.Log.INFO("Rebuilding regions...")
+                % number of Regions (one struct entry each)
+                nRegions = numel(S.Regions);
+                % iterate over all entries
+                for r = 1:nRegions
+                    % get struct for this Region
                     R = S.Regions(r);
-                    img.addRegionSilent(string(R.ID), R.Center, R.BoxSize);
-                    reg = img.getRegion(string(R.ID));
-                    reg.Name = string(R.Name);
-
-                    if isfield(R,'CreatedAt') && ~isempty(R.CreatedAt)
-                        reg.CreatedAt = R.CreatedAt;
-                    end
-
-                    if isfield(R,'Linescan') && ~isempty(R.Linescan)
-                        reg.Linescan = R.Linescan;
-                    end
-
-                    if isfield(R,'LabelID') && ~isempty(R.LabelID)
-                        reg.LabelID = string(R.LabelID);
-                    end
-
-                    if isfield(R,'LabelSource') && ~isempty(R.LabelSource)
-                        reg.LabelSource = string(R.LabelSource);
-                    end
-
-                    if isfield(R,'Score') && ~isempty(R.Score)
-                        reg.Score = R.Score;
-                    end
-
-
+                    % update log
+                    app.Log.INFO(sprintf("Region (%i/%i): %s",r,nRegions,R.Name));
+                    % create Region from struct
+                    reg = model.STORMRegion.fromStruct(R,img);
+                    % add it to the Regions dictionary
+                    img.RegionsDict(reg.ID) = reg;
                 end
                 % restore region order exactly
                 if isfield(S,'RegionOrder')
@@ -797,6 +850,15 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
                 end
             end
 
+        end
+
+    end
+
+    %% Hidden debug entry point
+    methods (Hidden)
+
+        function debug(obj)
+            debug
         end
 
     end

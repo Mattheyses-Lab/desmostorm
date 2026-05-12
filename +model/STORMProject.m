@@ -20,11 +20,13 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
     properties (Access=private)
         ImagesDict = dictionary   % string ID -> model.STORMImage
         ImageOrder (1,:) string = string.empty(1,0)
-        ActiveImageID (1,1) string = ""
+        %ActiveImageID (1,1) string = ""
+
+        ActiveImageID (1,:) string = string.empty(1,0)
     end
 
     properties (Access=private)
-        CDataCacheSize (1,1) double {mustBeNonnegative, mustBeInteger} = 2  % active + 1 previous
+        ImageDataCacheSize (1,1) double {mustBeNonnegative, mustBeInteger} = 2  % active + 1 previous
         RecentImageIDs (1,:) string = string.empty(1,0)
     end
 
@@ -136,6 +138,9 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             %ADDIMAGEFROMPATH Add a new STORMImage for the image specified by filePath
             % get file name and extension
             [~,name,ext] = fileparts(filePath);
+
+            app.Log.INFO(sprintf("Loading image: %s",filePath));
+
             % create a STORMImage object with new unique ID
             img = model.STORMImage(obj, string(name)+string(ext), string(filePath), matlabx.utils.text.uniqueID());  % NO imread
 
@@ -196,8 +201,15 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             if isKey(obj.ImagesDict, imageID)
                 obj.ActiveImageID = imageID;
 
-                % if no active region, set first in region array as active
+                % get the STORMImage
                 img = obj.getImage(imageID);
+
+                % buffer image data if not already
+                if ~img.isLoaded
+                    img.bufferImageData();
+                end
+
+                % if no active region, set first in region array as active
                 if isempty(img.ActiveRegion) && numel(img.RegionArray)>0
                     img.ActiveRegionID = img.RegionArray(1).ID;
                 end
@@ -242,16 +254,6 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
                 arr(i).removeAllRegions();
             end
         end
-
-    end
-
-    %% Label management
-    methods
-
-
-
-
-
 
     end
 
@@ -329,8 +331,8 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             if strlength(imgID) > 0
                 obj.RecentImageIDs(obj.RecentImageIDs == imgID) = [];
                 obj.RecentImageIDs = [imgID, obj.RecentImageIDs];
-                if numel(obj.RecentImageIDs) > obj.CDataCacheSize
-                    obj.RecentImageIDs = obj.RecentImageIDs(1:obj.CDataCacheSize);
+                if numel(obj.RecentImageIDs) > obj.ImageDataCacheSize
+                    obj.RecentImageIDs = obj.RecentImageIDs(1:obj.ImageDataCacheSize);
                 end
             end
         
@@ -342,7 +344,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             for k = 1:numel(toClear)
                 if isKey(obj.ImagesDict, toClear(k))
                     try
-                        obj.ImagesDict(toClear(k)).clearCDataBuffer();
+                        obj.ImagesDict(toClear(k)).clearImageDataBuffer();
                     catch
                     end
                 end
@@ -357,6 +359,11 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
 
             % get the new ActiveImage
             img = obj.ActiveImage;
+
+            % % TEST BELOW
+            % % buffer its image data
+            % img.bufferImageData();
+            % % END TEST
 
             % exit early if no ActiveImage
             if isempty(img), return; end
@@ -588,8 +595,6 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
 
         end
 
-
-
         function T = exportDetectorLabelTable(obj, opts)
             %exportDetectorLabelTable  Build training labels table for MATLAB object detectors.
             %
@@ -711,11 +716,18 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             obj.Name = name;
             obj.SourcePath = file;
 
-            % get save struct
-            Project = obj.toStruct(settings);
-
-            % save it
-            save(file, 'Project', '-mat');
+            % update log
+            app.Log.INFO(sprintf("Saving project: %s",obj.Name))
+            % attempt to save the project
+            try
+                % get save struct
+                Project = obj.toStruct(settings);
+                % save it
+                save(file, 'Project', '-mat');
+            catch ME
+                app.Log.ERROR(ME);
+                rethrow(ME);
+            end
 
             % indicate that it is now on disk
             obj.isOnDisk = true;
