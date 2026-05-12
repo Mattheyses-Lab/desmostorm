@@ -41,6 +41,8 @@ classdef PointClusters < handle
         ClusterIdxs (:,1) double
         Centroids (:,2) double
         Distances (:,:) double
+
+        UnclusteredPoints (:,2) double
     end
 
     %% events/listeners
@@ -65,7 +67,7 @@ classdef PointClusters < handle
                 opts.Recluster (1,1) logical = true
                 opts.RefineClusters (1,1) logical = false
                 opts.MinPointsPerCluster (1,1) double = 3
-                opts.MaxClusterConvexHullArea (1,1) double = 100
+                opts.MaxClusterConvexHullArea (1,1) double = inf
                 opts.MaxEccentricity (1,1) double = 1
 
                 opts.k (1,1) {mustBeGreaterThanOrEqual(opts.k,2)} = 2
@@ -426,6 +428,13 @@ classdef PointClusters < handle
             if isempty(obj.Clusters), val = []; return, end
             % concatenate point to centroid distances from all clusters
             val = horzcat(obj.Clusters(:).Distances);
+        end
+
+        function pts = get.UnclusteredPoints(obj)
+            A = obj.OriginalPoints;
+            B = obj.Points;
+            inB = ismember(A, B, 'rows');
+            pts = A(~inB, :);
         end
 
     end
