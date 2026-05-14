@@ -15,7 +15,7 @@ function rgb = getColor(name)
 %     rgb  : 1x3 RGB triplet in [0,1]
 %
 %   Example
-%     rgb = colorName('magenta');   % returns [1 0 1]
+%     rgb = getColor('magenta');   % returns [1 0 1]
 %
 %   See also COLORGRADIENT
 
