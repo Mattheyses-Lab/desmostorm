@@ -1500,9 +1500,18 @@ classdef GUI < handle
         function onDisplayChanged(obj,e)
             switch e.Name
                 case "Colormap"
-                    obj.ExampleColormapAxes.Colormap = obj.Settings.Display.Colormap;
-                    obj.Ax.Colormap = obj.Settings.Display.Colormap;
-                    obj.RegionViewer.Colormap = obj.Settings.Display.Colormap;
+                    cmap = obj.Settings.Display.Colormap;
+                    obj.ExampleColormapAxes.Colormap = cmap;
+
+                    C = obj.Ax.ComponentIdx;
+                    obj.Ax.setColormap(cmap,C);
+
+                    if C <= obj.RegionViewer.NumComponents
+                        obj.RegionViewer.setColormap(cmap,C);
+                    end
+
+                    % obj.Ax.Colormap = obj.Settings.Display.Colormap;
+                    % obj.RegionViewer.Colormap = obj.Settings.Display.Colormap;
                 case "BoxFaceColor"
                     %set(obj.ROI, 'FaceColor', obj.Settings.Display.BoxFaceColor);
                 case "BoxEdgeColor"
