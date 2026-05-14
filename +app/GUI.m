@@ -112,7 +112,7 @@ classdef GUI < handle
 
     %% Logging
     properties
-        Log (1,1) matlabx.logging.Logger
+        Log matlabx.logging.Logger
     end
 
 
@@ -219,16 +219,18 @@ classdef GUI < handle
             % need to add a more elegant way to set window size once app components are finalized
             s = matlabx.ui.calibration.getScreenSize();
             %s(4) = 0.45*s(3);
-            obj.Fig = uifigure('Name','DesmoSTORM',...
+            obj.Fig = uifigure(...
+                'WindowStyle','alwaysontop',...
+                'Tag',app.Info.Name,...
+                'Name','DesmoSTORM',...
                 'Color',[0 0 0],...
                 'OuterPosition',s(1,:),...
-                'WindowStyle','alwaysontop',...
                 'Visible','off',...
                 'Theme','dark',...
                 'HandleVisibility','on',...
                 'AutoResizeChildren','off',...
                 'SizeChangedFcn',@(~,~) obj.refreshComponentSizes(),...
-                'Tag',app.Info.Name);
+                'CloseRequestFcn',@(~,~) obj.onCloseRequest());
         end
 
         function setupCommandRouter(obj)
@@ -756,6 +758,13 @@ classdef GUI < handle
 
         function delete(obj)
             % if ~isempty(obj.L), delete(obj.L(isvalid(obj.L))); end
+
+            % delete the logger
+            % clear static facade first
+            app.Log.clear();
+            if ~isempty(obj.Log), delete(obj.Log(isvalid(obj.Log))); end
+
+
             if ~isempty(obj.projectL), delete(obj.projectL(isvalid(obj.projectL))); end
             if ~isempty(obj.settingsL), delete(obj.settingsL(isvalid(obj.settingsL))); end
             if ~isempty(obj.Ax) && isvalid(obj.Ax), delete(obj.Ax); end
@@ -804,8 +813,15 @@ classdef GUI < handle
 
 
         function onLogFlush(obj,lines)
-            obj.LogTextArea.Value(end+1) = cellstr(lines);
+            nOld = numel(obj.LogTextArea.Value);
+            obj.LogTextArea.Value(nOld+1:nOld+numel(lines)) = cellstr(lines);
             scroll(obj.LogTextArea,"bottom");
+        end
+
+        function onCloseRequest(obj)
+            app.Log.INFO("Exiting...");
+            % delete the GUI, will also delete fig window
+            obj.delete();
         end
 
     end
@@ -904,10 +920,6 @@ classdef GUI < handle
             % Sliders
             set(obj.IntensitySliders,'Limits',[0 1],'Value',[0 1]);
         end
-
-
-
-
 
         function detatchListeners(obj)
             % project
