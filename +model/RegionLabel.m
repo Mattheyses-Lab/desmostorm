@@ -1,4 +1,4 @@
-classdef RegionLabel < handle
+classdef RegionLabel < handle & matlab.mixin.SetGetExactNames
 %RegionLabel  Defines a user label (name/hotkey/color) for region annotation.
 
     properties
@@ -6,6 +6,9 @@ classdef RegionLabel < handle
         Name (1,1) string = ""
         Hotkey (1,1) string = ""   % e.g. "1", "a", "q"
         Color (1,3) double = [1 1 1]
+    end
+
+    properties (SetAccess=private)
         CreatedAt datetime = datetime('now')
     end
 
