@@ -55,9 +55,7 @@ classdef LabelRegistry < handle
 
         function setActiveByID(obj, id)
             id = string(id);
-            if id == obj.ActiveLabelID
-                return
-            end
+            if id == obj.ActiveLabelID, return; end
 
             if strlength(id)==0
                 obj.ActiveLabelID = "";
@@ -134,6 +132,63 @@ classdef LabelRegistry < handle
 
             notify(obj,'LabelsChanged');
         end
+
+
+
+        function edit(obj, id, opts)
+            arguments
+                obj
+                id
+                opts.Name string = string.empty()
+                opts.ID string = string.empty()
+                opts.Hotkey string = string.empty()
+                opts.Color double = []
+            end
+
+            % get label by its id
+            id = string(id);
+            if ~isKey(obj.LabelsDict, id), return; end
+            lbl = obj.LabelsDict(id);
+
+            % Name
+            if ~isempty(opts.Name)
+                lbl.Name = opts.Name;
+            end
+            
+            % ID
+            if ~isempty(opts.ID)
+                oldID = lbl.ID;
+                lbl.ID = opts.ID;
+                % remove entry keyed by oldID
+                remove(obj.LabelsDict,oldID);
+                % replace oldID in Order
+                obj.Order(obj.Order == oldID) = opts.ID;
+            end
+
+            % Hotkey
+            if ~isempty(opts.Hotkey)
+                oldHotkey = lbl.Hotkey;
+                lbl.Hotkey = opts.Hotkey;
+                % remove entry keyed by oldHotkey
+                remove(obj.HotkeyMap,oldHotkey);
+            end
+
+            % Color
+            if ~isempty(opts.Color)
+                lbl.Color = opts.Color;
+            end
+
+            % ensure unique hotkey mapping (last-wins)
+            if lbl.hasHotkey()
+                obj.HotkeyMap(lbl.Hotkey) = lbl.ID;
+            end
+
+            % add to LabelsDict
+            obj.LabelsDict(lbl.ID) = lbl;
+
+            notify(obj,'LabelsChanged');
+        end
+
 
         function S = toStruct(obj)
             arr = obj.labels();

@@ -13,21 +13,30 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
 
     %% Label bank
     properties
-        LabelBank model.LabelRegistry = model.LabelRegistry.default()
+        LabelBank model.LabelRegistry
     end
 
     %% Images (dictionary + order) and active selection
+    % properties (Access=private)
+    %     ImagesDict = dictionary   % string ID -> model.STORMImage
+    %     ImageOrder (1,:) string = string.empty(1,0)
+    %     ActiveImageID (1,:) string = string.empty(1,0)
+    % end
+
+    % properties (Access=private)
+    %     ImageDataCacheSize (1,1) double {mustBeNonnegative, mustBeInteger} = 2  % active + 1 previous
+    %     RecentImageIDs (1,:) string = string.empty(1,0)
+    % end
+
     properties (Access=private)
         ImagesDict = dictionary   % string ID -> model.STORMImage
-        ImageOrder (1,:) string = string.empty(1,0)
-        %ActiveImageID (1,1) string = ""
-
-        ActiveImageID (1,:) string = string.empty(1,0)
+        ImageOrder (:,1) string = string.empty(0,1)
+        ActiveImageID (:,1) string = string.empty(0,1)
     end
 
     properties (Access=private)
         ImageDataCacheSize (1,1) double {mustBeNonnegative, mustBeInteger} = 2  % active + 1 previous
-        RecentImageIDs (1,:) string = string.empty(1,0)
+        RecentImageIDs (:,1) string = string.empty(0,1)
     end
 
     properties (Dependent)
@@ -37,8 +46,9 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
 
     %% ergonomic array view, public, editor-friendly
     properties (Dependent, GetAccess=public, SetAccess=private)
-        ImageArray   % [1×N model.STORMImage] in ImageOrder
+        ImageArray   % [Nx1 model.STORMImage] in ImageOrder
         ActiveImage (:,1) model.STORMImage
+        ActiveRegion (:,1) model.STORMRegion
     end
 
     %% Project-wide defaults
@@ -89,6 +99,12 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             end
         end
 
+        function reg = get.ActiveRegion(obj)
+            reg = [];
+            if isempty(obj.ActiveImage), return; end
+            reg = obj.ActiveImage.ActiveRegion;
+        end
+
         function names = get.ImageNames(obj)
             arr = obj.ImageArray;
             if isempty(arr)
@@ -124,6 +140,9 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
 
             % add a listener for the ActiveImageChanged event
             obj.ActiveImageListener = addlistener(obj,'ActiveImageChanged',@(~,~) obj.onActiveImageChanged());
+
+            % label registry, default labels to start
+            obj.LabelBank = model.LabelRegistry.default();            
 
             % add a listener for the LabelsChanged event
             obj.LabelsChangedListener = addlistener(obj.LabelBank,'LabelsChanged',@(~,~) notify(obj,'LabelsChanged'));
@@ -255,6 +274,23 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             end
         end
 
+
+        % needs to be optimized
+        function regs = getRegionsByLabelID(obj,labelID)
+
+            regs = [];
+
+            imgs = obj.ImageArray;
+
+            for i = 1:numel(imgs)
+                regs = [regs;imgs(i).getRegionsByLabelID(labelID)];
+            end
+
+
+        end
+
+
+
     end
 
 
@@ -330,7 +366,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             % Update LRU list
             if strlength(imgID) > 0
                 obj.RecentImageIDs(obj.RecentImageIDs == imgID) = [];
-                obj.RecentImageIDs = [imgID, obj.RecentImageIDs];
+                obj.RecentImageIDs = [imgID; obj.RecentImageIDs];
                 if numel(obj.RecentImageIDs) > obj.ImageDataCacheSize
                     obj.RecentImageIDs = obj.RecentImageIDs(1:obj.ImageDataCacheSize);
                 end
@@ -521,7 +557,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
                     continue
                 end
 
-                % Valid center range so crop fits using your ceil/floor convention:
+                % Valid center range so crop follows ceil/floor convention:
                 % c1 = ceil(cx - s/2) >= 1 and c2 = floor(cx + s/2) <= W
                 xMin = 1 + (s-1)/2;
                 xMax = img.Width  - (s-1)/2;

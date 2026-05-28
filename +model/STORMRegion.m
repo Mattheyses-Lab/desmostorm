@@ -292,7 +292,7 @@
 % 
 % end
 
-classdef STORMRegion < handle
+classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
 %STORMRegion Geometry and per-region results
 
     %% ID/ownership/meta

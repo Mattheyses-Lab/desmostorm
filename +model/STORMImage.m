@@ -216,12 +216,20 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
         RegionsDict = dictionary   % string id -> model.STORMRegion
     end
 
+    % properties
+    %     RegionOrder (1,:) string = string.empty(1,0)
+    %     % ActiveRegionID (1,1) string = ""
+    %     ActiveRegionID (1,:) string = string.empty(1,0)
+    %     SelectedRegionIDs (1,:) string = string.empty(1,0)
+    % end
+
     properties
-        RegionOrder (1,:) string = string.empty(1,0)
+        RegionOrder (:,1) string = string.empty(0,1)
         % ActiveRegionID (1,1) string = ""
-        ActiveRegionID (1,:) string = string.empty(1,0)
-        SelectedRegionIDs (1,:) string = string.empty(1,0)
+        ActiveRegionID (:,1) string = string.empty(0,1)
+        SelectedRegionIDs (:,1) string = string.empty(0,1)
     end
+
 
     properties (Dependent, GetAccess=public, SetAccess=private)
         RegionArray     % [1×M model.STORMRegion] in RegionOrder
@@ -335,7 +343,6 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
     methods
 
         function addRegion(obj, ID, Center, BoxSize, LabelID, LabelSource, opts)
-
             arguments
                 obj             (1,1) model.STORMImage
                 ID              (1,1) string
@@ -346,7 +353,6 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
                 opts.Score      (1,1) double = NaN
                 opts.Notify     (1,1) logical = true
             end
-
 
             if ~isKey(obj.RegionsDict, ID)
                 % create new STORMRegion
@@ -405,22 +411,6 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
             end
         end
 
-        % function setActiveRegion(obj, regionID)
-        %     regionID = string(regionID);
-        %     % return if region is already active
-        %     if regionID == obj.ActiveRegionID, return; end
-        % 
-        %     if strlength(regionID)==0
-        %         obj.ActiveRegionID = "";
-        %         notify(obj,'ActiveRegionChanged');
-        %         return
-        %     end
-        %     if isKey(obj.RegionsDict, regionID)
-        %         obj.ActiveRegionID = regionID;
-        %         notify(obj,'ActiveRegionChanged');
-        %     end
-        % end
-
         function setActiveRegion(obj, regionID)
             regionID = string(regionID);
             % return if region is already active
@@ -446,12 +436,9 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
             if isKey(obj.RegionsDict, regionID), r = obj.RegionsDict(regionID); else, r = []; end
         end
 
-        function arr = get.RegionArray(obj)
-            if numel(obj.RegionOrder)==0
-                arr = model.STORMRegion.empty();
-                return
-            end
-            arr = obj.RegionsDict(obj.RegionOrder);
+        function regs = getRegionsByLabelID(obj,labelID)
+            if isempty(obj.RegionArray), regs = []; return; end
+            regs = obj.RegionArray([obj.RegionArray(:).LabelID]==labelID);
         end
 
 
@@ -663,13 +650,13 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
     %% Dependent getters/setters
     methods
 
-        % function reg = get.ActiveRegion(obj)
-        %     reg = [];
-        %     if strlength(obj.ActiveRegionID)==0, return; end
-        %     if isKey(obj.RegionsDict, obj.ActiveRegionID)
-        %         reg = obj.RegionsDict(obj.ActiveRegionID);
-        %     end
-        % end
+        function arr = get.RegionArray(obj)
+            if numel(obj.RegionOrder)==0
+                arr = model.STORMRegion.empty();
+                return
+            end
+            arr = obj.RegionsDict(obj.RegionOrder);
+        end
 
         function reg = get.ActiveRegion(obj)
             reg = [];

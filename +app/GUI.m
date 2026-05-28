@@ -1,8 +1,10 @@
 classdef GUI < handle
-% app.GUI - GUI controller
+%GUI  Controller for DesmoSTORM GUI
 
-    % add Transient and NonCopyable attributes?
-    properties (Access=private)
+    %% Private properties
+
+    % UI components
+    properties (Access=private, Transient, NonCopyable)
         % --- window and main grids ---
         Fig matlab.ui.Figure
         Grid matlab.ui.container.GridLayout
@@ -47,84 +49,66 @@ classdef GUI < handle
         RegionLinescanPanel matlab.ui.container.Panel
         RegionLinescanPanelGrid matlab.ui.container.GridLayout
         RegionLinescanPlot widgets.PeaksPlotContainer % custom plot
-    end
 
-    % Settings-related graphics components
-    properties (Access=private)
+        % --- Settings-related UI ---
         ExampleColormapPanel matlab.ui.container.Panel
         ExampleColormapAxes matlab.ui.control.UIAxes
         ExampleColormapImage matlab.graphics.primitive.Image
         ColormapTree matlab.ui.container.Tree
         IntensitySliders matlabx.ui.widgets.uirangeslidereditfield
-    end
-
-    % Extra graphics handles, stored as struct to reduce clutter
-    properties (Access=private)
+        LabelsTree matlab.ui.container.Tree
+        
+        % Extra graphics handles, stored as struct to reduce clutter
         MenubarUI struct
         SettingsUI struct
+        LabelsUI struct
+        ContextMenuUI struct
+
     end
 
     % listeners
     properties (Access=private)
-        % L event.listener
         settingsL event.listener
         projectL event.listener
     end
 
-    % Derived properties for specific component groups to reduce clutter
+    % Derived UI components and values
     properties (Access=private,Dependent=true)
         RegionLinescanPlotAnnotations
+        uipanelTopChromePx
     end
-
-    properties (Access=private)
-        LabelsTree matlab.ui.container.Tree
-        LabelsUI struct
-        IsSyncingSelection (1,1) logical = false
-
-        CommandRouter matlabx.ui.control.CommandRouter
-    end
-
 
     % UI values
     properties (Access=private)
-
-        UICal matlabx.ui.calibration.UICalibration
-
         SettingsW = 300;
         Padding = 5;
         RowSpacing = 5;
         ColumnSpacing = 5;
-
         LogH = 200;
-
         FontSize = 12;
     end
 
-    properties (Dependent, Access=private)
-        uipanelTopChromePx
-    end
-
+    % UI update/sync flags
     properties (Access=private)
-        % flags to help coalesce/manage updates
         pendingSizeUpdate (1,1) logical = false
+        isSyncingSelection (1,1) logical = false
     end
 
-
-    %% Logging
-    properties
+    % CommnadRouter, Calibration, Log
+    properties (Access=private)
+        CommandRouter matlabx.ui.control.CommandRouter
+        UICal matlabx.ui.calibration.UICalibration
         Log matlabx.logging.Logger
     end
 
+    %% Public properties (model and settings)
 
-    %% Public properties
-
-    % Model (Project), processing settings
     properties
         Project model.STORMProject
         Settings app.config.Settings
     end
 
-    %% Constructor/Destructor
+    %% Constructor/destructor/setup helpers
     methods
 
         function obj = GUI()
@@ -609,6 +593,8 @@ classdef GUI < handle
             obj.LabelsTree = uitree(...
                 "Parent",item.Pane,...
                 "SelectionChangedFcn",@(~,e) obj.onSelectLabel(e));
+
+            obj.ContextMenuUI = struct('LabelsTreeNodeContextMenu',[]);
         end
 
         function setupLogWindow(obj)
@@ -776,7 +762,6 @@ classdef GUI < handle
 
     end
 
-
     %% Derived getters
     methods
 
@@ -787,9 +772,6 @@ classdef GUI < handle
                 val = obj.UICal.uipanelTopChromeHeightPx(obj.FontSize);
             end
         end
-
-
-
 
     end
 
@@ -811,7 +793,6 @@ classdef GUI < handle
             model.analysis.image.detectPlaques(I,"DisplayClusterOutput",true);
         end
 
-
         function onLogFlush(obj,lines)
             nOld = numel(obj.LogTextArea.Value);
             obj.LogTextArea.Value(nOld+1:nOld+numel(lines)) = cellstr(lines);
@@ -822,6 +803,10 @@ classdef GUI < handle
             app.Log.INFO("Exiting...");
             % delete the GUI, will also delete fig window
             obj.delete();
+        end
+
+        function debug(obj)
+            blah = 0;
         end
 
     end
@@ -954,7 +939,11 @@ classdef GUI < handle
 
         function refreshHotkeys(obj)
             % refresh hotkeys for label selection
-            obj.onLabelsChanged();
+            labels = obj.Project.LabelBank.labels;
+            for i = 1:numel(labels)
+                % add a hotkey for each label
+                obj.CommandRouter.addHotkey(labels(i).Hotkey,@(~,k) obj.onLabelHotkeyPressed(k));
+            end
         end
 
         function refreshComponentSizes(obj)
@@ -1148,12 +1137,25 @@ classdef GUI < handle
                 return
             end
 
+            % % add a box for each region, colored according to its label
+            % regs = img.RegionArray;
+            % for i = 1:numel(regs)
+            %     r = regs(i);
+            %     boxColor = obj.Project.LabelBank.getByID(r.LabelID).Color;
+            %     obj.Ax.Tools.Pick.addBox(r.ID, r.Center, r.BoxSize, ...
+            %         "EdgeColor", boxColor, "FaceColor", boxColor, "Label", r.Name);
+            % end
+
+
             % add a box for each region, colored according to its label
-            for r = img.RegionArray
+            for r = img.RegionArray'
                 boxColor = obj.Project.LabelBank.getByID(r.LabelID).Color;
                 obj.Ax.Tools.Pick.addBox(r.ID, r.Center, r.BoxSize, ...
                     "EdgeColor", boxColor, "FaceColor", boxColor, "Label", r.Name);
             end
+
+
+
             % apply selection status to region boxes
             obj.Ax.Tools.Pick.setSelectedBoxIDs(img.SelectedRegionIDs);
             % set active box
@@ -1233,6 +1235,12 @@ classdef GUI < handle
             obj.refreshRegionSummaryTable();
             obj.refreshRegionLinescanROI();
             obj.refreshRegionLinescanPlot();
+
+            % set active box
+            reg = obj.Project.ActiveRegion;
+            if ~isempty(reg)
+                obj.Ax.Tools.Pick.setActiveBoxID(reg.ID);
+            end
         end
 
         % --- COMPONENT CALLBACKS ---
@@ -1267,7 +1275,9 @@ classdef GUI < handle
             if ~isempty(reg)
                 obj.RegionListBox.Value = reg.ID;
             else
-                obj.RegionListBox.Value = img.RegionOrder(1);
+                % set new active region in model, event will drive UI sync
+                % obj.RegionListBox.Value = img.RegionOrder(1);
+                img.setActiveRegion(img.RegionOrder(1));
             end
         end
 
@@ -1377,16 +1387,16 @@ classdef GUI < handle
     methods (Access=private)
 
         function onLabelsChanged(obj)
-
-            labels = obj.Project.LabelBank.labels;
-
-            for i = 1:numel(labels)
-                % add a hotkey for each label
-                obj.CommandRouter.addHotkey(labels(i).Hotkey,@(~,k) obj.onLabelHotkeyPressed(k));
-            end
+        %ONLABELSCHANGED LabelsChanged event callback
+            % refresh UI and hotkeys
+            obj.refreshHotkeys();
+            obj.refreshLabelsTree();
+            obj.refreshRegionBoxes();
+            obj.refreshRegionSummaryTable();
         end
 
         function onLabelHotkeyPressed(obj,key)
+        %ONLABELHOTKEYPRESSED Shared callback for label hotkeys    
             if isempty(obj.Project), return; end
 
             % get label matching hotkey
@@ -1410,14 +1420,29 @@ classdef GUI < handle
         end
 
         function refreshLabelsTree(obj)
+        %REFRESHLABELSTREE Sync labels uitree to LabelBank
             if isempty(obj.Project) || isempty(obj.LabelsTree) || ~isvalid(obj.LabelsTree)
                 return
             end
 
             delete(obj.LabelsTree.Children);
 
+            % get label bank and labels
             bank = obj.Project.LabelBank;
             arr = bank.labels();
+
+            % --- build context menu for tree nodes ---
+            % delete old context menu if valid
+            CM = obj.ContextMenuUI.LabelsTreeNodeContextMenu;
+            if ~isempty(CM)
+                delete(CM(isvalid(CM)));
+            end
+            % make new context menu
+            obj.ContextMenuUI.LabelsTreeNodeContextMenu = uicontextmenu(obj.Fig);
+            % add menu options
+            uimenu(obj.ContextMenuUI.LabelsTreeNodeContextMenu, ...
+                "Text","Edit", ...
+                "MenuSelectedFcn",@(~,e) obj.onEditLabel(e))
 
             for k = 1:numel(arr)
                 L = arr(k);
@@ -1425,9 +1450,16 @@ classdef GUI < handle
                 if strlength(L.Hotkey) > 0
                     txt = txt + "  [" + L.Hotkey + "]";
                 end
-                uitreenode("Parent",obj.LabelsTree,...
-                    "Text",txt,...
-                    "NodeData",L.ID);
+                % create tree node
+                tempNode = uitreenode("Parent",obj.LabelsTree,"Text",txt);
+                % IMPORTANT - set NodeData outside the constructor call in case label ID is "default"
+                tempNode.NodeData = L.ID;
+                % add the context menu to the newly created node
+                tempNode.ContextMenu = obj.ContextMenuUI.LabelsTreeNodeContextMenu;
+
+                % create uistyle and add to the node
+                nodeStyle = uistyle("Icon",reshape(L.Color,1,1,3));
+                addStyle(obj.LabelsTree,nodeStyle,"node",tempNode);
             end
 
             % select active label node if possible
@@ -1441,15 +1473,6 @@ classdef GUI < handle
 
         function clearLabelsTree(obj)
             delete(obj.LabelsTree.Children);
-        end
-
-        function onSelectLabel(obj, evt)
-            if isempty(obj.Project), return; end
-            node = evt.SelectedNodes;
-            if isempty(node) || isempty(node.NodeData)
-                return
-            end
-            obj.Project.LabelBank.setActiveByID(string(node.NodeData));
         end
 
         function applyActiveLabelToSelection(obj)
@@ -1473,6 +1496,9 @@ classdef GUI < handle
 
             % recolor overlays
             obj.Ax.Tools.Pick.setBoxesColorByIDs(ids, L.Color);
+
+            % refresh region table
+            obj.refreshRegionSummaryTable();
         end
 
         function clearLabelOnSelection(obj)
@@ -1491,6 +1517,57 @@ classdef GUI < handle
 
             obj.Ax.Tools.Pick.setBoxesEdgeColorByIDs(ids, 'w');
         end
+
+        % labels uitree callbacks
+        function onSelectLabel(obj, evt)
+            if isempty(obj.Project), return; end
+            if isempty(evt.SelectedNodes) || isempty(evt.SelectedNodes.NodeData), return; end
+            % get label ID from NodeData of selected node
+            labelID = string(evt.SelectedNodes.NodeData);
+            obj.Project.LabelBank.setActiveByID(labelID);
+        end
+
+        % labels uitree context menu callbacks
+        function onEditLabel(obj, evt)
+            % get clicked node from InteractionInformation of event payload
+            clickedNode = evt.InteractionInformation.Node;
+            % get label ID from NodeData of right-clicked node
+            labelID = string(clickedNode.NodeData);
+            % get the active label using its ID
+            label = obj.Project.LabelBank.getByID(labelID);
+            % open form dialog to edit label info
+            obj.Fig.Visible = 'off';
+            labelInfo = matlabx.app.ParamsDialog.prompt( ...
+                'Edit label info', ...
+                {'Name','Name','string',label.Name,@(x) strlength(x) > 0,'Name cannot be blank'}, ...
+                {'ID','ID','string',label.ID,@(x) strlength(x) > 0,'ID cannot be blank'}, ...
+                {'Hotkey','Hotkey','string',label.Hotkey,@(x) strlength(x) <= 1,'Hotkey must be a single alphanumeric character or empty'}, ...
+                {'Color','Color','color',label.Color});
+            % return if empty
+            if isempty(labelInfo)
+                obj.Fig.Visible = 'on';
+                return
+            end
+
+            % get regions labeled with the label being edited
+            regs = obj.Project.getRegionsByLabelID(label.ID);
+
+            % set new LabelID for those regions
+            if ~isempty(regs)
+                set(regs,"LabelID",labelInfo.ID);
+            end
+
+            % update the label
+            obj.Project.LabelBank.edit(label.ID, ...
+                "Name",labelInfo.Name, ...
+                "ID",labelInfo.ID, ...
+                "Hotkey",labelInfo.Hotkey, ...
+                "Color",labelInfo.Color);
+            obj.Fig.Visible = 'on';
+        end
+
+
+
 
     end
 
@@ -2099,7 +2176,7 @@ classdef GUI < handle
         end
 
         function onBoxSelectionChanged(obj, data)
-            if obj.IsSyncingSelection
+            if obj.isSyncingSelection
                 return
             end
 
@@ -2107,18 +2184,17 @@ classdef GUI < handle
             img = obj.Project.ActiveImage;
             if isempty(img), return; end
 
-            obj.IsSyncingSelection = true;
+            obj.isSyncingSelection = true;
 
             if isempty(ids)
                 img.clearRegionSelection();
-                %img.setActiveRegion("");
             else
                 %obj.RegionListBox.Value = ids;        % multi-select
                 img.setRegionSelection(ids);
                 %img.setActiveRegion(ids(end));        % last in selection is active
             end
 
-            obj.IsSyncingSelection = false;
+            obj.isSyncingSelection = false;
         end
 
     end
