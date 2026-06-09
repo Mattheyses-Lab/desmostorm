@@ -6,9 +6,6 @@ classdef RegionLabel < handle
         Name (1,1) string = ""
         Hotkey (1,1) string = ""   % e.g. "1", "a", "q"
         Color (1,3) double = [1 1 1]
-    end
-
-    properties (SetAccess=private)
         CreatedAt datetime = datetime('now')
     end
 
@@ -26,7 +23,7 @@ classdef RegionLabel < handle
             if strlength(opts.ID) > 0
                 obj.ID = opts.ID;
             else
-                obj.ID = utils.uniqueID();
+                obj.ID = matlabx.utils.text.uniqueID();
             end
 
             obj.Hotkey = lower(string(opts.Hotkey));
