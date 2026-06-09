@@ -16,13 +16,7 @@ function out = formatColumnName(in)
         'ROIHeight_px',         'ROI Height (px)';...
         'ROIWidth_phys',        'ROI Width';...
         'ROIHeight_phys',       'ROI Height';...
-        'ROIRotationAngle',     'ROI Rotation Angle (°)';...
-        'PeakDistance_px',      'Peak Distance (px)';...
-        'PeakWidth1_px',        'Peak Width 1 (px)';...
-        'PeakWidth2_px',        'Peak Width 2 (px)';...
-        'PeakDistance_phys',    'Peak Distance';...
-        'PeakWidth1_phys',      'Peak Width 1';...
-        'PeakWidth2_phys',      'Peak Width 2';...
+        'ROIRotationAngle',     'ROI Rotation Angle (°)'...
         };
 
     map = containers.Map(key_value_pairs(:,1),key_value_pairs(:,2));
@@ -30,7 +24,43 @@ function out = formatColumnName(in)
     if isKey(map, in)
         out = map(in);
     else
-        % input used as output
-        out = in;
+        % try to auto format
+        out = autoFormat(in);
     end
+
+
+    function str2 = autoFormat(str)
+
+        % Convert underscores into alternating parentheses
+        parenOpen = true;
+        str2 = strings(1,0);
+        
+        for k = 1:numel(str)
+            if str(k) == '_'
+                if parenOpen
+                    str2(end+1) = " (";
+                else
+                    str2(end+1) = ") ";
+                end
+                parenOpen = ~parenOpen;
+            else
+                str2(end+1) = string(str(k));
+            end
+        end
+        
+        str2 = char(join(str2,""));
+        
+        % Add spaces between lowercase-to-uppercase transitions
+        str2 = regexprep(str2, '([a-z])([A-Z])', '$1 $2');
+        
+        % Add spaces between letters and numbers in either direction
+        str2 = regexprep(str2, '([A-Za-z])([0-9])', '$1 $2');
+        str2 = regexprep(str2, '([0-9])([A-Za-z])', '$1 $2');
+        
+        % Clean up repeated spaces
+        str2 = regexprep(str2, '\s+', ' ');
+        str2 = strtrim(str2);
+
+    end
+
 end
