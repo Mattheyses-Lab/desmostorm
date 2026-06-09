@@ -449,7 +449,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
 
 
         function T = exportRegionTable(obj)
-            T = cell2mat(arrayfun(@(img) img.exportRegionTable(),obj.ImageArray','UniformOutput',false));
+            T = cell2mat(arrayfun(@(img) img.exportRegionTable(),obj.ImageArray,'UniformOutput',false));
         end
 
         function exportRegionTableToXlsx(obj, filename)
