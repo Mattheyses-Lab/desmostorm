@@ -691,14 +691,16 @@ classdef GUI < handle
         function setupRegionSummaryTable(obj)
             obj.RegionSummaryPanel = uipanel(obj.RegionGrid,...
                 'Title','Region Summary',...
-                'BackgroundColor',[.12 .12 .12]);
+                'BackgroundColor',[.12 .12 .12],...
+                'Scrollable','on');
             obj.RegionSummaryPanel.Layout.Row = 1;
             obj.RegionSummaryPanel.Layout.Column = 2;
 
             obj.RegionSummaryPanelGrid = uigridlayout(obj.RegionSummaryPanel,[1,1],...
                 "ColumnWidth",{'1x'},...
                 "RowHeight",{'1x'},...
-                "Padding",[0 0 0 0]);
+                "Padding",[0 0 0 0],...
+                "Scrollable","on");
 
             obj.RegionSummaryTable = uitable(obj.RegionSummaryPanelGrid,...
                 "ColumnName",{});
@@ -976,6 +978,11 @@ classdef GUI < handle
             % set sizes
             set(obj.ImageViewerPanelGrid,"RowHeight",{imageH},"ColumnWidth",{imageW});
             set(obj.RegionViewerPanelGrid,"RowHeight",{regionH},"ColumnWidth",{regionW});
+
+            % test below
+            set(obj.RegionSummaryPanelGrid,"RowHeight",{regionH});
+            % end test
+
             obj.RegionGrid.RowHeight{2} = plotPanelOuterH;
 
             drawnow
@@ -1233,7 +1240,7 @@ classdef GUI < handle
         %SYNCACTIVEREGIONTOVIEW Sync UI to ActiveRegion
             obj.refreshRegionViewer();
             obj.refreshRegionSummaryTable();
-            obj.refreshRegionLinescanROI();
+            obj.refreshRegionROI();
             obj.refreshRegionLinescanPlot();
 
             % set active box
@@ -1365,7 +1372,7 @@ classdef GUI < handle
             set(obj.RegionLinescanPlot,'Data',model.analysis.PeaksData.empty(),'Title','');
         end
 
-        function refreshRegionLinescanROI(obj)
+        function refreshRegionROI(obj)
         %REFRESHREGIONLINESCANROI Sync RegionLinescanROI to ActiveRegion    
             img = obj.Project.ActiveImage;
             % if empty, clear linescan position and return
@@ -1373,12 +1380,12 @@ classdef GUI < handle
                 obj.clearRegionLinescanROI(); return
             end
             % update linescan ROI position
-            obj.RegionViewer.Tools.DrawRectangle.setROIPosition(img.ActiveRegion.Linescan);
+            obj.RegionViewer.Tools.DrawRectangle.setROIPosition(img.ActiveRegion.ROI);
         end
 
         function clearRegionLinescanROI(obj)
         %CLEARREGIONLINESCANROI Reset RegionLinescanROI
-            obj.RegionViewer.Tools.DrawRectangle.setROIPosition(model.STORMRegion.LinescanTemplate);
+            obj.RegionViewer.Tools.DrawRectangle.setROIPosition(model.STORMRegion.ROITemplate);
         end
 
     end
@@ -1621,7 +1628,7 @@ classdef GUI < handle
                     obj.Project.removeAllRegions();
                     % refresh the display for the current image
                     obj.syncActiveImageToView();
-                    obj.refreshRegionLinescanROI();
+                    obj.refreshRegionROI();
                     obj.refreshRegionLinescanPlot();
                     % update BoxSize for Pick tool
                     obj.Ax.Tools.Pick.BoxSize = obj.Settings.Analysis.BoxSize;
@@ -1729,9 +1736,9 @@ classdef GUI < handle
             if isequal(file,0), return; end % cancelled | no files selected -> return
             fname = fullfile(path, file);
             % update log
-            app.Log.INFO(sprintf('Loading project file: %s',fname));
+            app.Log.INFO(sprintf("Loading project file: %s",fname));
             % set up progress dialog
-            msg = sprintf('Loading project file:\n%s',fname);
+            msg = sprintf("Loading project file:\n%s",fname);
             h = uiprogressdlg(obj.Fig,"Message",msg,'Indeterminate','on');
             % cleanup before loading
             obj.Project.delete();   % delete project
@@ -1755,7 +1762,7 @@ classdef GUI < handle
             % close progress dialog
             close(h);
             % update log
-            app.Log.INFO(sprintf('Successfully loaded project file: %s',fname));
+            app.Log.INFO(sprintf("Successfully loaded project file: %s",fname));
         end
 
         function onClose(obj)
@@ -1783,9 +1790,9 @@ classdef GUI < handle
             if isequal(file,0), return; end % cancelled | no files selected -> return
             fname = fullfile(path, file);
             % update log
-            app.Log.INFO(sprintf('Saving project file: %s',fname));
+            app.Log.INFO(sprintf("Saving project file: %s",fname));
             % create progress dialog
-            msg = sprintf('Saving project file:\n%s',fname);
+            msg = sprintf("Saving project file:\n%s",fname);
             h = uiprogressdlg(obj.Fig,"Message",msg,'Indeterminate','on');
             % save the project
             obj.Project.save(fname,obj.Settings);
@@ -1794,7 +1801,7 @@ classdef GUI < handle
             % clost progress dialog
             close(h);
             % update log
-            app.Log.INFO(sprintf('Successfully saved project file: %s',fname));
+            app.Log.INFO(sprintf("Successfully saved project file: %s",fname));
         end
 
         function onSaveSettings(obj)
@@ -2202,17 +2209,17 @@ classdef GUI < handle
     %% Event handlers for DrawRectangle tool callbacks
     methods (Access=private)
 
-        function onROIPreviewMoved(obj,data)
-            obj.onROIMoveCommitted(data);
+        function onROIPreviewMoved(obj,ROI)
+            obj.onROIMoveCommitted(ROI);
         end
 
-        function onROIMoveCommitted(obj,data)
+        function onROIMoveCommitted(obj,ROI)
             % get the ActiveImage, exit if empty
             img = obj.Project.ActiveImage; if isempty(img), return; end
             % get the ActiveRegion, exit if empty
             reg = img.ActiveRegion; if isempty(reg), return; end
             % update region linescan properties
-            reg.updateLinescan(data);
+            reg.updateROI(ROI);
             % process the linescan for this region
             img.processRegionLinescan(reg,obj.getRunConfig());
             % update the region linescan plot
@@ -2229,9 +2236,9 @@ classdef GUI < handle
             % get the ActiveRegion, exit if empty
             reg = img.ActiveRegion; if isempty(reg), return; end
             % reset linescan ROI for the active region (also resets linescan results)
-            img.resetRegionLinescan(reg);
+            img.resetRegionROI(reg);
             % update linescan
-            obj.refreshRegionLinescanROI();
+            obj.refreshRegionROI();
             obj.refreshRegionLinescanPlot();
             % update RegionSummaryTable
             obj.RegionSummaryTable.Data = reg.SummaryTable;
@@ -2371,7 +2378,7 @@ classdef GUI < handle
                     end
 
                     % update linescan ROI position
-                    ax.Tools.DrawRectangle.setROIPosition(regs(j).Linescan);
+                    ax.Tools.DrawRectangle.setROIPosition(regs(j).ROI);
 
                     % update uilabel Text
                     l.Text = regs(j).TextSummaryTable;
