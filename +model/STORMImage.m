@@ -487,7 +487,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
             % get region CData cell
             I = obj.regionSubimageCell(reg);
             % get linescan info
-            data = reg.Linescan;
+            data = reg.ROI;
 
             % run region analyzer
             LinescanResults = model.analysis.Analyzer.run(I,data,config);
@@ -499,9 +499,9 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
             reg.updateLinescanResults(LinescanResults);
         end
 
-        function resetRegionLinescan(~,reg)
-            % reset all linescan params to NaN
-            reg.resetLinescan();
+        function resetRegionROI(~,reg)
+            % reset ROI to default
+            reg.resetROI();
         end
 
         % --- autofit Region ROIs ---
@@ -530,13 +530,11 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
             % get region CData
             I = obj.regionSubimage(reg);
             % get linescan info
-            ROIData = model.analysis.Analyzer.autofitRegionROI(I, config);
+            ROI = model.analysis.Analyzer.autofitRegionROI(I, config);
 
-            if isempty(ROIData)
-                return
-            end
+            if isempty(ROI), return; end
 
-            reg.updateLinescan(ROIData);
+            reg.updateROI(ROI);
         end
 
         % --- retrieve Region subimage ---
@@ -711,7 +709,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
                 return
             end
 
-            T = cell2mat(arrayfun(@(r) struct2table(r.exportRow()),regs','UniformOutput',false));
+            T = cell2mat(arrayfun(@(r) struct2table(r.exportRow()),regs,'UniformOutput',false));
         end
 
     end
@@ -785,7 +783,15 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
             % get Region objects
             regs = obj.RegionArray;
             % initialize empty Regions struct
-            %I.Regions = repmat(struct(), 1, numel(regs));
+            % nRegions = numel(regs);
+            % 
+            % if nRegions == 0
+            %     I.Regions = struct.empty();
+            %     return
+            % end
+
+            I.Regions = struct.empty();
+
             % populate with struct for each Region
             for r = 1:numel(regs)
                 reg = regs(r);
