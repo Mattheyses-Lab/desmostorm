@@ -2,8 +2,8 @@ classdef PeaksData
 
     % input data
     properties
-        Y (:,1) double  % signal with peaks
-        X (:,1) double  % distance/time/etc. vector
+        Y (:,1) double  % signal values
+        X (:,1) double  % signal value location vector (distance/time/etc)
     end
 
     % processed input
@@ -26,13 +26,34 @@ classdef PeaksData
         RecomputeWidths     (1,1) logical   % T/F - whether to recompute widths from findpeaks() to match FWHM annotations
     end
 
-    % output measurements
+    % primary output measurements
     properties
         PeakValues      (:,1) double = []
         PeakLocations   (:,1) double = []
         PeakWidths      (:,1) double = []
         PeakProminences (:,1) double = []
         PeakDistances   (:,1) double = []
+    end
+
+    % additional collected outputs for central peak pair (if it exists)
+    properties
+        % CentralPeakPairValues      (:,1) double = []
+        % CentralPeakPairLocations   (:,1) double = []
+        % CentralPeakPairWidths      (:,1) double = []
+        % CentralPeakPairProminences (:,1) double = []
+        CentralPeakPairDistance    (:,1) double = []
+
+        LeftPeakIdx         (:,1) double = []
+        LeftPeakValue       (:,1) double = []
+        LeftPeakLocation    (:,1) double = []
+        LeftPeakWidth       (:,1) double = []
+        LeftPeakProminence  (:,1) double = []
+
+        RightPeakIdx         (:,1) double = []
+        RightPeakValue       (:,1) double = []
+        RightPeakLocation    (:,1) double = []
+        RightPeakWidth       (:,1) double = []
+        RightPeakProminence  (:,1) double = []
     end
 
     % plot annotation coordinates
@@ -53,7 +74,10 @@ classdef PeaksData
 
     % other derived outputs
     properties(Dependent)
-        nPeaks (1,1) double
+        nPeaks              (1,1) double
+        hasCentralPeakPair  (1,1) logical
+        hasLeftPeak         (1,1) logical
+        hasRightPeak        (1,1) logical
     end
 
 
@@ -137,6 +161,20 @@ classdef PeaksData
             obj.PeakToPeakLabelXY = out.PeakToPeakLabelXY;
             % if required, replace PeakWidths from findpeaks() with those measured directly from the FWHM lines
             if obj.RecomputeWidths, obj.PeakWidths = out.PeakWidths; end
+
+            % --- COLLECT OUTPUT STATS FOR CENTRAL PEAK PAIR ---
+            out = obj.getCentralPeakPairStats();
+            obj.LeftPeakIdx             = out.LeftPeakIdx;
+            obj.LeftPeakValue           = out.LeftPeakValue;
+            obj.LeftPeakLocation        = out.LeftPeakLocation;
+            obj.LeftPeakWidth           = out.LeftPeakWidth;
+            obj.LeftPeakProminence      = out.LeftPeakProminence;
+            obj.RightPeakIdx            = out.RightPeakIdx;
+            obj.RightPeakValue          = out.RightPeakValue;
+            obj.RightPeakLocation       = out.RightPeakLocation;
+            obj.RightPeakWidth          = out.RightPeakWidth;
+            obj.RightPeakProminence     = out.RightPeakProminence;
+            obj.CentralPeakPairDistance = out.CentralPeakPairDistance;
         end
 
         function h = plot(obj,opts)
@@ -155,6 +193,79 @@ classdef PeaksData
         end
 
     end
+
+
+    %% extra analysis helpers
+    methods
+
+        function out = getCentralPeakPairStats(obj)
+
+            % initialize struct
+            out = struct(...
+                'LeftPeakIdx',              [], ...
+                'LeftPeakValue',            [], ...
+                'LeftPeakLocation',         [], ...
+                'LeftPeakWidth',            [], ...
+                'LeftPeakProminence',       [], ...
+                'RightPeakIdx',             [], ...
+                'RightPeakValue',           [], ...
+                'RightPeakLocation',        [], ...
+                'RightPeakWidth',           [], ...
+                'RightPeakProminence',      [], ...
+                'CentralPeakPairDistance',  []);
+
+            % make sure we have at least 1 peak
+            if obj.nPeaks == 0, return; end
+
+            % convert peak locations to idxs
+            locs = obj.PeakLocations;
+            locs = arrayfun(@(loc) find(obj.X==loc,1),locs);
+
+            % convert location vector to idxs
+            nSamples = numel(obj.X);
+            %Xidx = 1:nSamples;
+
+            % find central peak pair, first peak to the left and right of the signal midpoint
+            midIdx = nSamples/2;
+
+            % first peak moving left from the middle of the signal
+            %peakIdx1 = find(locs<midIdx,1,"last");
+            leftPeakIdx = find(locs<midIdx,1,"last");
+
+            % first peak moving right from the middle of the signal
+            % peakIdx2 = find(locs>midIdx,1,"first");
+            rightPeakIdx = find(locs>midIdx,1,"first");
+
+            % assign left peak stats
+            if ~isempty(leftPeakIdx)
+                out.LeftPeakIdx             = leftPeakIdx;
+                out.LeftPeakValue           = obj.PeakValues(leftPeakIdx);
+                out.LeftPeakLocation        = obj.PeakLocations(leftPeakIdx);
+                out.LeftPeakWidth           = obj.PeakWidths(leftPeakIdx);
+                out.LeftPeakProminence      = obj.PeakProminences(leftPeakIdx);
+
+            end
+
+            % assign right peak stats
+            if ~isempty(rightPeakIdx)
+                out.RightPeakIdx            = rightPeakIdx;
+                out.RightPeakValue          = obj.PeakValues(rightPeakIdx);
+                out.RightPeakLocation       = obj.PeakLocations(rightPeakIdx);
+                out.RightPeakWidth          = obj.PeakWidths(rightPeakIdx);
+                out.RightPeakProminence     = obj.PeakProminences(rightPeakIdx);
+            end
+
+            % get central peak pair distance if possible
+            if ~isempty(leftPeakIdx) && ~isempty(rightPeakIdx)
+                out.CentralPeakPairDistance = obj.PeakDistances(leftPeakIdx);
+            end
+
+        end
+
+
+    end
+
+
 
 
     %% derived getters
@@ -198,6 +309,20 @@ classdef PeaksData
         function n = get.nPeaks(obj)
             n = numel(obj.PeakLocations);
         end
+
+
+        function tf = get.hasCentralPeakPair(obj)
+            tf = obj.hasLeftPeak && obj.hasRightPeak;
+        end
+
+        function tf = get.hasLeftPeak(obj)
+            tf = ~isempty(obj.LeftPeakIdx);
+        end
+
+        function tf = get.hasRightPeak(obj)
+            tf = ~isempty(obj.RightPeakIdx);
+        end
+
 
     end
 
