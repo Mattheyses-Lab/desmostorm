@@ -29,6 +29,10 @@ classdef PixelSize
                 mode = 'physical';
             end
 
+            if isempty(lenPx) % default to NaN if length is empty
+                lenPx = NaN;
+            end
+
             switch obj.Unit
                 case 'px'
                     s = sprintf('%.3g px', lenPx);
