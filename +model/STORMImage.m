@@ -394,7 +394,9 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
                     notify(obj,'ActiveRegionChanged');
                 end
 
-                remove(obj.RegionsDict, regionID);
+                % remove(obj.RegionsDict, regionID);
+                obj.RegionsDict = obj.RegionsDict.remove(regionID);
+                
                 obj.RegionOrder = obj.RegionOrder(obj.RegionOrder ~= regionID);
                 obj.SelectedRegionIDs = obj.SelectedRegionIDs(obj.SelectedRegionIDs ~= regionID);
                 % notify app that region was removed *after* mutating RegionOrder
@@ -790,7 +792,12 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
             %     return
             % end
 
-            I.Regions = struct.empty();
+            % I.Regions = struct.empty();
+
+            if numel(regs)==0
+                I.Regions = struct.empty();
+                return
+            end
 
             % populate with struct for each Region
             for r = 1:numel(regs)
