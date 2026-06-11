@@ -17,17 +17,6 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
     end
 
     %% Images (dictionary + order) and active selection
-    % properties (Access=private)
-    %     ImagesDict = dictionary   % string ID -> model.STORMImage
-    %     ImageOrder (1,:) string = string.empty(1,0)
-    %     ActiveImageID (1,:) string = string.empty(1,0)
-    % end
-
-    % properties (Access=private)
-    %     ImageDataCacheSize (1,1) double {mustBeNonnegative, mustBeInteger} = 2  % active + 1 previous
-    %     RecentImageIDs (1,:) string = string.empty(1,0)
-    % end
-
     properties (Access=private)
         ImagesDict = dictionary   % string ID -> model.STORMImage
         ImageOrder (:,1) string = string.empty(0,1)
@@ -51,32 +40,37 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
         ActiveRegion (:,1) model.STORMRegion
     end
 
-    %% Project-wide defaults
+    %% Project-wide info
     properties
         DefaultPixelSize model.units.PixelSize = model.units.PixelSize(1, 'px');
+
+        MaxSizeC (1,1) double = 0
     end
 
     %% Events and listeners
 
-    % (GUI controller listens)
+    % % (GUI controller listens)
+    % events
+    % 
+    % end
+
+    % (Project and GUI controller listen)
     events
         ImageAdded
         ImageRemoved
         ActiveImageChanged
-    end
 
-    % (Project and GUI controller listen)
-    events
         RegionAdded
         RegionRemoved
         ActiveRegionChanged
         RegionSelectionChanged
+
         LabelsChanged
     end
 
     properties
-        ActiveImageListener event.listener
         RegionListeners event.listener
+        ImageListeners event.listener
         LabelsChangedListener event.listener
     end
 
@@ -138,8 +132,10 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             % order of ImagesDict, empty string to start because our dictionary is empty
             obj.ImageOrder = string.empty(1,0);
 
-            % add a listener for the ActiveImageChanged event
-            obj.ActiveImageListener = addlistener(obj,'ActiveImageChanged',@(~,~) obj.onActiveImageChanged());
+            % add listeners for image-associated events
+            obj.ImageListeners(1) = addlistener(obj,'ImageAdded',@(~,evt) obj.onImageAdded(evt));
+            obj.ImageListeners(2) = addlistener(obj,'ImageRemoved',@(~,evt) obj.onImageRemoved(evt));
+            obj.ImageListeners(3) = addlistener(obj,'ActiveImageChanged',@(~,evt) obj.onActiveImageChanged(evt));
 
             % label registry, default labels to start
             obj.LabelBank = model.LabelRegistry.default();            
@@ -166,12 +162,9 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             % bind to dictionary and emit ImageAdded
             obj.ImagesDict(img.ID) = img;
             obj.ImageOrder(end+1) = img.ID;
-            notify(obj,'ImageAdded');
-        
-            if strlength(obj.ActiveImageID)==0
-                obj.setActiveImage(img.ID);
-            end
+
             imageID = img.ID;
+            notify(obj,'ImageAdded',model.events.ImageAdded(imageID));
         end
 
         % add a new model.STORMImage for each of the images located at the paths in the cell array, filePaths
@@ -193,35 +186,34 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             imageID = string(imageID);
             if ~isKey(obj.ImagesDict, imageID), return; end
 
-            % Clear active if removing it
-            if obj.ActiveImageID == imageID
-                obj.ActiveImageID = "";
-                notify(obj,'ActiveImageChanged');
-            end
-
-            remove(obj.ImagesDict, imageID);
+            obj.ImagesDict = obj.ImagesDict.remove(imageID);
             obj.ImageOrder = obj.ImageOrder(obj.ImageOrder ~= imageID);
-            notify(obj,'ImageRemoved');
+
+            notify(obj,'ImageRemoved',model.events.ImageRemoved(imageID));
         end
 
         function setActiveImage(obj, imageID)
-            %SETACTIVEIMAGE Set image as active by ID
+        %SETACTIVEIMAGE Set image as active by ID
 
-            imageID = string(imageID);
+            % store current active ID
+            oldID = obj.ActiveImageID;
+
+            % ID we are going to make active
+            newID = string(imageID);
 
             % prevent unnecessary updates, return if image is already active
-            if imageID == obj.ActiveImageID, return; end
+            if newID == obj.ActiveImageID, return; end
 
-            if strlength(imageID)==0
+            if strlength(newID)==0
                 obj.ActiveImageID = "";
-                notify(obj,'ActiveImageChanged');
+                notify(obj,'ActiveImageChanged',model.events.ActiveImageChanged("",oldID));
                 return
             end
-            if isKey(obj.ImagesDict, imageID)
-                obj.ActiveImageID = imageID;
+            if isKey(obj.ImagesDict, newID)
+                obj.ActiveImageID = newID;
 
                 % get the STORMImage
-                img = obj.getImage(imageID);
+                img = obj.getImage(newID);
 
                 % buffer image data if not already
                 if ~img.isLoaded
@@ -233,7 +225,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
                     img.ActiveRegionID = img.RegionArray(1).ID;
                 end
 
-                notify(obj,'ActiveImageChanged');
+                notify(obj,'ActiveImageChanged',model.events.ActiveImageChanged(newID,oldID));
             end
         end
 
@@ -358,24 +350,49 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
     %% Listener callbacks
     methods
 
-        function onActiveImageChanged(obj)
+        function onImageAdded(obj,evt)
+
+            obj.updateImageStats();
+
+
+
+            % set new image as active if none exists
+            if strlength(obj.ActiveImageID)==0
+                obj.setActiveImage(evt.ImageID);
+            end
+
+        end
+
+        function onImageRemoved(obj,evt)
+
+            obj.updateImageStats();
+
+            % if removed image was active, clear active image ID
+            if obj.ActiveImageID == evt.ImageID
+                obj.setActiveImage("");
+            end
+
+        end
+
+        function onActiveImageChanged(obj,evt)
 
             % --- buffer clearing policy: keep active + last N-1 ---
-            imgID = obj.ActiveImageID;
-        
+            % imageID = obj.ActiveImageID;
+            imageID = evt.NewID;
+
             % Update LRU list
-            if strlength(imgID) > 0
-                obj.RecentImageIDs(obj.RecentImageIDs == imgID) = [];
-                obj.RecentImageIDs = [imgID; obj.RecentImageIDs];
+            if strlength(imageID) > 0
+                obj.RecentImageIDs(obj.RecentImageIDs == imageID) = [];
+                obj.RecentImageIDs = [imageID; obj.RecentImageIDs];
                 if numel(obj.RecentImageIDs) > obj.ImageDataCacheSize
                     obj.RecentImageIDs = obj.RecentImageIDs(1:obj.ImageDataCacheSize);
                 end
             end
         
             % Clear anything not in cache list
-            imgIDs = obj.ImageOrder;
+            imageIDs = obj.ImageOrder;
             keep = obj.RecentImageIDs;
-            toClear = imgIDs(~ismember(imgIDs, keep));
+            toClear = imageIDs(~ismember(imageIDs, keep));
         
             for k = 1:numel(toClear)
                 if isKey(obj.ImagesDict, toClear(k))
@@ -396,11 +413,6 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             % get the new ActiveImage
             img = obj.ActiveImage;
 
-            % % TEST BELOW
-            % % buffer its image data
-            % img.bufferImageData();
-            % % END TEST
-
             % exit early if no ActiveImage
             if isempty(img), return; end
 
@@ -408,7 +420,6 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             obj.RegionListeners(1) = addlistener(img,'RegionAdded',             @(~,~) notify(obj,'RegionAdded'));
             obj.RegionListeners(2) = addlistener(img,'RegionRemoved',           @(~,~) notify(obj,'RegionRemoved'));
             obj.RegionListeners(3) = addlistener(img,'ActiveRegionChanged',     @(~,~) notify(obj,'ActiveRegionChanged'));
-
             obj.RegionListeners(4) = addlistener(img,'RegionSelectionChanged',  @(~,~) notify(obj,'RegionSelectionChanged'));
 
         end
@@ -431,6 +442,17 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
                 imgs(k).PixelSizeOverride = model.units.PixelSize.empty;
             end
         end
+
+        function updateImageStats(obj)
+
+            imgs = obj.ImageArray;
+
+            % argest SizeC across all images
+            obj.MaxSizeC = max([imgs(:).SizeC]);
+
+
+        end
+
 
     end
 
