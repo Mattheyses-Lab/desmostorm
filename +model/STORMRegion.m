@@ -39,7 +39,7 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
         LinescanResults (:,1) model.analysis.PeaksData = model.analysis.PeaksData.empty()
     end
 
-    %% Outputs
+    %% Derived outputs
     properties(Dependent)
         SummaryTable (:,:) table
     end
@@ -129,6 +129,10 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
             out = obj.PixelSize.px2phys(in);
         end
 
+        function out = getParentProject(obj)
+            out = obj.Parent.Parent;
+        end
+
     end
 
     %% Derived getters
@@ -216,41 +220,39 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
 
 
             % --- peak stats --- 
+            % get max number of channels in the project
+            proj = obj.getParentProject();
+            nChannels = proj.MaxSizeC;
 
-            % number of measurement channels we have peak data for
-            nResults = length(obj.LinescanResults);
+            peakStatNames = cell(nChannels*5,1);
+            peakStatValues = cell(1,nChannels*5);
+            for i = 1:nChannels
+                % helper idx for each set of 3 stats
+                ii = (i-1)*5;
+                % dynamic variable names per channel
+                peakStatNames{ii+1} = sprintf('Peak distance (C%i)',i);
+                peakStatNames{ii+2} = sprintf('Peak L FWHM (C%i)',i);
+                peakStatNames{ii+3} = sprintf('Peak L location (C%i)',i);
+                peakStatNames{ii+4} = sprintf('Peak R FWHM (C%i)',i);
+                peakStatNames{ii+5} = sprintf('Peak R location (C%i)',i);
 
-            if nResults == 0
-                peakStatNames = {'Peak distance';'Peak L FWHM';'Peak L location';'Peak R FWHM';'Peak R location'};
-                peakStatValues = cell(1,5);
-            else
-                peakStatNames = cell(nResults*5,1);
-                peakStatValues = cell(1,nResults*5);
-                for i = 1:nResults
-                    % helper idx for each set of 3 stats
-                    ii = (i-1)*5;
-                    % dynamic variable names per channel
-                    peakStatNames{ii+1} = sprintf('Peak distance (Channel %i)',i);
-                    peakStatNames{ii+2} = sprintf('Peak L FWHM (Channel %i)',i);
-                    peakStatNames{ii+3} = sprintf('Peak L location (Channel %i)',i);
-                    peakStatNames{ii+4} = sprintf('Peak R FWHM (Channel %i)',i);
-                    peakStatNames{ii+5} = sprintf('Peak R location (Channel %i)',i);
 
-                    if obj.LinescanResults(i).hasCentralPeakPair
-                        peakStatValues{ii+1} = obj.LinescanResults(i).CentralPeakPairDistance;
-                    end
+                if i > length(obj.LinescanResults), continue; end
 
-                    if obj.LinescanResults(i).hasLeftPeak
-                        peakStatValues{ii+2} = obj.LinescanResults(i).LeftPeakWidth;
-                        peakStatValues{ii+3} = obj.LinescanResults(i).LeftPeakLocation;
-                    end
-
-                    if obj.LinescanResults(i).hasRightPeak
-                        peakStatValues{ii+4} = obj.LinescanResults(i).RightPeakWidth;
-                        peakStatValues{ii+5} = obj.LinescanResults(i).RightPeakLocation;
-                    end
-
+                if obj.LinescanResults(i).hasCentralPeakPair
+                    peakStatValues{ii+1} = obj.LinescanResults(i).CentralPeakPairDistance;
                 end
+
+                if obj.LinescanResults(i).hasLeftPeak
+                    peakStatValues{ii+2} = obj.LinescanResults(i).LeftPeakWidth;
+                    peakStatValues{ii+3} = obj.LinescanResults(i).LeftPeakLocation;
+                end
+
+                if obj.LinescanResults(i).hasRightPeak
+                    peakStatValues{ii+4} = obj.LinescanResults(i).RightPeakWidth;
+                    peakStatValues{ii+5} = obj.LinescanResults(i).RightPeakLocation;
+                end
+
             end
 
             % format peak stats for display in table
@@ -345,63 +347,52 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
             % row.PeakWidth2_phys     = obj.px2phys(row.PeakWidth2_px);
 
 
-
+            proj = obj.getParentProject();
+            nChannels = proj.MaxSizeC;
 
             nResults = length(L);
 
-            if nResults == 0
-                row.('PeakDistance_px_')        = NaN;
-                row.('LeftPeakFWHM_px_')        = NaN;
-                row.('RightPeakFWHM_px_')       = NaN;
-                row.('LeftPeakLocation_px_')    = NaN;
-                row.('RightPeakLocation_px_')   = NaN;
-                row.('PeakDistance')            = NaN;
-                row.('LeftPeakFWHM')            = NaN;
-                row.('RightPeakFWHM')           = NaN;
-                row.('LeftPeakLocation')        = NaN;
-                row.('RightPeakLocation')       = NaN;
+            for i = 1:nChannels
 
-            else
-                for i = 1:nResults
+                % default values
+                leftPeakFWHM_px         = NaN;
+                leftPeakLocation_px     = NaN;
+                rightPeakFWHM_px        = NaN;
+                rightPeakLocation_px    = NaN;
+                peakDistance_px         = NaN;
+
+                % replace default values with region results if they exist
+                if i <= nResults
 
                     if L(i).hasLeftPeak
                         leftPeakFWHM_px     = round(L(i).LeftPeakWidth,2);
                         leftPeakLocation_px = round(L(i).LeftPeakLocation,2);
-                    else
-                        leftPeakFWHM_px     = NaN;
-                        leftPeakLocation_px = NaN;
                     end
 
                     if L(i).hasRightPeak
                         rightPeakFWHM_px     = round(L(i).RightPeakWidth,2);
                         rightPeakLocation_px = round(L(i).RightPeakLocation,2);
-                    else
-                        rightPeakFWHM_px     = NaN;
-                        rightPeakLocation_px = NaN;
                     end
 
                     if L(i).hasCentralPeakPair
                         peakDistance_px = round(L(i).CentralPeakPairDistance,2);
-                    else
-                        peakDistance_px = NaN;
                     end
 
-                    row.(sprintf('PeakDistance_px__Channel%i_',i))      = peakDistance_px;
-                    row.(sprintf('LeftPeakFWHM_px__Channel%i_',i))      = leftPeakFWHM_px;
-                    row.(sprintf('RightPeakFWHM_px__Channel%i_',i))     = rightPeakFWHM_px;
-                    row.(sprintf('LeftPeakLocation_px__Channel%i_',i))  = leftPeakLocation_px;
-                    row.(sprintf('RightPeakLocation_px__Channel%i_',i)) = rightPeakLocation_px;
-
-                    row.(sprintf('PeakDistance_Channel%i_',i))          = obj.px2phys(peakDistance_px);
-                    row.(sprintf('LeftPeakFWHM_Channel%i_',i))          = obj.px2phys(leftPeakFWHM_px);
-                    row.(sprintf('RightPeakFWHM_Channel%i_',i))         = obj.px2phys(rightPeakFWHM_px);
-                    row.(sprintf('LeftPeakLocation_Channel%i_',i))      = obj.px2phys(leftPeakLocation_px);
-                    row.(sprintf('RightPeakLocation_Channel%i_',i))     = obj.px2phys(rightPeakLocation_px);
-
                 end
+
+                row.(sprintf('PeakDistance_px__C%i_',i))      = peakDistance_px;
+                row.(sprintf('LeftPeakFWHM_px__C%i_',i))      = leftPeakFWHM_px;
+                row.(sprintf('RightPeakFWHM_px__C%i_',i))     = rightPeakFWHM_px;
+                row.(sprintf('LeftPeakLocation_px__C%i_',i))  = leftPeakLocation_px;
+                row.(sprintf('RightPeakLocation_px__C%i_',i)) = rightPeakLocation_px;
+
+                row.(sprintf('PeakDistance_C%i_',i))          = obj.px2phys(peakDistance_px);
+                row.(sprintf('LeftPeakFWHM_C%i_',i))          = obj.px2phys(leftPeakFWHM_px);
+                row.(sprintf('RightPeakFWHM_C%i_',i))         = obj.px2phys(rightPeakFWHM_px);
+                row.(sprintf('LeftPeakLocation_C%i_',i))      = obj.px2phys(leftPeakLocation_px);
+                row.(sprintf('RightPeakLocation_C%i_',i))     = obj.px2phys(rightPeakLocation_px);
+
             end
-
-
 
         end
         
