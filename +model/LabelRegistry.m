@@ -27,6 +27,11 @@ classdef LabelRegistry < handle
             ids = obj.Order;
         end
 
+        function hotkeys = hotkeys(obj)
+            lbls = obj.labels();
+            hotkeys = [lbls(:).Hotkey];
+        end
+
         function arr = labels(obj)
             if isempty(obj.Order)
                 arr = model.RegionLabel.empty();
