@@ -23,7 +23,7 @@ function P = buildPatchTableFromProject(project, opts)
 %   overlap with user-labeled positives and user-labeled backgrounds.
 
 arguments
-    project (1,1) model.STORMProject
+    project (1,1) desmostorm.STORMProject
 
     opts.BoxSize (1,1) double {mustBePositive} = 300
     opts.NegPerPos (1,1) double {mustBeNonnegative} = 6

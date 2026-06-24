@@ -104,8 +104,8 @@ classdef GUI < handle
     %% Public properties (model and settings)
 
     properties
-        Project model.STORMProject
-        Settings app.config.Settings
+        Project desmostorm.model.STORMProject
+        Settings desmostorm.config.Settings
     end
 
     %% Constructor/destructor/setup helpers
@@ -114,32 +114,32 @@ classdef GUI < handle
         function obj = GUI()
 
             % --- Log ---
-            obj.Log = app.Log.get();
+            obj.Log = desmostorm.Log.get();
 
-            app.Log.INFO("Starting DesmoSTORM...");
+            desmostorm.Log.INFO("Starting DesmoSTORM...");
 
             % --- Settings ---
-            app.Log.INFO("Loading settings...");
+            desmostorm.Log.INFO("Loading settings...");
             try
-                obj.Settings = app.config.Settings.load();
+                obj.Settings = desmostorm.config.Settings.load();
             catch ME
-                app.Log.ERROR(ME); rethrow(ME);
+                desmostorm.Log.ERROR(ME); rethrow(ME);
             end
 
             % --- UICalibration ---
-            app.Log.INFO("Calibrating UI...");
-            try obj.setupUICalibration(); catch ME, app.Log.ERROR(ME); rethrow(ME); end
+            desmostorm.Log.INFO("Calibrating UI...");
+            try obj.setupUICalibration(); catch ME, desmostorm.Log.ERROR(ME); rethrow(ME); end
 
             % --- Build GUI ---
-            app.Log.INFO("Building GUI...");
-            try obj.buildGUI(); catch ME, app.Log.ERROR(ME); rethrow(ME); end
+            desmostorm.Log.INFO("Building GUI...");
+            try obj.buildGUI(); catch ME, desmostorm.Log.ERROR(ME); rethrow(ME); end
 
             % --- Initial UI sync ---
-            app.Log.INFO("Refreshing UI...");
-            try obj.refreshUI(); catch ME, app.Log.ERROR(ME); rethrow(ME); end
+            desmostorm.Log.INFO("Refreshing UI...");
+            try obj.refreshUI(); catch ME, desmostorm.Log.ERROR(ME); rethrow(ME); end
 
             % --- Show figure ---
-            app.Log.INFO("Opening...");
+            desmostorm.Log.INFO("Opening...");
             obj.Fig.Visible = 'on';
 
             % --- Set UI sink for logger ---
@@ -156,44 +156,44 @@ classdef GUI < handle
 
         function buildGUI(obj)
             % --- Figure ---
-            app.Log.INFO("Setting up main figure window...");
-            try obj.setupFigure(); catch ME, app.Log.ERROR(ME); rethrow(ME); end
+            desmostorm.Log.INFO("Setting up main figure window...");
+            try obj.setupFigure(); catch ME, desmostorm.Log.ERROR(ME); rethrow(ME); end
 
             % --- CommandRouter ---
-            app.Log.INFO("Setting up CommandRouter...");
-            try obj.setupCommandRouter(); catch ME, app.Log.ERROR(ME); rethrow(ME); end
+            desmostorm.Log.INFO("Setting up CommandRouter...");
+            try obj.setupCommandRouter(); catch ME, desmostorm.Log.ERROR(ME); rethrow(ME); end
 
             % --- Menubar ---
-            app.Log.INFO("Setting up Menubar...");
-            try obj.setupMenubar(); catch ME, app.Log.ERROR(ME); rethrow(ME); end
+            desmostorm.Log.INFO("Setting up Menubar...");
+            try obj.setupMenubar(); catch ME, desmostorm.Log.ERROR(ME); rethrow(ME); end
 
             % --- Grids ---
-            app.Log.INFO("Setting up main grid layout managers...");
-            try obj.setupGrids(); catch ME, app.Log.ERROR(ME); rethrow(ME); end
+            desmostorm.Log.INFO("Setting up main grid layout managers...");
+            try obj.setupGrids(); catch ME, desmostorm.Log.ERROR(ME); rethrow(ME); end
 
             % --- Settings controllers ---
-            app.Log.INFO("Setting up settings controllers...");
-            try obj.setupSettingsControllers(); catch ME, app.Log.ERROR(ME); rethrow(ME); end
+            desmostorm.Log.INFO("Setting up settings controllers...");
+            try obj.setupSettingsControllers(); catch ME, desmostorm.Log.ERROR(ME); rethrow(ME); end
 
             % --- Log window ---
-            app.Log.INFO("Setting up log window...");
-            try obj.setupLogWindow(); catch ME, app.Log.ERROR(ME); rethrow(ME); end
+            desmostorm.Log.INFO("Setting up log window...");
+            try obj.setupLogWindow(); catch ME, desmostorm.Log.ERROR(ME); rethrow(ME); end
 
             % --- ImageViewer ---
-            app.Log.INFO("Setting up ImageViewer...");
-            try obj.setupImageViewer(); catch ME, app.Log.ERROR(ME); rethrow(ME); end
+            desmostorm.Log.INFO("Setting up ImageViewer...");
+            try obj.setupImageViewer(); catch ME, desmostorm.Log.ERROR(ME); rethrow(ME); end
 
             % --- RegionViewer ---
-            app.Log.INFO("Setting up RegionViewer...");
-            try obj.setupRegionViewer(); catch ME, app.Log.ERROR(ME); rethrow(ME); end
+            desmostorm.Log.INFO("Setting up RegionViewer...");
+            try obj.setupRegionViewer(); catch ME, desmostorm.Log.ERROR(ME); rethrow(ME); end
 
             % --- RegionSummaryTable ---
-            app.Log.INFO("Setting up RegionSummaryTable...");
-            try obj.setupRegionSummaryTable(); catch ME, app.Log.ERROR(ME); rethrow(ME); end
+            desmostorm.Log.INFO("Setting up RegionSummaryTable...");
+            try obj.setupRegionSummaryTable(); catch ME, desmostorm.Log.ERROR(ME); rethrow(ME); end
 
             % --- RegionLinescanPlot ---
-            app.Log.INFO("Setting up RegionSummaryTable...");
-            try obj.setupRegionLinescanPlot(); catch ME, app.Log.ERROR(ME); rethrow(ME); end
+            desmostorm.Log.INFO("Setting up RegionSummaryTable...");
+            try obj.setupRegionLinescanPlot(); catch ME, desmostorm.Log.ERROR(ME); rethrow(ME); end
 
             % center the GUI after defining all graphics components
             movegui(obj.Fig,"center");
@@ -204,7 +204,7 @@ classdef GUI < handle
             s = matlabx.ui.calibration.getScreenSize();
             % obj.Fig = uifigure(...
             %     'WindowStyle','alwaysontop',...
-            %     'Tag',app.Info.Name,...
+            %     'Tag',desmostorm.Info.Name,...
             %     'Name','DesmoSTORM',...
             %     'Color',[0 0 0],...
             %     'OuterPosition',s(1,:),...
@@ -217,7 +217,7 @@ classdef GUI < handle
 
             obj.Fig = uifigure(...
                 'WindowStyle','normal',...
-                'Tag',app.Info.Name,...
+                'Tag',desmostorm.Info.Name,...
                 'Name','DesmoSTORM',...
                 'Color',[0 0 0],...
                 'OuterPosition',s(1,:),...
@@ -330,12 +330,12 @@ classdef GUI < handle
             end
 
             % --- Images ---
-            app.Log.INFO("Setting up Images listbox...");
-            try obj.setupImagesListBox(); catch ME, app.Log.ERROR(ME); rethrow(ME); end
+            desmostorm.Log.INFO("Setting up Images listbox...");
+            try obj.setupImagesListBox(); catch ME, desmostorm.Log.ERROR(ME); rethrow(ME); end
 
             % --- Regions ---
-            app.Log.INFO("Setting up Regions listbox...");
-            try obj.setupRegionsListBox(); catch ME, app.Log.ERROR(ME); rethrow(ME); end
+            desmostorm.Log.INFO("Setting up Regions listbox...");
+            try obj.setupRegionsListBox(); catch ME, desmostorm.Log.ERROR(ME); rethrow(ME); end
 
             % Set up SettingsUI struct
             obj.SettingsUI = struct(...
@@ -345,24 +345,24 @@ classdef GUI < handle
                 "Box",struct());
 
             % --- Colormap ---
-            app.Log.INFO("Setting up Colormap controls...");
-            try obj.setupColormapControls(); catch ME, app.Log.ERROR(ME); rethrow(ME); end
+            desmostorm.Log.INFO("Setting up Colormap controls...");
+            try obj.setupColormapControls(); catch ME, desmostorm.Log.ERROR(ME); rethrow(ME); end
 
             % --- Analysis ---
-            app.Log.INFO("Setting up Analysis controls...");
-            try obj.setupAnalysisControls(); catch ME, app.Log.ERROR(ME); rethrow(ME); end
+            desmostorm.Log.INFO("Setting up Analysis controls...");
+            try obj.setupAnalysisControls(); catch ME, desmostorm.Log.ERROR(ME); rethrow(ME); end
 
             % --- Image Display ---
-            app.Log.INFO("Setting up Image Display controls...");
-            try obj.setupImageDisplayControls(); catch ME, app.Log.ERROR(ME); rethrow(ME); end
+            desmostorm.Log.INFO("Setting up Image Display controls...");
+            try obj.setupImageDisplayControls(); catch ME, desmostorm.Log.ERROR(ME); rethrow(ME); end
 
             % --- Peaks Plot ---
-            app.Log.INFO("Setting up Peaks Plot controls...");
-            try obj.setupPeaksPlotControls(); catch ME, app.Log.ERROR(ME); rethrow(ME); end
+            desmostorm.Log.INFO("Setting up Peaks Plot controls...");
+            try obj.setupPeaksPlotControls(); catch ME, desmostorm.Log.ERROR(ME); rethrow(ME); end
 
             % --- Labels ---
-            app.Log.INFO("Setting up Labels controls...");
-            try obj.setupLabelsControls(); catch ME, app.Log.ERROR(ME); rethrow(ME); end
+            desmostorm.Log.INFO("Setting up Labels controls...");
+            try obj.setupLabelsControls(); catch ME, desmostorm.Log.ERROR(ME); rethrow(ME); end
 
             % Expand Images and Regions listbox accordion items
             obj.SettingsAccordion.getItem("Images").expand();
@@ -529,8 +529,8 @@ classdef GUI < handle
                 "Text","Auto-scale display intensity");
 
             % --- IntensitySliders ---
-            app.Log.INFO("Setting up IntensitySliders...");
-            try obj.setupIntensitySliders(); catch ME, app.Log.ERROR(ME); rethrow(ME); end
+            desmostorm.Log.INFO("Setting up IntensitySliders...");
+            try obj.setupIntensitySliders(); catch ME, desmostorm.Log.ERROR(ME); rethrow(ME); end
         end
 
         function setupIntensitySliders(obj)
@@ -764,7 +764,7 @@ classdef GUI < handle
 
             % delete the logger
             % clear static facade first
-            app.Log.clear();
+            desmostorm.Log.clear();
             if ~isempty(obj.Log), delete(obj.Log(isvalid(obj.Log))); end
 
 
@@ -807,7 +807,7 @@ classdef GUI < handle
             % get active region CData
             I = img.regionSubimage(img.ActiveRegion);
 
-            model.analysis.image.detectPlaques(I,"DisplayClusterOutput",true);
+            desmostorm.analysis.image.detectPlaques(I,"DisplayClusterOutput",true);
         end
 
         function onLogFlush(obj,lines)
@@ -817,7 +817,7 @@ classdef GUI < handle
         end
 
         function onCloseRequest(obj)
-            app.Log.INFO("Exiting...");
+            desmostorm.Log.INFO("Exiting...");
             % delete the GUI, will also delete fig window
             obj.delete();
         end
@@ -886,9 +886,9 @@ classdef GUI < handle
 
         function refreshWindowName(obj)
             if isempty(obj.Project)
-                obj.Fig.Name = sprintf("%s (%s)",app.Info.Name,app.Info.Version);
+                obj.Fig.Name = sprintf("%s (%s)",desmostorm.Info.Name,desmostorm.Info.Version);
             else
-                obj.Fig.Name = sprintf("%s (%s) - %s",app.Info.Name,app.Info.Version,obj.Project.Name);
+                obj.Fig.Name = sprintf("%s (%s) - %s",desmostorm.Info.Name,desmostorm.Info.Version,obj.Project.Name);
             end
         end
 
@@ -1030,7 +1030,7 @@ classdef GUI < handle
 
         function guialert(obj,opts)
             arguments
-                obj (1,1) app.GUI
+                obj (1,1) desmostorm.app.GUI
                 opts.Message = ""
                 opts.Title = "Untitled"
                 opts.Icon (1,:) char {mustBeMember(opts.Icon,{'error','warning','info','message','success',''})} = ''
@@ -1048,7 +1048,7 @@ classdef GUI < handle
 
 
         function config = getRunConfig(obj)
-            config = app.config.RunConfig.fromSettings(obj.Settings);
+            config = desmostorm.config.RunConfig.fromSettings(obj.Settings);
         end
 
 
@@ -1061,19 +1061,19 @@ classdef GUI < handle
         function onImageAdded(obj)
         %ONIMAGEADDED ImageAdded event callback
             obj.refreshImageListBox();
-            app.Log.INFO("Image added.")
+            desmostorm.Log.INFO("Image added.")
         end
 
         function onImageRemoved(obj)
         %ONIMAGEREMOVED ImageRemoved event callback    
             obj.refreshImageListBox();
-            app.Log.INFO("Image removed.")
+            desmostorm.Log.INFO("Image removed.")
         end
 
         function onActiveImageChanged(obj)
         %ONACTIVEIMAGECHANGED ActiveImageChanged event callback
             obj.syncActiveImageToView();
-            app.Log.INFO("Active Image changed.")
+            desmostorm.Log.INFO("Active Image changed.")
         end
 
         % --- UI SYNC DRIVER ---
@@ -1229,25 +1229,25 @@ classdef GUI < handle
         function onRegionAdded(obj)
         %ONREGIONADDED RegionAdded event callback
             obj.refreshRegionListBox();
-            app.Log.INFO("Region added.")
+            desmostorm.Log.INFO("Region added.")
         end
 
         function onRegionRemoved(obj)
         %ONREGIONREMOVED RegionRemoved event callback    
             obj.refreshRegionListBox();
-            app.Log.INFO("Region removed.")
+            desmostorm.Log.INFO("Region removed.")
         end
 
         function onActiveRegionChanged(obj)
         %ONACTIVEREGIONCHANGED ActiveRegionChanged event callback
             obj.syncActiveRegionToView();
-            app.Log.INFO("Active Region changed.")
+            desmostorm.Log.INFO("Active Region changed.")
         end
 
         function onRegionSelectionChanged(obj)
         %ONREGIONSELECTIONCHANGED RegionSelectionChanged event callback
             obj.refreshRegionListBox();
-            app.Log.INFO("Region selection changed.")
+            desmostorm.Log.INFO("Region selection changed.")
         end
 
         % --- UI SYNC DRIVER ---
@@ -1384,7 +1384,7 @@ classdef GUI < handle
 
         function clearRegionLinescanPlot(obj)
         %CLEARREGIONLINESCANPLOT Reset RegionLinescanPlot
-            set(obj.RegionLinescanPlot,'Data',model.analysis.PeaksData.empty(),'Title','');
+            set(obj.RegionLinescanPlot,'Data',desmostorm.analysis.PeaksData.empty(),'Title','');
         end
 
         function refreshRegionROI(obj)
@@ -1400,7 +1400,7 @@ classdef GUI < handle
 
         function clearRegionLinescanROI(obj)
         %CLEARREGIONLINESCANROI Reset RegionLinescanROI
-            obj.RegionViewer.Tools.DrawRectangle.setROIPosition(model.STORMRegion.ROITemplate);
+            obj.RegionViewer.Tools.DrawRectangle.setROIPosition(desmostorm.model.STORMRegion.ROITemplate);
         end
 
     end
@@ -1738,9 +1738,9 @@ classdef GUI < handle
             obj.Settings.delete();
             obj.detatchListeners();
             % new Settings
-            obj.Settings = app.config.Settings.load();
+            obj.Settings = desmostorm.config.Settings.load();
             % new Project
-            obj.Project = model.STORMProject("untitled");
+            obj.Project = desmostorm.model.STORMProject("untitled");
             obj.Project.DefaultPixelSize = obj.Settings.Analysis.getDefaultPixelSize();
             % refresh hotkeys
             obj.refreshHotkeys();
@@ -1749,7 +1749,7 @@ classdef GUI < handle
             % refresh listeners
             obj.refreshListeners();
             % update log
-            app.Log.INFO(sprintf("Started new project: %s",obj.Project.Name));
+            desmostorm.Log.INFO(sprintf("Started new project: %s",obj.Project.Name));
         end
 
         function onOpen(obj)
@@ -1761,7 +1761,7 @@ classdef GUI < handle
             if isequal(file,0), return; end % cancelled | no files selected -> return
             fname = fullfile(path, file);
             % update log
-            app.Log.INFO(sprintf("Loading project file: %s",fname));
+            desmostorm.Log.INFO(sprintf("Loading project file: %s",fname));
             % set up progress dialog
             msg = sprintf("Loading project file:\n%s",fname);
             h = uiprogressdlg(obj.Fig,"Message",msg,'Indeterminate','on');
@@ -1770,15 +1770,15 @@ classdef GUI < handle
             obj.Settings.delete();  % delete settings
             obj.detatchListeners(); % detach listeners
             % load Project and Settings
-            [proj,stgs] = model.STORMProject.load(fname);
+            [proj,stgs] = desmostorm.model.STORMProject.load(fname);
             % valid output from load -> assign and process
             if ~isempty(proj) && ~isempty(stgs)
                 obj.Project = proj;
                 obj.Settings = stgs;
                 obj.processAllRegions(); % run region analysis
             else
-                obj.Project = model.STORMProject.empty(); % empty project
-                obj.Settings = app.config.Settings.load(); % default settings
+                obj.Project = desmostorm.model.STORMProject.empty(); % empty project
+                obj.Settings = desmostorm.config.Settings.load(); % default settings
             end
             % refresh hotkeys/UI/listeners
             obj.refreshHotkeys();
@@ -1787,7 +1787,7 @@ classdef GUI < handle
             % close progress dialog
             close(h);
             % update log
-            app.Log.INFO(sprintf("Successfully loaded project file: %s",fname));
+            desmostorm.Log.INFO(sprintf("Successfully loaded project file: %s",fname));
         end
 
         function onClose(obj)
@@ -1796,7 +1796,7 @@ classdef GUI < handle
             if isempty(obj.Project), return; end
             % --- delete project, detach listeners, refresh UI ---
             obj.Project.delete(); 
-            obj.Project = model.STORMProject.empty(); % set empty so we do not store old handle
+            obj.Project = desmostorm.model.STORMProject.empty(); % set empty so we do not store old handle
             obj.detatchListeners();
             obj.refreshUI();
         end
@@ -1815,7 +1815,7 @@ classdef GUI < handle
             if isequal(file,0), return; end % cancelled | no files selected -> return
             fname = fullfile(path, file);
             % update log
-            app.Log.INFO(sprintf("Saving project file: %s",fname));
+            desmostorm.Log.INFO(sprintf("Saving project file: %s",fname));
             % create progress dialog
             msg = sprintf("Saving project file:\n%s",fname);
             h = uiprogressdlg(obj.Fig,"Message",msg,'Indeterminate','on');
@@ -1826,7 +1826,7 @@ classdef GUI < handle
             % clost progress dialog
             close(h);
             % update log
-            app.Log.INFO(sprintf("Successfully saved project file: %s",fname));
+            desmostorm.Log.INFO(sprintf("Successfully saved project file: %s",fname));
         end
 
         function onSaveSettings(obj)
@@ -1972,7 +1972,7 @@ classdef GUI < handle
             [file, path] = uigetfile( ...
                 {'*.mat'}, ...
                 'Select classifier file', ...
-                app.Paths.ml, ...
+                desmostorm.Paths.ml, ...
                 'MultiSelect','off');
 
             % cancelled -> return
@@ -1984,8 +1984,8 @@ classdef GUI < handle
             classifierFile = fullfile(path,file);
 
             % --- load ---
-            app.Log.INFO(sprintf("Loading classifier file: %s",classifierFile));
-            pkg = model.ml.loadClassifierPackage(classifierFile);
+            desmostorm.Log.INFO(sprintf("Loading classifier file: %s",classifierFile));
+            pkg = desmostorm.ml.loadClassifierPackage(classifierFile);
             net = pkg.Net;
             propOpts = pkg.PropOpts;
 
@@ -2027,7 +2027,7 @@ classdef GUI < handle
             % --- run ---
             N = numel(imgs);
             for i = 1:N
-                app.Log.INFO(sprintf("Running classifier on image (%i/%i): %s",i,N,imgs(i).Name));
+                desmostorm.Log.INFO(sprintf("Running classifier on image (%i/%i): %s",i,N,imgs(i).Name));
                 imgs(i).runClassifier(net,propOpts);
             end
 
@@ -2061,8 +2061,8 @@ classdef GUI < handle
             if isempty(params), return; end
 
             % --- train a new classifier ---
-            app.Log.INFO(sprintf("Training new classifier: %s",params.BaseName));
-            model.ml.trainNewClassifierFromProject(obj.Project,...
+            desmostorm.Log.INFO(sprintf("Training new classifier: %s",params.BaseName));
+            desmostorm.ml.trainNewClassifierFromProject(obj.Project,...
                 "BaseName",         params.BaseName, ...
                 "MaxEpochs",        params.MaxEpochs, ...
                 "InitialLearnRate", params.InitialLearnRate, ...
@@ -2070,7 +2070,7 @@ classdef GUI < handle
                 "MiniBatchSize",    str2double(params.MiniBatchSize));
 
 
-            app.Log.INFO("Initial training complete.");
+            desmostorm.Log.INFO("Initial training complete.");
 
         end
 
@@ -2082,7 +2082,7 @@ classdef GUI < handle
             [file, path] = uigetfile( ...
                 {'*.mat'}, ...
                 'Select classifier file', ...
-                app.Paths.ml, ...
+                desmostorm.Paths.ml, ...
                 'MultiSelect','off');
 
             % cancelled -> return
@@ -2108,14 +2108,14 @@ classdef GUI < handle
             if isempty(params), return; end
 
             % --- continue training classifier ---
-            app.Log.INFO(sprintf("Continuing training from: %s",classifierFile));
-            model.ml.continueClassifierTrainingFromProject(obj.Project,classifierFile, ...
+            desmostorm.Log.INFO(sprintf("Continuing training from: %s",classifierFile));
+            desmostorm.ml.continueClassifierTrainingFromProject(obj.Project,classifierFile, ...
                 "MaxEpochs",            params.MaxEpochs, ...
                 "InitialLearnRate",     params.InitialLearnRate, ...
                 "IoUMax",               params.IoUMax, ...
                 "MiniBatchSize",        str2double(params.MiniBatchSize));
 
-            app.Log.INFO("Continued training complete.");
+            desmostorm.Log.INFO("Continued training complete.");
         end
 
 
@@ -2274,33 +2274,33 @@ classdef GUI < handle
     %% Export data
     methods
 
-        function onExportMeasurements(app, ~, ~)
+        function onExportMeasurements(obj, ~, ~)
 
-            app.Fig.Visible = 'off';
+            obj.Fig.Visible = 'off';
 
-            defaultName = fullfile(app.Settings.IO.DefaultFolder, 'region_measurements.xlsx');
+            defaultName = fullfile(obj.Settings.IO.DefaultFolder, 'region_measurements.xlsx');
             [file, path] = uiputfile('*.xlsx', ...
                 'Export region measurements', defaultName);
 
-            app.Fig.Visible = 'on';
+            obj.Fig.Visible = 'on';
 
             if isequal(file,0)
                 return;  % user cancelled
             end
 
             fname = fullfile(path, file);
-            app.Project.exportRegionTableToXlsx(fname);
+            obj.Project.exportRegionTableToXlsx(fname);
         end
 
-        function onExportPeakPlots(app, ~, ~)
+        function onExportPeakPlots(obj, ~, ~)
 
-            app.Fig.Visible = 'off';
+            obj.Fig.Visible = 'off';
 
-            defaultName = fullfile(app.Settings.IO.DefaultFolder, 'peak_plots.pdf');
+            defaultName = fullfile(obj.Settings.IO.DefaultFolder, 'peak_plots.pdf');
             [file, path] = uiputfile('*.pdf', ...
                 'Export peak plots', defaultName);
 
-            app.Fig.Visible = 'on';
+            obj.Fig.Visible = 'on';
 
             if isequal(file,0)
                 return;  % user cancelled
@@ -2325,13 +2325,13 @@ classdef GUI < handle
                 "BackgroundColor",[1 1 1]);
 
             p = widgets.PeaksPlotContainer(g,...
-                "RawLineWidth",app.Settings.PeaksPlot.RawLineWidth, ...
-                "RawLineColor",app.Settings.PeaksPlot.RawLineColor, ...
-                "SmoothLineWidth",app.Settings.PeaksPlot.SmoothLineWidth, ...
-                "SmoothLineColor",app.Settings.PeaksPlot.SmoothLineColor, ...
-                "BackgroundColor",app.Settings.PeaksPlot.BackgroundColor, ...
-                "ForegroundColor",app.Settings.PeaksPlot.ForegroundColor, ...
-                "XLabel",sprintf("Distance (%s)",app.Settings.Analysis.PixelSizeUnit), ...
+                "RawLineWidth",obj.Settings.PeaksPlot.RawLineWidth, ...
+                "RawLineColor",obj.Settings.PeaksPlot.RawLineColor, ...
+                "SmoothLineWidth",obj.Settings.PeaksPlot.SmoothLineWidth, ...
+                "SmoothLineColor",obj.Settings.PeaksPlot.SmoothLineColor, ...
+                "BackgroundColor",obj.Settings.PeaksPlot.BackgroundColor, ...
+                "ForegroundColor",obj.Settings.PeaksPlot.ForegroundColor, ...
+                "XLabel",sprintf("Distance (%s)",obj.Settings.Analysis.PixelSizeUnit), ...
                 "YLabel","Normalized Intensity",...
                 "FontSize",10);
             p.Layout.Row = [1 2];
@@ -2342,7 +2342,7 @@ classdef GUI < handle
                 'Name','RegionViewer',...
                 'ToolBox',{'DrawRectangle'},...
                 'ToolBelt',{'DrawRectangle'},...
-                'Colormap',app.Settings.Display.Colormap,...
+                'Colormap',obj.Settings.Display.Colormap,...
                 'CLim',[0 1],...
                 'CData',[]);
             ax.Layout.Row = 1;
@@ -2370,9 +2370,9 @@ classdef GUI < handle
             f.Visible = 'off';
 
             % create progress dialog
-            h = uiprogressdlg(app.Fig,"Message",'Exporting peak plots. Please wait...','Indeterminate','on');
+            h = uiprogressdlg(obj.Fig,"Message",'Exporting peak plots. Please wait...','Indeterminate','on');
 
-            imgs = app.Project.ImageArray;
+            imgs = obj.Project.ImageArray;
 
             if isempty(imgs)
                 return
@@ -2395,7 +2395,7 @@ classdef GUI < handle
                     ax.CData = imgs(i).regionSubimage(regs(j));
 
                     % get CLim
-                    switch app.Settings.Display.AutoScaleDisplayIntensity
+                    switch obj.Settings.Display.AutoScaleDisplayIntensity
                         case true
                             ax.CLim = imgs(i).AutoDisplayRange;
                         case false
@@ -2471,7 +2471,7 @@ classdef GUI < handle
 
         function h = findGUI()
             % locate and return handle to GUI figure window
-            h = findobj(groot,'Tag',app.Info.Name);
+            h = findobj(groot,'Tag',desmostorm.Info.Name);
             % more than one found -> return first
             if numel(h) > 1, h = h(1); end
         end

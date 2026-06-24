@@ -1,16 +1,16 @@
 classdef Log
-%APP.LOG  Static facade and singleton accessor for the DesmoSTORM session logger.
+%DESMOSTORM.APP.LOG  Static facade and singleton accessor for the DesmoSTORM session logger.
 %
 % Typical use
 % -----------
-%   app.Log.INFO("Application started")
-%   app.Log.WARN("Something looks odd")
+%   desmostorm.app.Log.INFO("Application started")
+%   desmostorm.app.Log.WARN("Something looks odd")
 %
 % Get underlying logger handle when needed
 % ----------------------------------------
-%   log = app.Log.get();
+%   log = desmostorm.app.Log.get();
 %   log.setFileSink(logPath, true);
-%   log.setUISink(@(lines) appendToTextArea(app.LogTextArea, lines), true);
+%   log.setUISink(@(lines) appendToTextArea(desmostorm.app.LogTextArea, lines), true);
 %
 % Notes
 % -----
@@ -23,10 +23,10 @@ classdef Log
 
         function log = get()
         %GET Return the active logger, creating it if needed.
-            log = app.Log.peek_();
+            log = desmostorm.app.Log.peek_();
             if isempty(log) || ~isvalid(log)
                 log = matlabx.logging.Logger();
-                app.Log.store_(log);
+                desmostorm.app.Log.store_(log);
             end
         end
 
@@ -35,69 +35,69 @@ classdef Log
             arguments
                 log (1,1) matlabx.logging.Logger
             end
-            app.Log.store_(log);
+            desmostorm.app.Log.store_(log);
         end
 
         function clear()
         %CLEAR Clear the stored logger handle from the facade.
-            app.Log.store_([]);
+            desmostorm.app.Log.store_([]);
         end
 
         function tf = exists()
         %EXISTS True if a valid logger is currently stored.
-            log = app.Log.peek_();
+            log = desmostorm.app.Log.peek_();
             tf = ~isempty(log) && isvalid(log);
         end
 
         function INFO(msg, varargin)
         %INFO Log an INFO message.
-            [src, args] = app.Log.resolveSource_(varargin{:});
-            app.Log.get().info(msg, "Source", src, args{:});
+            [src, args] = desmostorm.app.Log.resolveSource_(varargin{:});
+            desmostorm.app.Log.get().info(msg, "Source", src, args{:});
         end
 
         function DEBUG(msg, varargin)
         %DEBUG Log a DEBUG message.
-            [src, args] = app.Log.resolveSource_(varargin{:});
-            app.Log.get().debug(msg, "Source", src, args{:});
+            [src, args] = desmostorm.app.Log.resolveSource_(varargin{:});
+            desmostorm.app.Log.get().debug(msg, "Source", src, args{:});
         end
 
         function WARN(msg, varargin)
         %WARN Log a WARN message.
-            [src, args] = app.Log.resolveSource_(varargin{:});
-            app.Log.get().warn(msg, "Source", src, args{:});
+            [src, args] = desmostorm.app.Log.resolveSource_(varargin{:});
+            desmostorm.app.Log.get().warn(msg, "Source", src, args{:});
         end
 
         function ERROR(msg, varargin)
         %ERROR Log an ERROR message.
-            [src, args] = app.Log.resolveSource_(varargin{:});
-            app.Log.get().error(msg, "Source", src, args{:});
+            [src, args] = desmostorm.app.Log.resolveSource_(varargin{:});
+            desmostorm.app.Log.get().error(msg, "Source", src, args{:});
         end
 
         function EXCEPTION(ME, varargin)
         %EXCEPTION Log an MException as an error.
-            [src, args] = app.Log.resolveSource_(varargin{:});
-            app.Log.get().error(ME, "Source", src, args{:});
+            [src, args] = desmostorm.app.Log.resolveSource_(varargin{:});
+            desmostorm.app.Log.get().error(ME, "Source", src, args{:});
         end
 
         function LOG(level, msg, varargin)
         %LOG Generic logging entry point.
-            [src, args] = app.Log.resolveSource_(varargin{:});
-            app.Log.get().log(level, msg, "Source", src, args{:});
+            [src, args] = desmostorm.app.Log.resolveSource_(varargin{:});
+            desmostorm.app.Log.get().log(level, msg, "Source", src, args{:});
         end
 
         function flush()
         %FLUSH Flush pending UI/file sink output.
-            app.Log.get().flush();
+            desmostorm.app.Log.get().flush();
         end
 
         function T = asTable()
         %ASTABLE Return stored log entries as a table.
-            T = app.Log.get().asTable();
+            T = desmostorm.app.Log.get().asTable();
         end
 
         function lines = exportText()
         %EXPORTTEXT Return formatted stored log lines.
-            lines = app.Log.get().exportText();
+            lines = desmostorm.app.Log.get().exportText();
         end
 
     end
@@ -106,7 +106,7 @@ classdef Log
 
         function log = peek_()
         %PEEK_ Return stored logger without creating one.
-            log = app.Log.store_();
+            log = desmostorm.app.Log.store_();
         end
 
         function log = store_(newLog)
@@ -122,7 +122,7 @@ classdef Log
             %RESOLVESOURCE_ Use explicit Source if provided, else infer from caller.
             args = varargin;
 
-            idx = app.Log.findNameValue_(args, "Source");
+            idx = desmostorm.app.Log.findNameValue_(args, "Source");
             if ~isempty(idx)
                 src = string(args{idx+1});
                 args(idx:idx+1) = [];
@@ -131,7 +131,7 @@ classdef Log
 
             % Stack here is typically:
             % 1 resolveSource_
-            % 2 app.Log.INFO / DEBUG / ...
+            % 2 desmostorm.app.Log.INFO / DEBUG / ...
             % 3 actual caller
             st = dbstack(2, '-completenames');
 

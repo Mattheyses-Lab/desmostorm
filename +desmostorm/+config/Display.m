@@ -51,7 +51,7 @@ classdef Display < handle
             this.ColormapName_     = name;
             this.ColormapCategory_ = category;
 
-            ev = app.config.ChangeEvent("Display","Colormap",[],[]);
+            ev = desmostorm.config.ChangeEvent("Display","Colormap",[],[]);
             notify(this,'DisplayChanged',ev);
             notify(this,'Changed',ev);
         end
@@ -59,7 +59,7 @@ classdef Display < handle
         function set.AutoScaleDisplayIntensity(this, v)
             old = this.AutoScaleDisplayIntensity_;
             this.AutoScaleDisplayIntensity_ = v;
-            ev = app.config.ChangeEvent("Display","AutoScaleDisplayIntensity",old,v);
+            ev = desmostorm.config.ChangeEvent("Display","AutoScaleDisplayIntensity",old,v);
             notify(this,'DisplayChanged',ev);
             notify(this,'Changed',ev);
         end

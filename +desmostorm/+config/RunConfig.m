@@ -10,7 +10,7 @@ classdef RunConfig
 
     methods(Static)
         function rc = fromSettings(S)
-            rc = app.config.RunConfig;
+            rc = desmostorm.config.RunConfig;
             rc.MinPeakDistance = S.Analysis.MinPeakDistance;
             rc.MinPeakHeight   = S.Analysis.MinPeakHeight;
             rc.BoxSize         = S.Analysis.BoxSize;

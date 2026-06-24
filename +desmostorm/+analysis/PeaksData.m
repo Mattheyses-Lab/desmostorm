@@ -124,18 +124,18 @@ classdef PeaksData
             % --- SMOOTH AND NORMALIZE THE RAW INPUT SIGNAL ---
             % normalize the raw signal if required (use the raw signal if ~obj.Normalize)
             if obj.Normalize
-                obj.SignalNorm = model.analysis.PeaksData.normalizeSignal(obj.Signal);
+                obj.SignalNorm = desmostorm.analysis.PeaksData.normalizeSignal(obj.Signal);
             else
                 obj.SignalNorm = obj.Signal;
             end
             % smooth the normalized signal if required (use the normalized signal if ~obj.Smooth)
             if obj.Smooth
-                obj.SignalSmooth = model.analysis.PeaksData.smooth(obj.SignalNorm,obj.PeakSmoothing);
+                obj.SignalSmooth = desmostorm.analysis.PeaksData.smooth(obj.SignalNorm,obj.PeakSmoothing);
             else
                 obj.SignalSmooth = obj.SignalNorm;
             end
             % --- DETECT PEAKS USING findpeaks() ---
-            out = model.analysis.PeaksData.detect(obj.SignalSmooth, ...
+            out = desmostorm.analysis.PeaksData.detect(obj.SignalSmooth, ...
                 obj.Location, ...
                 obj.MinPeakDistance, ...
                 obj.MinPeakHeight, ...
@@ -152,7 +152,7 @@ classdef PeaksData
             % set height for peak distance annotations based on maximum of smoothed signal
             annotationsHeight = max(obj.SignalSmooth);
             % get annotation coordinates
-            out = model.analysis.PeaksData.getAnnotationCoordinates( ...
+            out = desmostorm.analysis.PeaksData.getAnnotationCoordinates( ...
                 obj.SignalSmooth, ...
                 obj.Location, ...
                 obj.PeakValues, ...
@@ -188,7 +188,7 @@ classdef PeaksData
 
         function [h,ax] = plot(obj,opts)
             arguments
-                obj         (1,1) model.analysis.PeaksData
+                obj         (1,1) desmostorm.analysis.PeaksData
                 opts.Parent (:,1) matlab.ui.control.UIAxes = matlab.ui.control.UIAxes.empty()
             end
 

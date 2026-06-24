@@ -2,7 +2,7 @@ classdef PointCluster < handle
 
     properties
         % the group of clusters to which this cluster belongs
-        Master (:,1) model.analysis.cluster.PointClusters = model.analysis.cluster.PointClusters.empty()
+        Master (:,1) desmostorm.analysis.cluster.PointClusters = desmostorm.analysis.cluster.PointClusters.empty()
         % index of this cluster in the master
         Index (1,1) = NaN
         % cluster centroid coordinates (x,y)
@@ -331,7 +331,7 @@ classdef PointCluster < handle
             D = pdist2(pts, pts);
             
             % find optimal epsilon value
-            epsilon = model.analysis.cluster.chooseDbscanEpsilonKnee(pts,minPts,"SmoothFrac",0.01);
+            epsilon = desmostorm.analysis.cluster.chooseDbscanEpsilonKnee(pts,minPts,"SmoothFrac",0.01);
             fprintf('Optimal epsilon: %f\n',epsilon);
 
             % cluster with DBSCAN (Density-based spatial clustering of applications with noise)
@@ -350,7 +350,7 @@ classdef PointCluster < handle
     methods
         function delete(obj)
             % create event data payload to carry cluster index
-            evt = model.analysis.cluster.ClusterDeletedEvent(obj.Index);
+            evt = desmostorm.analysis.cluster.ClusterDeletedEvent(obj.Index);
             % notify master we deleted a cluster
             notify(obj.Master,'ClusterDeleted',evt);
         end

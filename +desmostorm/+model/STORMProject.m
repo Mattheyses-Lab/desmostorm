@@ -7,18 +7,18 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
         Name (1,1) string = "untitled"
         SourcePath (1,1) string = ""
         CreatedAt datetime = datetime('now')
-        Version (1,1) string = app.Info.Version
+        Version (1,1) string = desmostorm.Info.Version
         isOnDisk (1,1) logical = false
     end
 
     %% Label bank
     properties
-        LabelBank model.LabelRegistry
+        LabelBank desmostorm.model.LabelRegistry
     end
 
     %% Images (dictionary + order) and active selection
     properties (Access=private)
-        ImagesDict = dictionary   % string ID -> model.STORMImage
+        ImagesDict = dictionary   % string ID -> desmostorm.model.STORMImage
         ImageOrder (:,1) string = string.empty(0,1)
         ActiveImageID (:,1) string = string.empty(0,1)
     end
@@ -35,14 +35,14 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
 
     %% ergonomic array view, public, editor-friendly
     properties (Dependent, GetAccess=public, SetAccess=private)
-        ImageArray   % [Nx1 model.STORMImage] in ImageOrder
-        ActiveImage (:,1) model.STORMImage
-        ActiveRegion (:,1) model.STORMRegion
+        ImageArray   % [Nx1 desmostorm.model.STORMImage] in ImageOrder
+        ActiveImage (:,1) desmostorm.model.STORMImage
+        ActiveRegion (:,1) desmostorm.model.STORMRegion
     end
 
     %% Project-wide info
     properties
-        DefaultPixelSize model.units.PixelSize = model.units.PixelSize(1, 'px');
+        DefaultPixelSize desmostorm.model.units.PixelSize = desmostorm.model.units.PixelSize(1, 'px');
 
         MaxSizeC (1,1) double = 0
     end
@@ -79,7 +79,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
 
         function arr = get.ImageArray(obj)
             if numel(obj.ImageOrder)==0
-                arr = model.STORMImage.empty(); return;
+                arr = desmostorm.model.STORMImage.empty(); return;
             end
 
             arr = obj.ImagesDict(obj.ImageOrder);   % -> array of STORMImage
@@ -126,8 +126,8 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
         function obj = STORMProject(name)
             if nargin >= 1 && ~isempty(name), obj.Name = string(name); end
 
-            % dictionary of string ID -> model.STORMImage
-            obj.ImagesDict = dictionary(string.empty(1,0), model.STORMImage.empty(1,0));
+            % dictionary of string ID -> desmostorm.model.STORMImage
+            obj.ImagesDict = dictionary(string.empty(1,0), desmostorm.model.STORMImage.empty(1,0));
 
             % order of ImagesDict, empty string to start because our dictionary is empty
             obj.ImageOrder = string.empty(1,0);
@@ -138,7 +138,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             obj.ImageListeners(3) = addlistener(obj,'ActiveImageChanged',@(~,evt) obj.onActiveImageChanged(evt));
 
             % label registry, default labels to start
-            obj.LabelBank = model.LabelRegistry.default();            
+            obj.LabelBank = desmostorm.model.LabelRegistry.default();            
 
             % add a listener for the LabelsChanged event
             obj.LabelsChangedListener = addlistener(obj.LabelBank,'LabelsChanged',@(~,~) notify(obj,'LabelsChanged'));
@@ -154,27 +154,27 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             % get file name and extension
             [~,name,ext] = fileparts(filePath);
 
-            app.Log.INFO(sprintf("Loading image: %s",filePath));
+            desmostorm.Log.INFO(sprintf("Loading image: %s",filePath));
 
             % create a STORMImage object with new unique ID
-            img = model.STORMImage(obj, string(name)+string(ext), string(filePath), matlabx.utils.text.uniqueID());  % NO imread
+            img = desmostorm.model.STORMImage(obj, string(name)+string(ext), string(filePath), matlabx.utils.text.uniqueID());  % NO imread
 
             % bind to dictionary and emit ImageAdded
             obj.ImagesDict(img.ID) = img;
             obj.ImageOrder(end+1) = img.ID;
 
             imageID = img.ID;
-            notify(obj,'ImageAdded',model.events.ImageAdded(imageID));
+            notify(obj,'ImageAdded',desmostorm.model.events.ImageAdded(imageID));
         end
 
-        % add a new model.STORMImage for each of the images located at the paths in the cell array, filePaths
+        % add a new desmostorm.model.STORMImage for each of the images located at the paths in the cell array, filePaths
         function addImagesFromPaths(obj, filePaths)
             %ADDIMAGESFROMPATHS Add a new STORMImage for each of the images specified by filePath
             % convert char/string to cell if not already cell
             if ~iscell(filePaths)
                 filePaths = cellstr(filePaths);
             end
-            % for each path in the cell, add a new model.STORMImage
+            % for each path in the cell, add a new desmostorm.model.STORMImage
             for i = 1:numel(filePaths)
                 obj.addImageFromPath(filePaths{i});
             end
@@ -189,7 +189,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             obj.ImagesDict = obj.ImagesDict.remove(imageID);
             obj.ImageOrder = obj.ImageOrder(obj.ImageOrder ~= imageID);
 
-            notify(obj,'ImageRemoved',model.events.ImageRemoved(imageID));
+            notify(obj,'ImageRemoved',desmostorm.model.events.ImageRemoved(imageID));
         end
 
         function setActiveImage(obj, imageID)
@@ -206,7 +206,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
 
             if strlength(newID)==0
                 obj.ActiveImageID = "";
-                notify(obj,'ActiveImageChanged',model.events.ActiveImageChanged("",oldID));
+                notify(obj,'ActiveImageChanged',desmostorm.model.events.ActiveImageChanged("",oldID));
                 return
             end
             if isKey(obj.ImagesDict, newID)
@@ -225,7 +225,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
                     img.ActiveRegionID = img.RegionArray(1).ID;
                 end
 
-                notify(obj,'ActiveImageChanged',model.events.ActiveImageChanged(newID,oldID));
+                notify(obj,'ActiveImageChanged',desmostorm.model.events.ActiveImageChanged(newID,oldID));
             end
         end
 
@@ -303,8 +303,8 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
 
         function detectRegions(obj, config, progressdlg)
             arguments
-                obj (1,1) model.STORMProject
-                config (1,1) app.config.RunConfig
+                obj (1,1) desmostorm.model.STORMProject
+                config (1,1) desmostorm.config.RunConfig
                 progressdlg (:,1) matlab.ui.dialog.ProgressDialog = matlab.ui.dialog.ProgressDialog.empty()
             end
 
@@ -432,14 +432,14 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
         function setDefaultPixelSize(obj, ps)
             arguments
                 obj
-                ps (1,1) model.units.PixelSize
+                ps (1,1) desmostorm.model.units.PixelSize
             end
             % set project default
             obj.DefaultPixelSize = ps;
             % Reset all image overrides
             imgs = obj.ImageArray;
             for k = 1:numel(imgs)
-                imgs(k).PixelSizeOverride = model.units.PixelSize.empty;
+                imgs(k).PixelSizeOverride = desmostorm.model.units.PixelSize.empty;
             end
         end
 
@@ -534,7 +534,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             % Negatives: random centers in valid range, rejected if IoU > iouMax w/ any positive
 
             arguments
-                project (1,1) model.STORMProject
+                project (1,1) desmostorm.model.STORMProject
                 boxSize (1,1) double {mustBePositive} = 300
                 negPerPos (1,1) double {mustBeNonnegative} = 6
                 iouMax (1,1) double {mustBeGreaterThanOrEqual(iouMax,0), mustBeLessThanOrEqual(iouMax,1)} = 0.05
@@ -666,7 +666,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             % - Uses Region.BoxSize (scalar) unless overridden by opts.BoxSizeOverride.
             %
             arguments
-                obj (1,1) model.STORMProject
+                obj (1,1) desmostorm.model.STORMProject
 
                 opts.ClassName (1,1) string = "plaque_pair"
 
@@ -762,7 +762,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             arguments
                 obj
                 file (1,1) string
-                settings (1,1) app.config.Settings
+                settings (1,1) desmostorm.config.Settings
             end
 
             [folder,name,~] = fileparts(file);
@@ -775,7 +775,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             obj.SourcePath = file;
 
             % update log
-            app.Log.INFO(sprintf("Saving project: %s",obj.Name))
+            desmostorm.Log.INFO(sprintf("Saving project: %s",obj.Name))
             % attempt to save the project
             try
                 % get save struct
@@ -783,7 +783,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
                 % save it
                 save(file, 'Project', '-mat');
             catch ME
-                app.Log.ERROR(ME);
+                desmostorm.Log.ERROR(ME);
                 rethrow(ME);
             end
 
@@ -803,7 +803,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             end
 
             % load the mat file
-            app.Log.INFO(sprintf("Loading project file: %s",file))
+            desmostorm.Log.INFO(sprintf("Loading project file: %s",file))
             saveStruct = load(file, 'Project', '-mat');
 
             % ensure file contains a variable named "Project"
@@ -815,15 +815,15 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
 
 
             % warn on version mismatch
-            if app.Version.compare(S.Project.Version, app.Info.Version) < 0
-                app.Log.WARN(sprintf("Project version (%s) does not match current app version (%s)",S.Project.Version,app.Info.Version));
+            if app.Version.compare(S.Project.Version, desmostorm.Info.Version) < 0
+                desmostorm.Log.WARN(sprintf("Project version (%s) does not match current app version (%s)",S.Project.Version,desmostorm.Info.Version));
             end
 
-            app.Log.INFO("Rebuilding project...")
+            desmostorm.Log.INFO("Rebuilding project...")
             try
-                [proj, settings] = model.STORMProject.fromStruct(S, file);
+                [proj, settings] = desmostorm.model.STORMProject.fromStruct(S, file);
             catch ME
-                app.Log.ERROR(ME);
+                desmostorm.Log.ERROR(ME);
                 rethrow(ME);
             end
         end
@@ -833,11 +833,11 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             projectFolder = string(fileparts(file));
 
             % Settings restore
-            settings = app.config.Settings();
+            settings = desmostorm.config.Settings();
             settings.fromStruct(P.Settings);
 
             % Project
-            proj = model.STORMProject(P.Project.Name);
+            proj = desmostorm.model.STORMProject(P.Project.Name);
             proj.ID = string(P.Project.ID);
             proj.CreatedAt = P.Project.CreatedAt;
             proj.Version = string(P.Project.Version);
@@ -845,18 +845,18 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
 
             if isfield(P.Project,'DefaultPixelSize')
                 ps = P.Project.DefaultPixelSize;
-                proj.DefaultPixelSize = model.units.PixelSize(ps.Value, ps.Unit);
+                proj.DefaultPixelSize = desmostorm.model.units.PixelSize(ps.Value, ps.Unit);
             end
 
             if isfield(P.Project,'LabelBank') && ~isempty(P.Project.LabelBank)
-                proj.LabelBank = model.LabelRegistry.fromStruct(P.Project.LabelBank);
+                proj.LabelBank = desmostorm.model.LabelRegistry.fromStruct(P.Project.LabelBank);
             else
-                proj.LabelBank = model.LabelRegistry.default();
+                proj.LabelBank = desmostorm.model.LabelRegistry.default();
             end
 
             % Resolve image paths
-            app.Log.INFO("Resolving image paths...")
-            resolved = model.STORMProject.resolveImagePaths(P.Images, projectFolder);
+            desmostorm.Log.INFO("Resolving image paths...")
+            resolved = desmostorm.model.STORMProject.resolveImagePaths(P.Images, projectFolder);
 
             % If resolved comes back empty -> return empty, load fails
             if isempty(resolved)
@@ -866,14 +866,14 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             end
 
             % Rebuild images/regions without eager pixel loads
-            proj.ImagesDict = dictionary(string.empty(1,0), model.STORMImage.empty(1,0));
+            proj.ImagesDict = dictionary(string.empty(1,0), desmostorm.model.STORMImage.empty(1,0));
             proj.ImageOrder = string.empty(1,0);
 
-            app.Log.INFO("Rebuilding images...")
+            desmostorm.Log.INFO("Rebuilding images...")
             nResolved = numel(resolved);
             for k = 1:nResolved
-                app.Log.INFO(sprintf("Image (%i/%i): %s",k,nResolved,resolved(k).Name))
-                img = model.STORMImage.fromStruct(resolved(k),proj);
+                desmostorm.Log.INFO(sprintf("Image (%i/%i): %s",k,nResolved,resolved(k).Name))
+                img = desmostorm.model.STORMImage.fromStruct(resolved(k),proj);
                 proj.ImagesDict(img.ID) = img;
                 proj.ImageOrder(end+1) = img.ID;
             end
@@ -992,7 +992,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             end
 
             % recurse until all files found or empty returned (user cancels)
-            imagesOut = model.STORMProject.resolveImagePaths(imagesOut, projectFolder);
+            imagesOut = desmostorm.model.STORMProject.resolveImagePaths(imagesOut, projectFolder);
 
         end
 
@@ -1005,7 +1005,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             P.Project.ID           = obj.ID;
             P.Project.Name         = obj.Name;
             P.Project.CreatedAt    = obj.CreatedAt;
-            P.Project.Version      = app.Info.Version;
+            P.Project.Version      = desmostorm.Info.Version;
             P.Project.SourcePath   = obj.SourcePath;
             P.Project.DefaultPixelSize = struct('Value', obj.DefaultPixelSize.Value, 'Unit', obj.DefaultPixelSize.Unit);
 

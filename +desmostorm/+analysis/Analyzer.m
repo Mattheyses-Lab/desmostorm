@@ -13,7 +13,7 @@
 %             % check for valid ROI input -> return if invalid (i.e. if any NaNs are found)
 %             if any(isnan([data.CenterX,data.CenterY,data.Width,data.Height,data.RotationAngle])), out = []; return, end
 %             % compute the linescan
-%             linescanData = model.analysis.profile.measure2D(I,...
+%             linescanData = desmostorm.analysis.profile.measure2D(I,...
 %                 data.CenterX,...
 %                 data.CenterY,...
 %                 data.Width,...
@@ -21,7 +21,7 @@
 %                 data.RotationAngle,...
 %                 'Interp','linear');
 %             % detect the peaks and get annotation coordinates ("out" is an instance of model.PeaksData)
-%             out = model.analysis.PeaksData(linescanData.HeightProfile,linescanData.HeightDist,...
+%             out = desmostorm.analysis.PeaksData(linescanData.HeightProfile,linescanData.HeightDist,...
 %                 "MinPeakDistance",rc.MinPeakDistance, ...
 %                 "MinPeakHeight",rc.MinPeakHeight, ...
 %                 "PeakSmoothing",rc.PeakSmoothing);
@@ -36,7 +36,7 @@
 %                 rc (1,1) app.config.RunConfig
 %             end
 %             % automatically fit rectangular ROI
-%             out = model.analysis.image.fitPlaquePairROI(I);
+%             out = desmostorm.analysis.image.fitPlaquePairROI(I);
 %         end
 % 
 % 
@@ -53,17 +53,17 @@ classdef Analyzer
                 %   fields: CenterX, CenterY, Width, Height, RotationAngle
                 data (1,1) struct
                 % Analysis settings snapshot
-                rc (1,1) app.config.RunConfig
+                rc (1,1) desmostorm.app.config.RunConfig
             end
             % check for valid ROI input -> return if invalid (i.e. if any NaNs are found)
             if any(isnan([data.CenterX,data.CenterY,data.Width,data.Height,data.RotationAngle])), out = []; return, end
 
 
-            out = model.analysis.PeaksData.empty();
+            out = desmostorm.analysis.PeaksData.empty();
 
             for i = 1:numel(I)
                 % compute the linescan
-                linescanData = model.analysis.profile.measure2D(I{i},...
+                linescanData = desmostorm.analysis.profile.measure2D(I{i},...
                     data.CenterX,...
                     data.CenterY,...
                     data.Width,...
@@ -71,7 +71,7 @@ classdef Analyzer
                     data.RotationAngle,...
                     'Interp','linear');
                 % detect the peaks and get annotation coordinates ("out" is an instance of model.PeaksData)
-                out(i) = model.analysis.PeaksData(linescanData.HeightProfile,linescanData.HeightDist,...
+                out(i) = desmostorm.analysis.PeaksData(linescanData.HeightProfile,linescanData.HeightDist,...
                     "MinPeakDistance",rc.MinPeakDistance, ...
                     "MinPeakHeight",rc.MinPeakHeight, ...
                     "PeakSmoothing",rc.PeakSmoothing, ...
@@ -88,7 +88,7 @@ classdef Analyzer
         %         rc (1,1) app.config.RunConfig
         %     end
         %     % automatically fit rectangular ROI
-        %     out = model.analysis.image.fitPlaquePairROI(I);
+        %     out = desmostorm.analysis.image.fitPlaquePairROI(I);
         % end
 
 
@@ -101,7 +101,7 @@ classdef Analyzer
                 rc (1,1) app.config.RunConfig
             end
             % automatically fit rectangular ROI
-            out = model.analysis.image.autofitRegionROI(I,rc);
+            out = desmostorm.analysis.image.autofitRegionROI(I,rc);
         end
 
 

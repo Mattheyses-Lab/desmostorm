@@ -4,16 +4,16 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
     %% Identity/ownership/meta
     properties
         ID (1,1) string = matlabx.utils.text.uniqueID()
-        Parent (:,1) model.STORMProject
+        Parent (:,1) desmostorm.model.STORMProject
         Name (1,1) string = ""
         SourcePath (1,1) string = ""
         FileType (1,1) string = ""    % 'tif','png',...
         CreatedAt datetime = datetime('now')
-        PixelSizeOverride model.units.PixelSize = model.units.PixelSize.empty
+        PixelSizeOverride desmostorm.model.units.PixelSize = desmostorm.model.units.PixelSize.empty
     end
 
     properties (Dependent=true)
-        PixelSize model.units.PixelSize
+        PixelSize desmostorm.model.units.PixelSize
     end
 
     %% Image Data properties
@@ -213,7 +213,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
 
     %% Regions (dictionary + order) and active selection
     properties (Access=private)
-        RegionsDict = dictionary   % string id -> model.STORMRegion
+        RegionsDict = dictionary   % string id -> desmostorm.model.STORMRegion
     end
 
     % properties
@@ -232,11 +232,11 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
 
 
     properties (Dependent, GetAccess=public, SetAccess=private)
-        RegionArray     % [1×M model.STORMRegion] in RegionOrder
-        ActiveRegion    % model.STORMRegion or []
+        RegionArray     % [1×M desmostorm.model.STORMRegion] in RegionOrder
+        ActiveRegion    % desmostorm.model.STORMRegion or []
     end
 
-    properties(Access=?model.STORMProject)
+    properties(Access=?desmostorm.model.STORMProject)
         % monotonic counter used to set human-friendly unique region names
         NextRegionOrdinal (1,1) double = 1
     end
@@ -258,7 +258,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
 
         function obj = STORMImage(parent, name, sourcePath, ID)
             arguments
-                parent (:,1) model.STORMProject = model.STORMProject.empty()
+                parent (:,1) desmostorm.model.STORMProject = desmostorm.model.STORMProject.empty()
                 name (1,1) string = ""
                 sourcePath (1,1) string = ""
                 ID (1,1) string = ""     % allow ID injection on reload
@@ -279,7 +279,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
                 obj.FileType = string(lower(strip(ext,'.')));
             end
 
-            obj.RegionsDict = dictionary(string.empty(1,0), model.STORMRegion.empty(1,0));
+            obj.RegionsDict = dictionary(string.empty(1,0), desmostorm.model.STORMRegion.empty(1,0));
             obj.RegionOrder = string.empty(1,0);
 
             % create Image5D object from file
@@ -344,7 +344,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
 
         function addRegion(obj, ID, Center, BoxSize, LabelID, LabelSource, opts)
             arguments
-                obj             (1,1) model.STORMImage
+                obj             (1,1) desmostorm.model.STORMImage
                 ID              (1,1) string
                 Center          (1,2) double
                 BoxSize         (1,1) double
@@ -356,7 +356,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
 
             if ~isKey(obj.RegionsDict, ID)
                 % create new STORMRegion
-                reg = model.STORMRegion(obj,ID,Center,BoxSize,LabelID,LabelSource,opts.Score);
+                reg = desmostorm.model.STORMRegion(obj,ID,Center,BoxSize,LabelID,LabelSource,opts.Score);
                 % add it to the Regions dictionary
                 obj.RegionsDict(ID) = reg;
                 % add its ID to RegionOrder array
@@ -373,7 +373,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
         function addRegionSilent(obj, ID, Center, BoxSize)
             if ~isKey(obj.RegionsDict, ID)
                 % create new STORMRegion
-                reg = model.STORMRegion(obj,ID,Center,BoxSize,"unlabeled","classifier");
+                reg = desmostorm.model.STORMRegion(obj,ID,Center,BoxSize,"unlabeled","classifier");
                 % add it to the Regions dictionary
                 obj.RegionsDict(ID) = reg;
                 % add its ID to RegionOrder array
@@ -479,9 +479,9 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
 
         function processRegionLinescan(obj, reg, config)
             arguments
-                obj model.STORMImage
-                reg model.STORMRegion
-                config app.config.RunConfig
+                obj desmostorm.model.STORMImage
+                reg desmostorm.model.STORMRegion
+                config desmostorm.config.RunConfig
             end
 
             if isempty(reg), return; end
@@ -492,7 +492,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
             data = reg.ROI;
 
             % run region analyzer
-            LinescanResults = model.analysis.Analyzer.run(I,data,config);
+            LinescanResults = desmostorm.model.analysis.Analyzer.run(I,data,config);
 
             if isempty(LinescanResults)
                 return
@@ -522,9 +522,9 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
 
         function autofitRegionROI(obj, reg, config)
             arguments
-                obj model.STORMImage
-                reg model.STORMRegion
-                config app.config.RunConfig
+                obj desmostorm.model.STORMImage
+                reg desmostorm.model.STORMRegion
+                config desmostorm.config.RunConfig
             end
 
             if isempty(reg), return; end
@@ -532,7 +532,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
             % get region CData
             I = obj.regionSubimage(reg);
             % get linescan info
-            ROI = model.analysis.Analyzer.autofitRegionROI(I, config);
+            ROI = desmostorm.model.analysis.Analyzer.autofitRegionROI(I, config);
 
             if isempty(ROI), return; end
 
@@ -582,15 +582,15 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
         %!!! DEPRECATED !!!
         function detectRegions(obj, config)
             arguments
-                obj model.STORMImage
-                config app.config.RunConfig
+                obj desmostorm.model.STORMImage
+                config desmostorm.config.RunConfig
             end
 
             % remove any existing regions first
             obj.removeAllRegions();
 
             % detect new region locations
-            ctrs = model.analysis.image.detectRegions(obj.CData,"BoxSize",config.BoxSize);
+            ctrs = desmostorm.model.analysis.image.detectRegions(obj.CData,"BoxSize",config.BoxSize);
 
             % return if none found
             if isempty(ctrs)
@@ -613,7 +613,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
             % remove any existing regions first
             obj.removeAllRegions();
 
-            [ctrs,scores] = model.ml.proposePatchCenters(obj.SourcePath,net,...
+            [ctrs,scores] = desmostorm.model.ml.proposePatchCenters(obj.SourcePath,net,...
                 "BoxSize",          propOpts.BoxSize, ...
                 "Stride",           propOpts.Stride, ...
                 "ScoreThreshold",   propOpts.ScoreThreshold, ...
@@ -652,7 +652,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
 
         function arr = get.RegionArray(obj)
             if numel(obj.RegionOrder)==0
-                arr = model.STORMRegion.empty();
+                arr = desmostorm.model.STORMRegion.empty();
                 return
             end
             arr = obj.RegionsDict(obj.RegionOrder);
@@ -691,7 +691,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
             end
 
             % 3) factory fallback (should rarely be hit)
-            ps = model.units.PixelSize(1, 'px');
+            ps = desmostorm.model.units.PixelSize(1, 'px');
         end
 
         function set.PixelSize(obj, ps)
@@ -749,7 +749,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
     end
 
     %% Serialization helpers
-    methods(Access=?model.STORMProject)
+    methods(Access=?desmostorm.model.STORMProject)
 
         function I = toStruct(obj)
 
@@ -817,13 +817,13 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
             name = string(S.Name);
             path = string(S.SourcePath);
 
-            img = model.STORMImage(proj, name, path, string(S.ID));
+            img = desmostorm.model.STORMImage(proj, name, path, string(S.ID));
 
             % restore per-image settings/state
             img.CreatedAt = S.CreatedAt;
 
             if ~isempty(S.PixelSizeOverride)
-                img.PixelSizeOverride = model.units.PixelSize(S.PixelSizeOverride.Value, S.PixelSizeOverride.Unit);
+                img.PixelSizeOverride = desmostorm.model.units.PixelSize(S.PixelSizeOverride.Value, S.PixelSizeOverride.Unit);
             end
 
             img.NextRegionOrdinal = S.NextRegionOrdinal;
@@ -840,7 +840,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
                     % update log
                     app.Log.INFO(sprintf("Region (%i/%i): %s",r,nRegions,R.Name));
                     % create Region from struct
-                    reg = model.STORMRegion.fromStruct(R,img);
+                    reg = desmostorm.model.STORMRegion.fromStruct(R,img);
                     % add it to the Regions dictionary
                     img.RegionsDict(reg.ID) = reg;
                 end

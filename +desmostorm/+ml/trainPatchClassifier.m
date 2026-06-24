@@ -2,11 +2,11 @@ function net = trainPatchClassifier(Ptrain, Pval, boxSize, opts)
 %trainPatchClassifier Train or continue training a binary patch classifier.
 %
 % Fresh training:
-%   net = model.ml.trainPatchClassifier(Ptrain, Pval, 300, ...
+%   net = desmostorm.ml.trainPatchClassifier(Ptrain, Pval, 300, ...
 %       BaseNet="resnet18", ContinueTraining=false)
 %
 % Continue training:
-%   net = model.ml.trainPatchClassifier(Ptrain, Pval, 300, ...
+%   net = desmostorm.ml.trainPatchClassifier(Ptrain, Pval, 300, ...
 %       BaseNet=oldNet, ContinueTraining=true)
 %
 % Notes
@@ -107,14 +107,14 @@ function net = trainPatchClassifier(Ptrain, Pval, boxSize, opts)
     netInputSize = inputLayer.InputSize(1:2);
     
     % ---- Datastores ----
-    app.Log.INFO("Building training datastore...")
-    dsTrain = model.ml.patchDatastore(Ptrain, boxSize, netInputSize);
-    app.Log.INFO("Building validation datastore...")
-    dsVal   = model.ml.patchDatastore(Pval,   boxSize, netInputSize);
+    desmostorm.Log.INFO("Building training datastore...")
+    dsTrain = desmostorm.ml.patchDatastore(Ptrain, boxSize, netInputSize);
+    desmostorm.Log.INFO("Building validation datastore...")
+    dsVal   = desmostorm.ml.patchDatastore(Pval,   boxSize, netInputSize);
     
-    app.Log.INFO("Building augmentation datastore...")
+    desmostorm.Log.INFO("Building augmentation datastore...")
     if opts.Augment
-        dsTrain = transform(dsTrain, @model.ml.augmentPatch);
+        dsTrain = transform(dsTrain, @desmostorm.ml.augmentPatch);
     end
     
     % ---- Validation sanity check ----
@@ -239,7 +239,7 @@ function net = trainPatchClassifier(Ptrain, Pval, boxSize, opts)
     fprintf('\n');
 
     % ---- Train ----
-    app.Log.INFO("Training network...")
+    desmostorm.Log.INFO("Training network...")
     net = trainNetwork(dsTrain, lgraph, options);
 
 end

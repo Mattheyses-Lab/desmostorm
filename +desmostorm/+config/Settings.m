@@ -1,12 +1,12 @@
 classdef Settings < handle
     % Orchestrates sub-settings. Observable; bubbles child changes.
     properties (SetAccess=public)
-        Analysis  app.config.Analysis   % analysis settings
-        Display   app.config.Display    % general display settings
-        IO        app.config.IO         % import/export settings
+        Analysis  desmostorm.config.Analysis   % analysis settings
+        Display   desmostorm.config.Display    % general display settings
+        IO        desmostorm.config.IO         % import/export settings
 
-        PeaksPlot app.config.PeaksPlot  % PeaksPlot appearance settings
-        Box       app.config.Box        % region selection box settings
+        PeaksPlot desmostorm.config.PeaksPlot  % PeaksPlot appearance settings
+        Box       desmostorm.config.Box        % region selection box settings
     end
 
     events
@@ -21,11 +21,11 @@ classdef Settings < handle
 
     methods
         function this = Settings()
-            this.Analysis   = app.config.Analysis();
-            this.Display    = app.config.Display();
-            this.IO         = app.config.IO();
-            this.PeaksPlot  = app.config.PeaksPlot();
-            this.Box        = app.config.Box();
+            this.Analysis   = desmostorm.config.Analysis();
+            this.Display    = desmostorm.config.Display();
+            this.IO         = desmostorm.config.IO();
+            this.PeaksPlot  = desmostorm.config.PeaksPlot();
+            this.Box        = desmostorm.config.Box();
 
             % Bubble domain-specific change events up to Settings.Changed
             addlistener(this.Analysis,  'AnalysisChanged',  @(s,e) notify(this,'AnalysisChanged',e));
@@ -44,10 +44,10 @@ classdef Settings < handle
 
         function save(this, file)
             if nargin < 2
-                file = app.config.Settings.defaultFile();
+                file = desmostorm.config.Settings.defaultFile();
             end
 
-            S.Version  = char(app.Info.Version);
+            S.Version  = char(desmostorm.app.Info.Version);
             S.Analysis = this.Analysis.toStruct();
             S.Display  = this.Display.toStruct();
             S.IO       = this.IO.toStruct();
@@ -70,7 +70,7 @@ classdef Settings < handle
 
 
         function S = toStruct(obj)
-            S.Version   = char(app.Info.Version);
+            S.Version   = char(desmostorm.app.Info.Version);
             S.Analysis  = obj.Analysis.toStruct();
             S.Display   = obj.Display.toStruct();
             S.IO        = obj.IO.toStruct();
@@ -79,7 +79,7 @@ classdef Settings < handle
         end
 
         function fromStruct(obj,S)
-            [S,~] = app.config.Settings.migrate(S);
+            [S,~] = desmostorm.config.Settings.migrate(S);
             obj.Analysis.fromStruct(S.Analysis);
             obj.Display.fromStruct(S.Display);
             obj.IO.fromStruct(S.IO);
@@ -93,11 +93,11 @@ classdef Settings < handle
 
         function obj = load(file)
             if nargin < 1
-                file = app.config.Settings.defaultFile();
+                file = desmostorm.config.Settings.defaultFile();
             end
 
             % create the settings object
-            obj = app.config.Settings();
+            obj = desmostorm.config.Settings();
 
             if isfile(file)
                 txt = fileread(file);
@@ -107,7 +107,7 @@ classdef Settings < handle
                 end
 
                 % upgrade version if needed
-                [S,migrated] = app.config.Settings.migrate(S);
+                [S,migrated] = desmostorm.config.Settings.migrate(S);
 
                 obj.Analysis.fromStruct(S.Analysis);
                 obj.Display.fromStruct(S.Display);
@@ -129,7 +129,7 @@ classdef Settings < handle
 
         function p = defaultFile()
             % get full path to default settings file
-            p = app.Paths.settingsFile();
+            p = desmostorm.app.Paths.settingsFile();
         end
 
         function [S, migrated] = migrate(S)
@@ -139,7 +139,7 @@ classdef Settings < handle
 
             % --- Example migration ---
             % From any version older than 1.0.0: add IO.AutoSave
-            % if app.Version.compare(old, "1.0.0") < 0
+            % if desmostorm.app.Version.compare(old, "1.0.0") < 0
             %     warning('Migrating settings to v1.0.0...')
             %     if ~isfield(S,'IO') || ~isfield(S.IO,'AutoSave')
             %         S.IO.AutoSave = true;
@@ -149,10 +149,10 @@ classdef Settings < handle
 
             old = string(S.Version);
 
-            if app.Version.compare(old, "1.1.0") < 0
-                app.Log.WARN("Migrating settings to v1.1.0")
+            if desmostorm.app.Version.compare(old, "1.1.0") < 0
+                desmostorm.app.Log.WARN("Migrating settings to v1.1.0")
                 % Box settings
-                defaultBox = app.config.Box;
+                defaultBox = desmostorm.config.Box;
                 S.Box.FaceColor     = S.Box.BoxFaceColor;
                 S.Box.EdgeColor     = S.Box.BoxEdgeColor;
                 S.Box.ShowTitle     = defaultBox.ShowTitle;
@@ -165,9 +165,9 @@ classdef Settings < handle
 
         function restore()
             % get default settings file location
-            file = app.config.Settings.defaultFile();
+            file = desmostorm.config.Settings.defaultFile();
             % create the settings object using default values
-            obj = app.config.Settings();
+            obj = desmostorm.config.Settings();
             % save the new file (will overwrite current settings if it exists)
             obj.save(file);
         end

@@ -8,7 +8,7 @@ function [pkg, out] = trainNewClassifierFromProject(project, opts)
 % out : struct with saved file paths and useful metadata
 
     arguments
-        project (1,1) model.STORMProject
+        project (1,1) desmostorm.model.STORMProject
     
         opts.BaseName (1,1) string
         opts.BoxSize (1,1) double {mustBePositive} = 300
@@ -36,8 +36,8 @@ function [pkg, out] = trainNewClassifierFromProject(project, opts)
     matlabx.utils.files.ensureDir(opts.SaveDir);
     
     % Build current project patch table
-    app.Log.INFO("Building patch table from current project...")
-    patchTableProject = model.ml.buildPatchTableFromProject(project, ...
+    desmostorm.Log.INFO("Building patch table from current project...")
+    patchTableProject = desmostorm.ml.buildPatchTableFromProject(project, ...
         BoxSize=opts.BoxSize, ...
         NegPerPos=opts.NegPerPos, ...
         IoUMax=opts.IoUMax, ...
@@ -48,8 +48,8 @@ function [pkg, out] = trainNewClassifierFromProject(project, opts)
     % For fresh training, project table == training table
     patchTableTraining = patchTableProject;
     
-    app.Log.INFO("Splitting patch table into training and validation sets...")
-    [Ptrain, Pval] = model.ml.splitByImage(patchTableTraining, opts.ValFrac);
+    desmostorm.Log.INFO("Splitting patch table into training and validation sets...")
+    [Ptrain, Pval] = desmostorm.ml.splitByImage(patchTableTraining, opts.ValFrac);
     
     % Training options
     trainOpts = struct;
@@ -63,7 +63,7 @@ function [pkg, out] = trainNewClassifierFromProject(project, opts)
     trainOpts.ValidationFrequency = opts.ValidationFrequency;
     
     % Train the classifier
-    net = model.ml.trainPatchClassifier(Ptrain, Pval, opts.BoxSize, ...
+    net = desmostorm.ml.trainPatchClassifier(Ptrain, Pval, opts.BoxSize, ...
         "BaseNet", trainOpts.BaseNet, ...
         "ContinueTraining", trainOpts.ContinueTraining, ...
         "MaxEpochs", trainOpts.MaxEpochs, ...
@@ -83,11 +83,11 @@ function [pkg, out] = trainNewClassifierFromProject(project, opts)
     propOpts.PositiveClass = opts.PositiveLabel;
     
     % Determine version number for this iteration
-    [nextVersion, stem] = model.ml.nextClassifierVersion(opts.SaveDir, opts.BaseName);
+    [nextVersion, stem] = desmostorm.ml.nextClassifierVersion(opts.SaveDir, opts.BaseName);
     
     % Package everything for saving
-    app.Log.INFO("Packaging classifier and saving files...")
-    pkg = model.ml.makeClassifierPackage( ...
+    desmostorm.Log.INFO("Packaging classifier and saving files...")
+    pkg = desmostorm.ml.makeClassifierPackage( ...
         net, opts.BoxSize, trainOpts, propOpts, patchTableTraining, ...
         PositiveClass=opts.PositiveLabel, ...
         SourceModel="", ...
@@ -99,12 +99,12 @@ function [pkg, out] = trainNewClassifierFromProject(project, opts)
     trainingPatchFile = fullfile(opts.SaveDir, sprintf("patchTable_%s_v%03d_training.csv", stem, nextVersion));
     
     % Save files
-    model.ml.saveClassifierPackage(classifierFile, pkg);
-    app.Log.INFO(sprintf("Saved classifier package: %s",classifierFile))
+    desmostorm.ml.saveClassifierPackage(classifierFile, pkg);
+    desmostorm.Log.INFO(sprintf("Saved classifier package: %s",classifierFile))
     writetable(patchTableProject, projectPatchFile);
-    app.Log.INFO(sprintf("Saved project patch table: %s",projectPatchFile))
+    desmostorm.Log.INFO(sprintf("Saved project patch table: %s",projectPatchFile))
     writetable(patchTableTraining, trainingPatchFile);
-    app.Log.INFO(sprintf("Saved training patch table: %s",trainingPatchFile))
+    desmostorm.Log.INFO(sprintf("Saved training patch table: %s",trainingPatchFile))
     
     % Collect struct output
     out = struct();

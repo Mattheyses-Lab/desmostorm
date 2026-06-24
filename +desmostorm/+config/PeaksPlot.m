@@ -41,7 +41,7 @@ classdef PeaksPlot < handle
         function set.RawLineColor(this,v)
             old = this.RawLineColor_;
             this.RawLineColor_ = v;
-            ev = app.config.ChangeEvent("PeaksPlot","RawLineColor",old,v);
+            ev = desmostorm.config.ChangeEvent("PeaksPlot","RawLineColor",old,v);
             notify(this,'PeaksPlotChanged',ev);
             notify(this,'Changed',ev);
         end
@@ -49,7 +49,7 @@ classdef PeaksPlot < handle
         function set.RawLineWidth(this,v)
             old = this.RawLineWidth_;
             this.RawLineWidth_ = v;
-            ev = app.config.ChangeEvent("PeaksPlot","RawLineWidth",old,v);
+            ev = desmostorm.config.ChangeEvent("PeaksPlot","RawLineWidth",old,v);
             notify(this,'PeaksPlotChanged',ev);
             notify(this,'Changed',ev);
         end
@@ -57,7 +57,7 @@ classdef PeaksPlot < handle
         function set.SmoothLineColor(this,v)
             old = this.SmoothLineColor_;
             this.SmoothLineColor_ = v;
-            ev = app.config.ChangeEvent("PeaksPlot","SmoothLineColor",old,v);
+            ev = desmostorm.config.ChangeEvent("PeaksPlot","SmoothLineColor",old,v);
             notify(this,'PeaksPlotChanged',ev);
             notify(this,'Changed',ev);
         end
@@ -65,7 +65,7 @@ classdef PeaksPlot < handle
         function set.SmoothLineWidth(this,v)
             old = this.SmoothLineWidth_;
             this.SmoothLineWidth_ = v;
-            ev = app.config.ChangeEvent("PeaksPlot","SmoothLineWidth",old,v);
+            ev = desmostorm.config.ChangeEvent("PeaksPlot","SmoothLineWidth",old,v);
             notify(this,'PeaksPlotChanged',ev);
             notify(this,'Changed',ev);
         end
@@ -73,7 +73,7 @@ classdef PeaksPlot < handle
         function set.BackgroundColor(this,v)
             old = this.BackgroundColor_;
             this.BackgroundColor_ = v;
-            ev = app.config.ChangeEvent("PeaksPlot","BackgroundColor",old,v);
+            ev = desmostorm.config.ChangeEvent("PeaksPlot","BackgroundColor",old,v);
             notify(this,'PeaksPlotChanged',ev);
             notify(this,'Changed',ev);
         end
@@ -81,7 +81,7 @@ classdef PeaksPlot < handle
         function set.ForegroundColor(this,v)
             old = this.ForegroundColor_;
             this.ForegroundColor_ = v;
-            ev = app.config.ChangeEvent("PeaksPlot","ForegroundColor",old,v);
+            ev = desmostorm.config.ChangeEvent("PeaksPlot","ForegroundColor",old,v);
             notify(this,'PeaksPlotChanged',ev);
             notify(this,'Changed',ev);
         end

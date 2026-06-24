@@ -1,7 +1,7 @@
 classdef IO < handle
 
     properties (Access=private)
-        DefaultFolder_ string = app.Paths.user
+        DefaultFolder_ string = desmostorm.app.Paths.user
         AutoSave_      logical = true
     end
 
@@ -30,13 +30,13 @@ classdef IO < handle
 
             % ensure DefaultFolder is an actual folder
             if ~isfolder(v)
-                warning('%s is not a folder or is not accessible, reverting to default: %s',v,app.Paths.user);
-                v = app.Paths.user;
+                warning('%s is not a folder or is not accessible, reverting to default: %s',v,desmostorm.app.Paths.user);
+                v = desmostorm.app.Paths.user;
             end
 
             old = this.DefaultFolder_;
             this.DefaultFolder_ = v; 
-            ev = app.config.ChangeEvent("IO","DefaultFolder",old,v);
+            ev = desmostorm.config.ChangeEvent("IO","DefaultFolder",old,v);
             notify(this,'IOChanged',ev);
             notify(this,'Changed',ev);
         end
@@ -44,7 +44,7 @@ classdef IO < handle
         function set.AutoSave(this, v)
             old = this.AutoSave_;
             this.AutoSave_ = logical(v);
-            ev = app.config.ChangeEvent("IO","AutoSave",old,v);
+            ev = desmostorm.config.ChangeEvent("IO","AutoSave",old,v);
             notify(this,'IOChanged',ev);
             notify(this,'Changed',ev);
         end

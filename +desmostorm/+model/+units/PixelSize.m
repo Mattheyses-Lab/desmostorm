@@ -1,5 +1,5 @@
 classdef PixelSize
-% model.units.PixelSize
+% desmostorm.model.units.PixelSize
 
     properties (SetAccess = immutable)
         Value (1,1) double {mustBePositive} = 1  % units per pixel
@@ -13,9 +13,9 @@ classdef PixelSize
                 Unit  (1,:) char = 'px'
             end
 
-            Unit = model.units.PixelSize.normalizeUnit(Unit);
+            Unit = desmostorm.model.units.PixelSize.normalizeUnit(Unit);
 
-            % obj = model.units.PixelSize.empty;
+            % obj = desmostorm.model.units.PixelSize.empty;
             obj.Value = Value;
             obj.Unit  = Unit;
         end

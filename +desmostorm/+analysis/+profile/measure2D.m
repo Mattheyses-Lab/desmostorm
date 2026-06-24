@@ -1,6 +1,6 @@
 function out = measure2D(I, cx, cy, w, h, thetaDeg, varargin)
-% model.analysis.profile.measure2D  Rectified "rectangular linescan" averaged across both directions.
-% out = model.analysis.profile.measure2D(I, cx, cy, w, h, thetaDeg, 'Step', ds, 'Interp', 'linear', 'Fill', NaN)
+% desmostorm.analysis.profile.measure2D  Rectified "rectangular linescan" averaged across both directions.
+% out = desmostorm.analysis.profile.measure2D(I, cx, cy, w, h, thetaDeg, 'Step', ds, 'Interp', 'linear', 'Fill', NaN)
 %
 % Inputs
 %   I         : 2-D image (double/single/uint*)

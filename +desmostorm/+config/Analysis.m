@@ -37,42 +37,42 @@ classdef Analysis < handle
         function set.MinPeakDistance(this,v)
             old = this.MinPeakDistance_;
             this.MinPeakDistance_ = v;
-            ev = app.config.ChangeEvent("Analysis","MinPeakDistance",old,v);
+            ev = desmostorm.config.ChangeEvent("Analysis","MinPeakDistance",old,v);
             notify(this,'AnalysisChanged',ev);
             notify(this,'Changed');
         end
         function set.MinPeakHeight(this,v)
             old = this.MinPeakHeight_;
             this.MinPeakHeight_ = v;
-            ev = app.config.ChangeEvent("Analysis","MinPeakHeight",old,v);
+            ev = desmostorm.config.ChangeEvent("Analysis","MinPeakHeight",old,v);
             notify(this,'AnalysisChanged',ev);
             notify(this,'Changed');
         end
         function set.BoxSize(this,v)
             old = this.BoxSize_;
             this.BoxSize_ = v;
-            ev = app.config.ChangeEvent("Analysis","BoxSize",old,v);
+            ev = desmostorm.config.ChangeEvent("Analysis","BoxSize",old,v);
             notify(this,'AnalysisChanged',ev);
             notify(this,'Changed');
         end
         function set.PeakSmoothing(this,v)
             old = this.PeakSmoothing_;
             this.PeakSmoothing_ = v;
-            ev = app.config.ChangeEvent("Analysis","PeakSmoothing",old,v);
+            ev = desmostorm.config.ChangeEvent("Analysis","PeakSmoothing",old,v);
             notify(this,'AnalysisChanged',ev);
             notify(this,'Changed');
         end
         function set.PixelSizeValue(this,v)
             old = this.PixelSizeValue_;
             this.PixelSizeValue_ = v;
-            ev = app.config.ChangeEvent("Analysis","PixelSizeValue",old,v);
+            ev = desmostorm.config.ChangeEvent("Analysis","PixelSizeValue",old,v);
             notify(this,'AnalysisChanged',ev);
             notify(this,'Changed');
         end
         function set.PixelSizeUnit(this,v)
             old = this.PixelSizeUnit_;
             this.PixelSizeUnit_ = v;
-            ev = app.config.ChangeEvent("Analysis","PixelSizeUnit",old,v);
+            ev = desmostorm.config.ChangeEvent("Analysis","PixelSizeUnit",old,v);
             notify(this,'AnalysisChanged',ev);
             notify(this,'Changed');
         end
@@ -101,7 +101,7 @@ classdef Analysis < handle
     methods
 
         function ps = getDefaultPixelSize(this)
-            ps = model.units.PixelSize(this.PixelSizeValue, this.PixelSizeUnit);
+            ps = desmostorm.model.units.PixelSize(this.PixelSizeValue, this.PixelSizeUnit);
         end
         
     end

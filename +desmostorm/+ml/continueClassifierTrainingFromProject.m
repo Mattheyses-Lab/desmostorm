@@ -10,7 +10,7 @@ function [pkgNew, out] = continueClassifierTrainingFromProject(project, classifi
 %   - auto-save next version in same folder (default)
 
     arguments
-        project (1,1) model.STORMProject
+        project (1,1) desmostorm.model.STORMProject
         classifierFile (1,1) string
     
         opts.PositiveLabel (1,1) string = "object"
@@ -32,8 +32,8 @@ function [pkgNew, out] = continueClassifierTrainingFromProject(project, classifi
         opts.Notes (1,1) string = ""
     end
     
-    app.Log.INFO(sprintf("Loading classifier package: %s",classifierFile))
-    pkgOld = model.ml.loadClassifierPackage(classifierFile);
+    desmostorm.Log.INFO(sprintf("Loading classifier package: %s",classifierFile))
+    pkgOld = desmostorm.ml.loadClassifierPackage(classifierFile);
     
     if opts.SaveDir == ""
         saveDir = string(fileparts(classifierFile));
@@ -42,11 +42,11 @@ function [pkgNew, out] = continueClassifierTrainingFromProject(project, classifi
     end
     matlabx.utils.files.ensureDir(saveDir);
     
-    baseName = model.ml.classifierBaseNameFromFile(classifierFile);
+    baseName = desmostorm.ml.classifierBaseNameFromFile(classifierFile);
     
     % Build project patch table from current project
-    app.Log.INFO("Building patch table from current project...")
-    patchTableProject = model.ml.buildPatchTableFromProject(project, ...
+    desmostorm.Log.INFO("Building patch table from current project...")
+    patchTableProject = desmostorm.ml.buildPatchTableFromProject(project, ...
         BoxSize=pkgOld.BoxSize, ...
         NegPerPos=opts.NegPerPos, ...
         IoUMax=opts.IoUMax, ...
@@ -55,11 +55,11 @@ function [pkgNew, out] = continueClassifierTrainingFromProject(project, classifi
         RequiredLabelSource=opts.RequiredLabelSource);
     
     % Merge old training table with new project table
-    app.Log.INFO("Merging patch table with existing training data...")
-    patchTableTraining = model.ml.mergePatchTables(pkgOld.PatchTable, patchTableProject);
+    desmostorm.Log.INFO("Merging patch table with existing training data...")
+    patchTableTraining = desmostorm.ml.mergePatchTables(pkgOld.PatchTable, patchTableProject);
     
-    app.Log.INFO("Splitting patch table into training and validation sets...")
-    [Ptrain, Pval] = model.ml.splitByImage(patchTableTraining, opts.ValFrac);
+    desmostorm.Log.INFO("Splitting patch table into training and validation sets...")
+    [Ptrain, Pval] = desmostorm.ml.splitByImage(patchTableTraining, opts.ValFrac);
     
     trainOpts = pkgOld.TrainOpts;
     trainOpts.BaseNet = pkgOld.Net;
@@ -71,9 +71,9 @@ function [pkgNew, out] = continueClassifierTrainingFromProject(project, classifi
     trainOpts.Augment = opts.Augment;
     trainOpts.ValidationFrequency = opts.ValidationFrequency;
     
-    % netNew = model.ml.trainPatchClassifier(Ptrain, Pval, pkgOld.BoxSize, trainOpts);
+    % netNew = desmostorm.ml.trainPatchClassifier(Ptrain, Pval, pkgOld.BoxSize, trainOpts);
 
-    netNew = model.ml.trainPatchClassifier(Ptrain, Pval, pkgOld.BoxSize, ...
+    netNew = desmostorm.ml.trainPatchClassifier(Ptrain, Pval, pkgOld.BoxSize, ...
         "BaseNet",trainOpts.BaseNet,...
         "ContinueTraining",trainOpts.ContinueTraining,...
         "MaxEpochs",trainOpts.MaxEpochs,...
@@ -86,10 +86,10 @@ function [pkgNew, out] = continueClassifierTrainingFromProject(project, classifi
     propOpts = pkgOld.PropOpts;
     propOpts.PositiveClass = opts.PositiveLabel;
     
-    [nextVersion, stem] = model.ml.nextClassifierVersion(saveDir, baseName);
+    [nextVersion, stem] = desmostorm.ml.nextClassifierVersion(saveDir, baseName);
     
-    app.Log.INFO("Packaging classifier and saving files...")
-    pkgNew = model.ml.makeClassifierPackage( ...
+    desmostorm.Log.INFO("Packaging classifier and saving files...")
+    pkgNew = desmostorm.ml.makeClassifierPackage( ...
         netNew, pkgOld.BoxSize, trainOpts, propOpts, patchTableTraining, ...
         PositiveClass=opts.PositiveLabel, ...
         SourceModel=string(classifierFile), ...
@@ -99,12 +99,12 @@ function [pkgNew, out] = continueClassifierTrainingFromProject(project, classifi
     projectPatchOut = fullfile(saveDir, sprintf("patchTable_%s_v%03d_project.csv", stem, nextVersion));
     trainingPatchOut = fullfile(saveDir, sprintf("patchTable_%s_v%03d_training.csv", stem, nextVersion));
     
-    model.ml.saveClassifierPackage(classifierOut, pkgNew);
-    app.Log.INFO(sprintf("Saved classifier package: %s",classifierOut))
+    desmostorm.ml.saveClassifierPackage(classifierOut, pkgNew);
+    desmostorm.Log.INFO(sprintf("Saved classifier package: %s",classifierOut))
     writetable(patchTableProject, projectPatchOut);
-    app.Log.INFO(sprintf("Saved project patch table: %s",projectPatchOut))
+    desmostorm.Log.INFO(sprintf("Saved project patch table: %s",projectPatchOut))
     writetable(patchTableTraining, trainingPatchOut);
-    app.Log.INFO(sprintf("Saved training patch table: %s",trainingPatchOut))
+    desmostorm.Log.INFO(sprintf("Saved training patch table: %s",trainingPatchOut))
     
     out = struct();
     out.ClassifierFile = string(classifierOut);

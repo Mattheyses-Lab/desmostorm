@@ -34,7 +34,7 @@ classdef Box < handle
         function set.FaceColor(this,v)
             old = this.FaceColor_;
             this.FaceColor_ = v;
-            ev = app.config.ChangeEvent("Display","FaceColor",old,v);
+            ev = desmostorm.config.ChangeEvent("Display","FaceColor",old,v);
             notify(this,'DisplayChanged',ev);
             notify(this,'Changed',ev);
         end
@@ -42,7 +42,7 @@ classdef Box < handle
         function set.EdgeColor(this,v)
             old = this.EdgeColor_;
             this.EdgeColor_ = v;
-            ev = app.config.ChangeEvent("Display","EdgeColor",old,v);
+            ev = desmostorm.config.ChangeEvent("Display","EdgeColor",old,v);
             notify(this,'DisplayChanged',ev);
             notify(this,'Changed',ev);
         end
@@ -50,7 +50,7 @@ classdef Box < handle
         function set.ShowTitle(this,v)
             old = this.ShowTitle_;
             this.ShowTitle_ = v;
-            ev = app.config.ChangeEvent("Display","ShowTitle",old,v);
+            ev = desmostorm.config.ChangeEvent("Display","ShowTitle",old,v);
             notify(this,'DisplayChanged',ev);
             notify(this,'Changed',ev);
         end
@@ -58,7 +58,7 @@ classdef Box < handle
         function set.TitleContent(this,v)
             old = this.TitleContent_;
             this.TitleContent_ = v;
-            ev = app.config.ChangeEvent("Display","TitleContent",old,v);
+            ev = desmostorm.config.ChangeEvent("Display","TitleContent",old,v);
             notify(this,'DisplayChanged',ev);
             notify(this,'Changed',ev);
         end

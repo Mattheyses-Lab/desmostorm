@@ -2,7 +2,7 @@ classdef LabelRegistry < handle
 %LabelRegistry  Project-level label bank (lookup by id/hotkey, active label, serialization).
 
     properties (Access=private)
-        LabelsDict = dictionary(string.empty(1,0), model.RegionLabel.empty(1,0))  % ID -> RegionLabel
+        LabelsDict = dictionary(string.empty(1,0), desmostorm.model.RegionLabel.empty(1,0))  % ID -> RegionLabel
         Order (1,:) string = string.empty(1,0)
         HotkeyMap = dictionary(string.empty(1,0), string.empty(1,0))            % hotkey -> ID
     end
@@ -18,7 +18,7 @@ classdef LabelRegistry < handle
 
     methods
         function obj = LabelRegistry()
-            obj.LabelsDict = dictionary(string.empty(1,0), model.RegionLabel.empty(1,0));
+            obj.LabelsDict = dictionary(string.empty(1,0), desmostorm.model.RegionLabel.empty(1,0));
             obj.HotkeyMap  = dictionary(string.empty(1,0), string.empty(1,0));
             obj.Order      = string.empty(1,0);
         end
@@ -34,7 +34,7 @@ classdef LabelRegistry < handle
 
         function arr = labels(obj)
             if isempty(obj.Order)
-                arr = model.RegionLabel.empty();
+                arr = desmostorm.model.RegionLabel.empty();
             else
                 arr = obj.LabelsDict(obj.Order);
             end
@@ -95,7 +95,7 @@ classdef LabelRegistry < handle
                 opts.MakeActive (1,1) logical = false
             end
 
-            lbl = model.RegionLabel(name, "ID",opts.ID, "Hotkey",opts.Hotkey, "Color",opts.Color);
+            lbl = desmostorm.model.RegionLabel(name, "ID",opts.ID, "Hotkey",opts.Hotkey, "Color",opts.Color);
 
             % ensure unique hotkey mapping (last-wins)
             if lbl.hasHotkey()
@@ -216,7 +216,7 @@ classdef LabelRegistry < handle
 
     methods (Static)
         function bank = fromStruct(S)
-            bank = model.LabelRegistry();
+            bank = desmostorm.model.LabelRegistry();
 
             if isfield(S,'Labels') && ~isempty(S.Labels)
                 for k = 1:numel(S.Labels)
@@ -244,7 +244,7 @@ classdef LabelRegistry < handle
 
 
         function obj = default()
-            obj = model.LabelRegistry();
+            obj = desmostorm.model.LabelRegistry();
             obj.add("Unlabeled","ID","unlabeled","Hotkey","u","Color",[0.7 0.7 0.7]);
             % Examples (edit/remove as you like)
             obj.add("Object","ID","object","Hotkey","1","Color",[0.2 0.8 0.2]);

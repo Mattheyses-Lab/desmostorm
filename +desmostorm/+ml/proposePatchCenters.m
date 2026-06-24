@@ -22,7 +22,7 @@ function [centers, scores] = proposePatchCenters(imgOrPath, net, opts)
     Wn = netInputSize(2);
     
     % Load image
-    if isa(imgOrPath, "model.STORMImage")
+    if isa(imgOrPath, "desmostorm.model.STORMImage")
         I0 = imgOrPath.CData;
         H = imgOrPath.Height;
         W = imgOrPath.Width;

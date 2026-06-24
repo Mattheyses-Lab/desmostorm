@@ -93,7 +93,7 @@ function [out, debug] = fitPlaquePairROI(I, opts)
     % locate puncta maxima to get seeds for mask
     %[seedPts,seedMask] = matlabx.image.measure.findPuncta(Inorm);
 
-    [seedPts,seedMask] = model.analysis.image.detectPlaques(Inorm);
+    [seedPts,seedMask] = desmostorm.analysis.image.detectPlaques(Inorm);
     
     % Keep only in-bounds seed points
     if ~isempty(seedPts)

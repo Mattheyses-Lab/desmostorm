@@ -32,7 +32,7 @@ classdef PointClusters < handle
     %% clustering output
     properties
         % Clusters (:,1) PointCluster = PointCluster.empty()
-        Clusters (:,1) model.analysis.cluster.PointCluster = model.analysis.cluster.PointCluster.empty()
+        Clusters (:,1) desmostorm.analysis.cluster.PointCluster = desmostorm.analysis.cluster.PointCluster.empty()
     end
 
     properties (Dependent)
@@ -114,7 +114,7 @@ classdef PointClusters < handle
 
         function cluster(obj,opts)
             arguments
-                obj (1,1) model.analysis.cluster.PointClusters
+                obj (1,1) desmostorm.analysis.cluster.PointClusters
                 opts.ClusterMethod (1,:) char {mustBeMember(opts.ClusterMethod,{'dbscan','kmeans'})} = 'dbscan'
             end
 
@@ -131,7 +131,7 @@ classdef PointClusters < handle
 
         function dbscan(obj,pts,minPts)
             arguments
-                obj (1,1) model.analysis.cluster.PointClusters
+                obj (1,1) desmostorm.analysis.cluster.PointClusters
                 % points to cluster
                 pts (:,2) double
                 % minimum number of neighbors required to form a core point in DBSCAN
@@ -146,7 +146,7 @@ classdef PointClusters < handle
             % all point-to-point distances
             D = pdist2(pts, pts);
             % find optimal epsilon value
-            epsilon = model.analysis.cluster.chooseDbscanEpsilonKnee(pts,minPts,"SmoothFrac",0.01);
+            epsilon = desmostorm.analysis.cluster.chooseDbscanEpsilonKnee(pts,minPts,"SmoothFrac",0.01);
             fprintf('DBSCAN: Optimal epsilon: %f\n',epsilon);
             % cluster with DBSCAN (Density-based spatial clustering of applications with noise)
             clusterIdxs = dbscan(D,epsilon,minPts,"Distance","precomputed");
@@ -157,7 +157,7 @@ classdef PointClusters < handle
             fprintf('DBSCAN: %i points grouped into %i clusters (%i outliers rejected)\n',n,N,nOutliers);
             % create a PointCluster object to hold the data for each cluster
             obj.Clusters = arrayfun(@(i) ...
-                model.analysis.cluster.PointCluster(...
+                desmostorm.analysis.cluster.PointCluster(...
                     obj,...
                     pts(clusterIdxs==i, :),...
                     i),...
@@ -166,7 +166,7 @@ classdef PointClusters < handle
 
         function kmeans(obj,pts,k)
             arguments
-                obj (1,1) model.analysis.cluster.PointClusters
+                obj (1,1) desmostorm.analysis.cluster.PointClusters
                 % points to cluster
                 pts (:,2) double
                 % number of clusters
@@ -183,7 +183,7 @@ classdef PointClusters < handle
             fprintf('KMEANS: %i points grouped into %i clusters\n',n,N);
             % create a PointCluster object to hold the data for each cluster
             obj.Clusters = arrayfun(@(i) ...
-                model.analysis.cluster.PointCluster(...
+                desmostorm.analysis.cluster.PointCluster(...
                     obj,...
                     pts(clusterIdxs==i, :),...
                     i),...
@@ -251,7 +251,7 @@ classdef PointClusters < handle
         function recluster(obj,opts)
             % recluster only those points currently in a cluster
             arguments
-                obj (1,1) model.analysis.cluster.PointClusters
+                obj (1,1) desmostorm.analysis.cluster.PointClusters
                 opts.ClusterMethod (1,:) char {mustBeMember(opts.ClusterMethod,{'dbscan','kmeans'})} = 'dbscan'
             end
 
@@ -312,7 +312,7 @@ classdef PointClusters < handle
         function filterByProperty(obj,prop,thresh)
             %FILTERBYPROPERTY remove any clusters for which the value of property, prop, falls outside the range, thresh
             arguments
-                obj (1,1) model.analysis.cluster.PointClusters
+                obj (1,1) desmostorm.analysis.cluster.PointClusters
                 % name of property to filter on
                 prop (1,:) char {ismember(prop,{'Eccentricity','nPoints','PointDensity','HullArea'})}
                 % minimum number of neighbors required to form a core point in DBSCAN

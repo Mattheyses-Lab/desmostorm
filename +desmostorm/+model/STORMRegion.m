@@ -4,7 +4,7 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
     %% ID/ownership/meta
     properties
         ID (1,1) string
-        Parent model.STORMImage
+        Parent desmostorm.model.STORMImage
         Name (1,1) string = ""
         CreatedAt datetime = datetime('now')
 
@@ -15,7 +15,7 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
 
     % props derived from parent
     properties (Dependent=true)
-        PixelSize (1,1) model.units.PixelSize
+        PixelSize (1,1) desmostorm.model.units.PixelSize
     end
 
     %% Classification/auto-detection
@@ -36,7 +36,7 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
             'Height',NaN,...            % height of the rectangle (px)
             'RotationAngle',NaN)        % CCW rotation angle of the rectangle (deg)
         % Linescan measurement results
-        LinescanResults (:,1) model.analysis.PeaksData = model.analysis.PeaksData.empty()
+        LinescanResults (:,1) desmostorm.model.analysis.PeaksData = desmostorm.model.analysis.PeaksData.empty()
     end
 
     %% Derived outputs
@@ -49,7 +49,7 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
         % Constructor
         function obj = STORMRegion(Parent, ID, Center, BoxSize, LabelID, LabelSource, Score)
             arguments
-                Parent      model.STORMImage
+                Parent      desmostorm.model.STORMImage
                 ID          (1,1) string
                 Center      (1,2) double
                 BoxSize     (1,1) double
@@ -97,13 +97,13 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
 
         function resetROI(obj)
             % reset the linescan ROI params
-            obj.ROI = model.STORMRegion.ROITemplate();
+            obj.ROI = desmostorm.model.STORMRegion.ROITemplate();
             % also reset linescan results
             obj.resetLinescanResults();
         end
 
         function resetLinescanResults(obj)
-            obj.LinescanResults = model.analysis.PeaksData.empty();
+            obj.LinescanResults = desmostorm.model.analysis.PeaksData.empty();
         end
 
     end
@@ -113,7 +113,7 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
 
         function str = formatLength(obj,val,mode)
             arguments
-                obj (1,1) model.STORMRegion
+                obj (1,1) desmostorm.model.STORMRegion
                 val (:,1)
                 mode (1,:) char {mustBeMember(mode,{'physical','px'})} = 'physical'
             end
@@ -399,7 +399,7 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
     end
 
     %% Serialization helpers
-    methods(Access=?model.STORMImage)
+    methods(Access=?desmostorm.model.STORMImage)
 
         function R = toStruct(obj)
             R.ID            = obj.ID;
@@ -423,7 +423,7 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
 
         function reg = fromStruct(R,img)
                 % create a new STORMRegion parented to the STORMImage, img
-                reg = model.STORMRegion(img, string(R.ID), R.Center, R.BoxSize);
+                reg = desmostorm.model.STORMRegion(img, string(R.ID), R.Center, R.BoxSize);
                 reg.Name = string(R.Name);
 
                 if isfield(R,'CreatedAt') && ~isempty(R.CreatedAt)

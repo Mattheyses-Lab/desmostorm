@@ -1,10 +1,10 @@
 function setup()
 
     % restore default settings
-    app.config.Settings.restore();
+    desmostorm.app.config.Settings.restore();
 
     % setup MATLAB path
-    app.setupSearchPath();
+    desmostorm.app.setupSearchPath();
 
     % setup matlabx
     matlabx.setup();
