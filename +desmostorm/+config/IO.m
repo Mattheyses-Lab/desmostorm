@@ -1,7 +1,7 @@
 classdef IO < handle
 
     properties (Access=private)
-        DefaultFolder_ string = desmostorm.app.Paths.user
+        DefaultFolder_ string = desmostorm.Paths.user
         AutoSave_      logical = true
     end
 
@@ -30,8 +30,8 @@ classdef IO < handle
 
             % ensure DefaultFolder is an actual folder
             if ~isfolder(v)
-                warning('%s is not a folder or is not accessible, reverting to default: %s',v,desmostorm.app.Paths.user);
-                v = desmostorm.app.Paths.user;
+                warning('%s is not a folder or is not accessible, reverting to default: %s',v,desmostorm.Paths.user);
+                v = desmostorm.Paths.user;
             end
 
             old = this.DefaultFolder_;

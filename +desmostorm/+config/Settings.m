@@ -47,7 +47,7 @@ classdef Settings < handle
                 file = desmostorm.config.Settings.defaultFile();
             end
 
-            S.Version  = char(desmostorm.app.Info.Version);
+            S.Version  = char(desmostorm.Info.Version);
             S.Analysis = this.Analysis.toStruct();
             S.Display  = this.Display.toStruct();
             S.IO       = this.IO.toStruct();
@@ -70,7 +70,7 @@ classdef Settings < handle
 
 
         function S = toStruct(obj)
-            S.Version   = char(desmostorm.app.Info.Version);
+            S.Version   = char(desmostorm.Info.Version);
             S.Analysis  = obj.Analysis.toStruct();
             S.Display   = obj.Display.toStruct();
             S.IO        = obj.IO.toStruct();
@@ -129,7 +129,7 @@ classdef Settings < handle
 
         function p = defaultFile()
             % get full path to default settings file
-            p = desmostorm.app.Paths.settingsFile();
+            p = desmostorm.Paths.settingsFile();
         end
 
         function [S, migrated] = migrate(S)
@@ -149,8 +149,8 @@ classdef Settings < handle
 
             old = string(S.Version);
 
-            if desmostorm.app.Version.compare(old, "1.1.0") < 0
-                desmostorm.app.Log.WARN("Migrating settings to v1.1.0")
+            if desmostorm.Version.compare(old, "1.1.0") < 0
+                desmostorm.Log.WARN("Migrating settings to v1.1.0")
                 % Box settings
                 defaultBox = desmostorm.config.Box;
                 S.Box.FaceColor     = S.Box.BoxFaceColor;
