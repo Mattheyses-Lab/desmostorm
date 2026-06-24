@@ -1,5 +1,5 @@
 function setupSearchPath()
-%SETUPSEARCHPATH Adds necessary folder to MATLAB search path
+%SETUPSEARCHPATH  Adds required folders to MATLAB search path
 
 % add project root to MATLAB search path
 addpath(desmostorm.app.Paths.root());
