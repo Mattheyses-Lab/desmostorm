@@ -1635,7 +1635,8 @@ classdef GUI < handle
         end
 
         function onPeaksPlotChanged(obj,e)
-            obj.RegionLinescanPlot.(e.Name) = obj.Settings.PeaksPlot.(e.Name);
+            %obj.RegionLinescanPlot.(e.Name) = obj.Settings.PeaksPlot.(e.Name);
+            set(obj.RegionLinescanPlot,e.Name,obj.Settings.PeaksPlot.(e.Name));
         end
 
         function onBoxChanged(obj,e)

@@ -2,28 +2,30 @@ classdef PeaksData
 
     % input data
     properties
-        Y (:,1) double  % signal values
-        X (:,1) double  % signal value location vector (distance/time/etc)
+        Signal (:,1) double  % signal values
+        Location (:,1) double  % signal value location vector (distance/time/etc)
     end
 
     % processed input
     properties
-        YNorm   (:,1) double
-        YSmooth (:,1) double
+        SignalNorm   (:,1) double
+        SignalSmooth (:,1) double
     end
 
     % analysis settings
     properties
-        Normalize           (1,1) logical
-        Smooth              (1,1) logical
-        MinPeakDistance     (1,1) double
-        MinPeakHeight       (1,1) double
-        MinPeakProminence   (1,1) double
-        PeakSmoothing       (1,1) double
-        WidthReference      (1,:) char
-        DistanceScale       (1,1) double
-        DistanceUnit        (1,:) char
-        RecomputeWidths     (1,1) logical   % T/F - whether to recompute widths from findpeaks() to match FWHM annotations
+        Normalize               (1,1) logical
+        Smooth                  (1,1) logical
+        MinPeakDistance         (1,1) double
+        MinPeakHeight           (1,1) double
+        MinPeakHeightMode       (1,:) char
+        MinPeakProminence       (1,1) double
+        MinPeakProminenceMode   (1,:) char
+        PeakSmoothing           (1,1) double
+        WidthReference          (1,:) char
+        DistanceScale           (1,1) double
+        DistanceUnit            (1,:) char
+        RecomputeWidths         (1,1) logical % T/F - whether to recompute widths from findpeaks() to match FWHM annotations
     end
 
     % primary output measurements
@@ -82,29 +84,33 @@ classdef PeaksData
 
 
     methods
-        function obj = PeaksData(Y,X,opts)
+        function obj = PeaksData(Signal,Location,opts)
             arguments
-                Y                       (:,1) double
-                X                       (:,1) double
-                opts.Normalize          (1,1) logical   = true
-                opts.Smooth             (1,1) logical   = true
-                opts.MinPeakDistance    (1,1) double    = 0
-                opts.MinPeakHeight      (1,1) double    = -Inf
-                opts.MinPeakProminence  (1,1) double    = 0
-                opts.PeakSmoothing      (1,1) double    = 15
-                opts.WidthReference     (1,:) char      = 'halfheight'
-                opts.DistanceScale      (1,1) double    = 1
-                opts.DistanceUnit       (1,:) char      = 'px'
-                opts.RecomputeWidths    (1,1) logical   = true
+                Signal                      (:,1) double
+                Location                    (:,1) double
+                opts.Normalize              (1,1) logical   = true
+                opts.Smooth                 (1,1) logical   = true
+                opts.MinPeakDistance        (1,1) double    = 0
+                opts.MinPeakHeight          (1,1) double    = 0
+                opts.MinPeakHeightMode      (1,:) char {ismember(opts.MinPeakHeightMode,{'absolute','relative'})} = 'relative'
+                opts.MinPeakProminence      (1,1) double    = 0
+                opts.MinPeakProminenceMode  (1,:) char {ismember(opts.MinPeakProminenceMode,{'absolute','relative'})} = 'relative'
+                opts.PeakSmoothing          (1,1) double    = 15
+                opts.WidthReference         (1,:) char      = 'halfheight'
+                opts.DistanceScale          (1,1) double    = 1
+                opts.DistanceUnit           (1,:) char      = 'px'
+                opts.RecomputeWidths        (1,1) logical   = true
             end
             % collect inputs
-            obj.Y = Y;
-            obj.X = X;
+            obj.Signal = Signal;
+            obj.Location = Location;
             obj.Normalize = opts.Normalize;
             obj.Smooth = opts.Smooth;
             obj.MinPeakDistance = opts.MinPeakDistance;
             obj.MinPeakHeight = opts.MinPeakHeight;
+            obj.MinPeakHeightMode = opts.MinPeakHeightMode;
             obj.MinPeakProminence = opts.MinPeakProminence;
+            obj.MinPeakProminenceMode = opts.MinPeakProminenceMode;
             obj.PeakSmoothing = opts.PeakSmoothing;
             obj.WidthReference = opts.WidthReference;
             obj.DistanceScale = opts.DistanceScale;
@@ -118,23 +124,25 @@ classdef PeaksData
             % --- SMOOTH AND NORMALIZE THE RAW INPUT SIGNAL ---
             % normalize the raw signal if required (use the raw signal if ~obj.Normalize)
             if obj.Normalize
-                obj.YNorm = model.analysis.PeaksData.normalizeSignal(obj.Y);
+                obj.SignalNorm = model.analysis.PeaksData.normalizeSignal(obj.Signal);
             else
-                obj.YNorm = obj.Y;
+                obj.SignalNorm = obj.Signal;
             end
             % smooth the normalized signal if required (use the normalized signal if ~obj.Smooth)
             if obj.Smooth
-                obj.YSmooth = model.analysis.PeaksData.smooth(obj.YNorm,obj.PeakSmoothing);
+                obj.SignalSmooth = model.analysis.PeaksData.smooth(obj.SignalNorm,obj.PeakSmoothing);
             else
-                obj.YSmooth = obj.YNorm;
+                obj.SignalSmooth = obj.SignalNorm;
             end
             % --- DETECT PEAKS USING findpeaks() ---
-            out = model.analysis.PeaksData.detect(obj.YSmooth, ...
-                obj.X, ...
+            out = model.analysis.PeaksData.detect(obj.SignalSmooth, ...
+                obj.Location, ...
                 obj.MinPeakDistance, ...
                 obj.MinPeakHeight, ...
                 obj.MinPeakProminence, ...
-                obj.WidthReference);
+                obj.WidthReference, ...
+                'MinPeakHeightMode', obj.MinPeakHeightMode, ...
+                'MinPeakProminenceMode', obj.MinPeakProminenceMode);
             obj.PeakValues = out.PeakValues;
             obj.PeakLocations = out.PeakLocations;
             obj.PeakWidths = out.PeakWidths;
@@ -142,11 +150,11 @@ classdef PeaksData
             obj.PeakDistances = out.PeakDistances;
             % --- GET PLOT ANNOTATION COORDINATES ---
             % set height for peak distance annotations based on maximum of smoothed signal
-            annotationsHeight = max(obj.YSmooth);
+            annotationsHeight = max(obj.SignalSmooth);
             % get annotation coordinates
             out = model.analysis.PeaksData.getAnnotationCoordinates( ...
-                obj.YSmooth, ...
-                obj.X, ...
+                obj.SignalSmooth, ...
+                obj.Location, ...
                 obj.PeakValues, ...
                 obj.PeakLocations, ...
                 obj.PeakProminences, ...
@@ -177,19 +185,26 @@ classdef PeaksData
             obj.CentralPeakPairDistance = out.CentralPeakPairDistance;
         end
 
-        function h = plot(obj,opts)
+
+        function [h,ax] = plot(obj,opts)
             arguments
                 obj         (1,1) model.analysis.PeaksData
                 opts.Parent (:,1) matlab.ui.control.UIAxes = matlab.ui.control.UIAxes.empty()
             end
 
             if isempty(opts.Parent)
-                fig = uifigure();
-                ax = uiaxes(fig);
+                pos = matlabx.ui.calibration.getCenteredFigOuterPosition(750,350);
+                fig = uifigure(...
+                    "WindowStyle","alwaysontop",...
+                    "Units","pixels",...
+                    "OuterPosition",pos,...
+                    "Theme","light",...
+                    "Color",[1 1 1]);
+                ax = uiaxes(fig,"Units","normalized","OuterPosition",[0 0 1 1]);
             else
                 ax = opts.Parent;
             end
-            h = model.analysis.PeaksPlot(ax,obj);
+            h = widgets.PeaksPlot(ax,obj);
         end
 
     end
@@ -219,10 +234,10 @@ classdef PeaksData
 
             % convert peak locations to idxs
             locs = obj.PeakLocations;
-            locs = arrayfun(@(loc) find(obj.X==loc,1),locs);
+            locs = arrayfun(@(loc) find(obj.Location==loc,1),locs);
 
             % convert location vector to idxs
-            nSamples = numel(obj.X);
+            nSamples = numel(obj.Location);
             %Xidx = 1:nSamples;
 
             % find central peak pair, first peak to the left and right of the signal midpoint
@@ -262,7 +277,6 @@ classdef PeaksData
 
         end
 
-
     end
 
 
@@ -273,10 +287,10 @@ classdef PeaksData
 
         % package unscaled output
         function out = get.OutputRaw(obj)
-            out.X = obj.X;
-            out.Y = obj.Y;
-            out.YNorm = obj.YNorm;
-            out.YSmooth = obj.YSmooth;
+            out.Location = obj.Location;
+            out.Signal = obj.Signal;
+            out.SignalNorm = obj.SignalNorm;
+            out.SignalSmooth = obj.SignalSmooth;
             out.PeakValues = obj.PeakValues;
             out.PeakLocations = obj.PeakLocations;
             out.PeakWidths = obj.PeakWidths;
@@ -293,7 +307,7 @@ classdef PeaksData
         % package scaled output (multiplied by obj.DistanceScale)
         function out = get.OutputScaled(obj)
             out = obj.OutputRaw;
-            out.X = out.X*obj.DistanceScale;
+            out.Location = out.Location*obj.DistanceScale;
             out.PeakLocations = out.PeakLocations*obj.DistanceScale;
             out.PeakWidths = out.PeakWidths*obj.DistanceScale;
             out.PeakDistances = out.PeakDistances*obj.DistanceScale;
@@ -323,27 +337,80 @@ classdef PeaksData
             tf = ~isempty(obj.RightPeakIdx);
         end
 
-
     end
 
 
 
     methods(Static)
 
-        function out = detect(Y, X, MinPeakDistance, MinPeakHeight, MinPeakProminence, WidthReference)
+        % function out = detect(Signal, Location, MinPeakDistance, MinPeakHeight, MinPeakProminence, WidthReference)
+        %     arguments
+        %         Signal              (:,1) double
+        %         Location            (:,1) double
+        %         MinPeakDistance     (1,1) double
+        %         MinPeakHeight       (1,1) double
+        %         MinPeakProminence   (1,1) double
+        %         WidthReference      (1,:) char = 'halfheight'
+        %     end
+        %     % make sure signal has at least two more elements than the value of MinPeakDistance
+        %     if length(Signal) > (MinPeakDistance+1)
+        %         % 4th output is prominence for each peak, may use in future
+        %         [PeakValues,PeakLocations,PeakWidths,PeakProminences] = findpeaks(...
+        %             Signal,Location,...
+        %             'MinPeakHeight',MinPeakHeight,...
+        %             'MinPeakDistance',MinPeakDistance,...
+        %             'WidthReference',WidthReference,...
+        %             'MinPeakProminence',MinPeakProminence); % set higher to pick up fewer small peaks
+        % 
+        %         if numel(PeakLocations) > 1
+        %             PeakDistances = diff(PeakLocations);
+        %         else
+        %             PeakDistances = NaN;
+        %         end
+        %     else
+        %         PeakValues = [];
+        %         PeakLocations = [];
+        %         PeakWidths = [];
+        %         PeakProminences = [];
+        %         PeakDistances = [];
+        %     end
+        % 
+        %     % collect output
+        %     out = struct(...
+        %         'PeakValues',       PeakValues, ...
+        %         'PeakLocations',    PeakLocations, ...
+        %         'PeakWidths',       PeakWidths, ...
+        %         'PeakProminences',  PeakProminences, ...
+        %         'PeakDistances',    PeakDistances);
+        % 
+        % end
+
+      function out = detect(Signal, Location, MinPeakDistance, MinPeakHeight, MinPeakProminence, WidthReference, opts)
             arguments
-                Y                   (:,1) double
-                X                   (:,1) double
-                MinPeakDistance     (1,1) double
-                MinPeakHeight       (1,1) double
-                MinPeakProminence   (1,1) double
-                WidthReference      (1,:) char = 'halfheight'
+                Signal                      (:,1) double
+                Location                    (:,1) double
+                MinPeakDistance             (1,1) double
+                MinPeakHeight               (1,1) double
+                MinPeakProminence           (1,1) double
+                WidthReference              (1,:) char = 'halfheight'
+                opts.MinPeakHeightMode      (1,:) char {ismember(opts.MinPeakHeightMode,{'absolute','relative'})} = 'relative'
+                opts.MinPeakProminenceMode  (1,:) char {ismember(opts.MinPeakProminenceMode,{'absolute','relative'})} = 'relative'
             end
+
+            % recalculate MinPeakHeight and MinPeakProminence in terms of the Signal values if applicable
+            if strcmp(opts.MinPeakHeightMode,'relative')
+                MinPeakHeight = MinPeakHeight * max(Signal);
+            end
+
+            if strcmp(opts.MinPeakProminenceMode,'relative')
+                MinPeakProminence = MinPeakProminence * max(Signal);
+            end
+
             % make sure signal has at least two more elements than the value of MinPeakDistance
-            if length(Y) > (MinPeakDistance+1)
+            if length(Signal) > (MinPeakDistance+1)
                 % 4th output is prominence for each peak, may use in future
                 [PeakValues,PeakLocations,PeakWidths,PeakProminences] = findpeaks(...
-                    Y,X,...
+                    Signal,Location,...
                     'MinPeakHeight',MinPeakHeight,...
                     'MinPeakDistance',MinPeakDistance,...
                     'WidthReference',WidthReference,...
@@ -372,14 +439,15 @@ classdef PeaksData
 
         end
 
+
         % rescale to [0,1]
-        function out = normalizeSignal(Y)
-            out = rescale(Y);
+        function out = normalizeSignal(Signal)
+            out = rescale(Signal);
         end
 
         % smooth with moving average filter
-        function out = smooth(Y,span)
-            out = smooth(Y,span);
+        function out = smooth(Signal,span)
+            out = smooth(Signal,span);
         end
 
         % get coordinates for plot annotations
@@ -542,61 +610,96 @@ classdef PeaksData
                 out.BorderLineXY = borderLineXY;
                 out.WidthLabelXY = widthLabelXY;
                 out.PeakToPeakLabelXY = peakToPeakLabelXY;
-
                 out.PeakWidths = peakWidths;
-
         end
 
         % generate random noisy peaks for testing
-        function [X,Y] = generateRandomGaussPeaks(N, nPeaks, noiseSigma)
+        function [Location,Signal,data] = generateRandomGaussPeaks(opts)
             %GENERATERANDOMGAUSSPEAKS  Random smooth peaks + noise
             %
-            %   [X,Y,params] = generateRandomGaussPeaks(N, nPeaks, noiseSigma)
+            %   [Location,Signal,data] = generateRandomGaussPeaks("N",N,"nPeaks",nPeaks,"noiseSigma",noiseSigma)
             %
-            %   INPUTS
+            %   INPUTS (name-value pairs)
             %       N           – number of points (must be odd)
             %       nPeaks      – number of peaks to generate
             %       noiseSigma  – amplitude of additive noise
             %
             %   OUTPUTS
-            %       X           – integer vector centered at 0
-            %       Y           – noisy signal with smooth underlying peaks
-            %       params      – struct holding randomized peak parameters (Pos, Hgt, Wdt)
+            %       Location    – integer vector centered at 0
+            %       Signal      – noisy signal with smooth underlying peaks
+            %       data        – struct holding inputs, randomized peak parameters (Height, Width, etc.),
+            %                     and some outputs
+            %
 
-            if nargin < 1 || isempty(N),        N = 1001;     end
-            if nargin < 2 || isempty(nPeaks),   nPeaks = 6;   end
-            if nargin < 3 || isempty(noiseSigma), noiseSigma = 0.3; end
+            arguments
+                opts.N          (1,1) double = 2*randi([250 750]) + 1
+                opts.nPeaks     (1,1) double = randi([3 10])
+                opts.noiseSigma (1,1) double = 0.1 + 0.4*rand
+            end
+
+            N = opts.N;
+            nPeaks = opts.nPeaks;
+            noiseSigma = opts.noiseSigma;  
 
             % Ensure odd N
             if mod(N,2)==0
-                error('N must be odd so that X can be symmetric around 0.');
+                error('N must be odd so that Location can be symmetric around 0.');
             end
 
-            % X centered at 0
+            % Location centered at 0
             halfRange = (N-1)/2;
-            X = -halfRange:halfRange;
-            x = (X - min(X)) / (max(X) - min(X));   % normalized coordinate [0,1]
+            Location = -halfRange:halfRange;
+            loc = (Location - min(Location)) / (max(Location) - min(Location));   % normalized coordinate [0,1]
 
             % ---- RANDOMIZE PEAK PARAMETERS ----
 
             % Peak positions: uniform in [0.05, 0.95] so they aren't on the edges
-            Pos = 0.05 + 0.90*rand(1, nPeaks);
+            Positions = 0.05 + 0.90*rand(1, nPeaks);
             % Peak heights: between 1 and 4 (tunable)
-            Hgt = 1 + 3*rand(1, nPeaks);
+            Heights = 1 + 3*rand(1, nPeaks);
             % Peak widths: between 1% and 10% of the full domain
-            Wdt = (0.01 + 0.09*rand(1, nPeaks));
+            Widths = (0.01 + 0.09*rand(1, nPeaks));
 
             % ---- BUILD GAUSSIAN PEAKS ----
 
-            % Vectorized: Gauss(i,:) = Hgt(i)*exp(-((x - Pos(i))/Wdt(i)).^2)
-            Gauss = Hgt(:) .* exp(-((x - Pos(:))./Wdt(:)).^2);
-            cleanSignal = sum(Gauss, 1);
+            % % Vectorized: Gauss(i,:) = Hgt(i)*exp(-((x - Pos(i))/Wdt(i)).^2)
+            % Gauss = Heights(:) .* exp(-((loc - Positions(:))./Widths(:)).^2);
+            % cleanSignal = sum(Gauss, 1);
+            % 
+            % % ---- ADD NOISE ----
+            % Signal = cleanSignal + noiseSigma * randn(size(cleanSignal));
+            % 
+            % % normalize such that all(Signal(:)>=0)
+            % Signal = Signal - min(Signal);
 
-            % ---- ADD NOISE ----
-            Y = cleanSignal + noiseSigma * randn(size(cleanSignal));
+            % generate gaussians
+            GaussRaw = Heights(:) .* exp(-((loc - Positions(:))./Widths(:)).^2);
 
-            % normalize such that all(Y(:)>=0)
-            Y = Y - min(Y);
+            % add noise
+            GaussNoise = GaussRaw + noiseSigma * randn(size(GaussRaw));
+
+            % sum individual signals
+            Signal = sum(GaussNoise, 1);
+
+            % normalize such that all(Signal(:)>=0)
+            Signal = Signal - min(Signal);
+
+            [sortedPositions,sortIdx] = sort(Positions,"ascend");
+            sortedPositionsIdx = max(min(round(sortedPositions*N),N),1);
+            sortedLocations = Location(sortedPositionsIdx);
+            sortedHeights = Heights(sortIdx);
+            sortedWidths = Widths(sortIdx);
+
+            data = struct(...
+                "N_Points",N,...
+                "N_Peaks",nPeaks,...
+                "NoiseSigma",noiseSigma,...
+                "Peak_Locations",sortedLocations,...
+                "Peak_Heights",sortedHeights,...
+                "Peak_Widths",sortedWidths,...
+                "Gauss_Raw",GaussRaw,...
+                "Gauss_Noise",GaussNoise);
+
         end
 
     end
