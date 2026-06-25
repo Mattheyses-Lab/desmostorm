@@ -31,12 +31,12 @@
 %     %% public properties with private backing
 %     properties(Dependent)
 %         Parent (1,1) matlab.ui.control.UIAxes
-%         Data model.analysis.PeaksData
+%         Data desmostorm.analysis.PeaksData
 %     end
 % 
 %     properties(Access=private)
 %         Parent_ (1,1) matlab.ui.control.UIAxes
-%         Data_ model.analysis.PeaksData
+%         Data_ desmostorm.analysis.PeaksData
 %     end
 % 
 % 
@@ -58,7 +58,7 @@
 %         function obj = PeaksPlot(ax,data) % constructor
 %             arguments
 %                 ax (1,1) matlab.ui.control.UIAxes
-%                 data (1,1) model.analysis.PeaksData
+%                 data (1,1) desmostorm.analysis.PeaksData
 %             end
 % 
 %             % set up a title for the axes
@@ -258,7 +258,7 @@
 % 
 %         function set.Parent(obj,h)
 %             arguments
-%                 obj (1,1) model.analysis.PeaksPlot
+%                 obj (1,1) desmostorm.analysis.PeaksPlot
 %                 h (1,1) matlab.ui.control.UIAxes
 %             end
 % 
@@ -283,8 +283,8 @@
 % 
 %         function set.Data(obj,data)
 %             arguments
-%                 obj (1,1) model.analysis.PeaksPlot
-%                 data (1,1) model.analysis.PeaksData
+%                 obj (1,1) desmostorm.analysis.PeaksPlot
+%                 data (1,1) desmostorm.analysis.PeaksData
 %             end
 %             obj.Data_ = data;
 %             obj.update();
@@ -297,16 +297,16 @@
 %     methods(Static)
 %         function [peaksData,peaksPlot] = demo()
 %             % generate some random sample data
-%             [Location,Signal,data] = model.analysis.PeaksData.generateRandomGaussPeaks();
+%             [Location,Signal,data] = desmostorm.analysis.PeaksData.generateRandomGaussPeaks();
 %             % PeaksData object to store/analyze the random data
-%             % peaksData = model.analysis.PeaksData(Signal,Location,...
+%             % peaksData = desmostorm.analysis.PeaksData(Signal,Location,...
 %             %     "MinPeakHeight",0.2,...
 %             %     "MinPeakDistance",25,...
 %             %     "MinPeakProminence",0.05,...
 %             %     "PeakSmoothing",15,...
 %             %     "Normalize",true);
 % 
-%             peaksData = model.analysis.PeaksData(Signal,Location,...
+%             peaksData = desmostorm.analysis.PeaksData(Signal,Location,...
 %                 "MinPeakHeight",0.2,...
 %                 "MinPeakDistance",25,...
 %                 "MinPeakProminence",0.5,...
@@ -370,12 +370,12 @@ classdef PeaksPlot < handle & matlab.mixin.SetGetExactNames
     %% public properties with private backing
     properties(Dependent)
         Parent (1,1) matlab.ui.control.UIAxes
-        Data model.analysis.PeaksData
+        Data desmostorm.analysis.PeaksData
     end
 
     properties(Access=private)
         Parent_ (1,1) matlab.ui.control.UIAxes
-        Data_ model.analysis.PeaksData
+        Data_ desmostorm.analysis.PeaksData
     end
 
     %% graphics components the PeaksPlot is built from
@@ -395,7 +395,7 @@ classdef PeaksPlot < handle & matlab.mixin.SetGetExactNames
         function obj = PeaksPlot(ax,data) % constructor
             arguments
                 ax (1,1) matlab.ui.control.UIAxes
-                data (:,1) model.analysis.PeaksData
+                data (:,1) desmostorm.analysis.PeaksData
             end
 
             % create empty line/text objects to show signal profile, peak annotations, distance/width values, etc.
@@ -569,7 +569,7 @@ classdef PeaksPlot < handle & matlab.mixin.SetGetExactNames
 
         function set.Parent(obj,h)
             arguments
-                obj (1,1) model.analysis.PeaksPlot
+                obj (1,1) desmostorm.analysis.PeaksPlot
                 h (1,1) matlab.ui.control.UIAxes
             end
 
@@ -594,8 +594,8 @@ classdef PeaksPlot < handle & matlab.mixin.SetGetExactNames
 
         function set.Data(obj,data)
             arguments
-                obj (1,1) widgets.PeaksPlot
-                data (:,1) model.analysis.PeaksData
+                obj (1,1) desmostorm.widgets.PeaksPlot
+                data (:,1) desmostorm.analysis.PeaksData
             end
             obj.Data_ = data;
             obj.update();
@@ -608,16 +608,16 @@ classdef PeaksPlot < handle & matlab.mixin.SetGetExactNames
     methods(Static)
         function [peaksData,peaksPlot] = demo()
             % generate some random sample data
-            [Location,Signal,data] = model.analysis.PeaksData.generateRandomGaussPeaks();
+            [Location,Signal,data] = desmostorm.analysis.PeaksData.generateRandomGaussPeaks();
             % PeaksData object to store/analyze the random data
-            % peaksData = model.analysis.PeaksData(Signal,Location,...
+            % peaksData = desmostorm.analysis.PeaksData(Signal,Location,...
             %     "MinPeakHeight",0.2,...
             %     "MinPeakDistance",25,...
             %     "MinPeakProminence",0.05,...
             %     "PeakSmoothing",15,...
             %     "Normalize",true);
 
-            peaksData = model.analysis.PeaksData(Signal,Location,...
+            peaksData = desmostorm.analysis.PeaksData(Signal,Location,...
                 "MinPeakHeight",0.2,...
                 "MinPeakDistance",25,...
                 "MinPeakProminence",0.5,...

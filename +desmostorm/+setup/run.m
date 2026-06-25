@@ -2,10 +2,10 @@ function run()
 %DESMOSTORM.SETUP.RUN  Performs any necessary setup actions prior to launch
 
     % restore default settings
-    desmostorm.app.config.Settings.restore();
+    desmostorm.config.Settings.restore();
 
     % setup MATLAB path
-    desmostorm.app.setupSearchPath();
+    desmostorm.setup.setupSearchPath();
 
     % setup matlabx
     matlabx.setup();

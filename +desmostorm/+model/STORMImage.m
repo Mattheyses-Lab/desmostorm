@@ -492,7 +492,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
             data = reg.ROI;
 
             % run region analyzer
-            LinescanResults = desmostorm.model.analysis.Analyzer.run(I,data,config);
+            LinescanResults = desmostorm.analysis.Analyzer.run(I,data,config);
 
             if isempty(LinescanResults)
                 return
@@ -532,7 +532,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
             % get region CData
             I = obj.regionSubimage(reg);
             % get linescan info
-            ROI = desmostorm.model.analysis.Analyzer.autofitRegionROI(I, config);
+            ROI = desmostorm.analysis.Analyzer.autofitRegionROI(I, config);
 
             if isempty(ROI), return; end
 
@@ -590,7 +590,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
             obj.removeAllRegions();
 
             % detect new region locations
-            ctrs = desmostorm.model.analysis.image.detectRegions(obj.CData,"BoxSize",config.BoxSize);
+            ctrs = desmostorm.analysis.image.detectRegions(obj.CData,"BoxSize",config.BoxSize);
 
             % return if none found
             if isempty(ctrs)

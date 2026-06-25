@@ -1,6 +1,8 @@
 function ROI = autofitRegionROI(I,config)
 
 % --- preprocess image to improve fitting ---
+
+% NEEDS TO BE OPTIMIZED IN SEED GROWING STEP
 I = desmostorm.analysis.image.removeIsolatedPuncta(I);
 
 
@@ -26,7 +28,7 @@ maxPeakDist = 0;
 
 % --- temp debug ui ---
 
-showPlots = false;
+showPlots = true;
 
 if showPlots
     f = uifigure("WindowStyle","alwaysontop",...
@@ -37,7 +39,7 @@ if showPlots
     ax = matlabx.ui.widgets.ImageAxes(g,...
         "ToolBelt",{'DrawRectangle'});
     ax.Tools.DrawRectangle.RotationAngleMode = 'half-circle';
-    peaksPlot = widgets.PeaksPlotContainer(g);
+    peaksPlot = desmostorm.widgets.PeaksPlotContainer(g);
 end
 
 
@@ -51,7 +53,7 @@ for i = 1:numel(thetas)
 
     I2 = I;
 
-    I2 = imdilate(I2,strel('line',W/10,theta));
+    % I2 = imdilate(I2,strel('line',W/10,theta));
 
     % compute linescan
     linescanData = desmostorm.analysis.profile.measure2D(I2,...
@@ -66,7 +68,9 @@ for i = 1:numel(thetas)
     peaksData = desmostorm.analysis.PeaksData(linescanData.HeightProfile,linescanData.HeightDist,...
         "MinPeakDistance",config.MinPeakDistance, ...
         "MinPeakHeight",config.MinPeakHeight, ...
-        "PeakSmoothing",config.PeakSmoothing);
+        "PeakSmoothing",config.PeakSmoothing, ...
+        "MinPeakHeightMode",'absolute',...
+        "MinPeakProminenceMode",'absolute');
 
     % method 1 - only consider scans with 2 peaks
     nPeaks(i) = peaksData.nPeaks;
@@ -134,15 +138,17 @@ linescanData = desmostorm.analysis.profile.measure2D(I,...
 peaksData = desmostorm.analysis.PeaksData(linescanData.HeightProfile,linescanData.HeightDist,...
     "MinPeakDistance",config.MinPeakDistance, ...
     "MinPeakHeight",config.MinPeakHeight, ...
-    "PeakSmoothing",config.PeakSmoothing);
+    "PeakSmoothing",config.PeakSmoothing, ...
+    "MinPeakHeightMode",'absolute',...
+    "MinPeakProminenceMode",'absolute');
 
 % get non-normalized signal to make it easier to identify minima
 % (normalizing to [0 1] means there will always be a signal value of 0 somewhere)
-Yraw = peaksData.Y;
-Ysmooth = desmostorm.analysis.PeaksData.smooth(Yraw,config.PeakSmoothing);
+signalRaw = peaksData.Signal;
+signalSmooth = desmostorm.analysis.PeaksData.smooth(signalRaw,config.PeakSmoothing);
 
-X = peaksData.X;                % distance vector
-Y = Ysmooth;                    % signal vector
+X = peaksData.Location;              % location vector
+Y = signalSmooth;                    % signal vector
 locs = peaksData.PeakLocations; % peak locations
 
 
@@ -212,59 +218,6 @@ ROI = shiftTopEdge(dH_Top,ROI);
 dH_Bot = X(rightMinIdx) - X(end);
 ROI = shiftBottomEdge(dH_Bot,ROI);
 
-
-
-
-% left min first
-
-% % distance to adjust ROI height to trim from the "top"
-% dH_Top = X(leftMinIdx) - X(1);
-% 
-% % distance to shift center to account for changing height
-% dC_Top = dH_Top / 2;
-% 
-% % X and Y shifts, unsigned
-% dX_Top = cosd(90-abs(RotationAngle))*dC_Top;
-% dY_Top = sind(90-abs(RotationAngle))*dC_Top;
-
-% right min
-
-% % distance to adjust ROI height to trim from the "bottom"
-% dH_Bot = X(end) - X(rightMinIdx);
-% 
-% % distance to shift center to account for changing height
-% dC_Bot = dH_Bot / 2;
-% 
-% % X and Y shifts, unsigned
-% dX_Bot = cosd(90-abs(RotationAngle))*dC_Bot;
-% dY_Bot = sind(90-abs(RotationAngle))*dC_Bot;
-% 
-% % apply signs
-% if RotationAngle < 0
-%     dX_Top = -dX_Top;
-%     dY_Bot = -dY_Bot;
-% else
-%     dX_Bot = -dX_Bot;
-%     dY_Bot = -dY_Bot;
-% end
-% 
-% % Adjust the ROI dimensions based on the calculated shifts
-% Height = Height - dH_Top - dH_Bot;
-% CenterX = CenterX + (dX_Top + dX_Bot);
-% CenterY = CenterY + (dY_Top + dY_Bot);
-
-% % collect output as struct
-% ROI = struct(...
-%     "CenterX",CenterX, ...
-%     "CenterY",CenterY, ...
-%     "Width",Width, ...
-%     "Height", Height, ...
-%     "RotationAngle", RotationAngle);
-
-% matlabx.struct.prettyPrint(ROI);
-
-
-
     function ROIout = shiftTopEdge(d,ROI)
         % distance to shift center to account for changing height
         dC = d / 2;
@@ -278,8 +231,6 @@ ROI = shiftBottomEdge(dH_Bot,ROI);
         ROIout.CenterY = ROI.CenterY + dY;
     end
 
-
-
     function ROIout = shiftBottomEdge(d,ROI)
         % distance to shift center to account for changing height
         dC = d / 2;
@@ -292,9 +243,5 @@ ROI = shiftBottomEdge(dH_Bot,ROI);
         ROIout.CenterX = ROI.CenterX + dX;
         ROIout.CenterY = ROI.CenterY + dY;
     end
-
-
-
-
 
 end

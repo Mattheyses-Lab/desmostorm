@@ -36,7 +36,7 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
             'Height',NaN,...            % height of the rectangle (px)
             'RotationAngle',NaN)        % CCW rotation angle of the rectangle (deg)
         % Linescan measurement results
-        LinescanResults (:,1) desmostorm.model.analysis.PeaksData = desmostorm.model.analysis.PeaksData.empty()
+        LinescanResults (:,1) desmostorm.analysis.PeaksData = desmostorm.analysis.PeaksData.empty()
     end
 
     %% Derived outputs
@@ -103,7 +103,7 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
         end
 
         function resetLinescanResults(obj)
-            obj.LinescanResults = desmostorm.model.analysis.PeaksData.empty();
+            obj.LinescanResults = desmostorm.analysis.PeaksData.empty();
         end
 
     end

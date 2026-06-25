@@ -4,7 +4,7 @@
 %     %% data used to build the plot
 %     properties(AbortSet = true)
 %         % PeaksData object, empty by default
-%         Data model.analysis.PeaksData = model.analysis.PeaksData.empty()
+%         Data desmostorm.analysis.PeaksData = desmostorm.analysis.PeaksData.empty()
 %     end
 % 
 %     %% plot appearance properties
@@ -245,7 +245,7 @@
 %     methods
 %         function export(obj,filename,opts)
 %             arguments
-%                 obj (1,1) widgets.PeaksPlotContainer
+%                 obj (1,1) desmostorm.widgets.PeaksPlotContainer
 %                 filename (1,:) char = 'peaks-plot.pdf'
 %                 opts.ContentType = "vector"
 %                 opts.Append = false
@@ -268,9 +268,9 @@
 %     methods (Static)
 %         function [peaksData,peaksPlot] = demo()
 %             % generate some random sample data
-%             [X,Y] = model.analysis.PeaksData.generateRandomGaussPeaks(1001,10,0.2);
+%             [X,Y] = desmostorm.analysis.PeaksData.generateRandomGaussPeaks(1001,10,0.2);
 %             % create an instance of PeaksData
-%             peaksData = model.analysis.PeaksData(Y,X,...
+%             peaksData = desmostorm.analysis.PeaksData(Y,X,...
 %                 "MinPeakHeight",0.2,...
 %                 "MinPeakDistance",25,...
 %                 "PeakSmoothing",15,...
@@ -280,7 +280,7 @@
 %             % create new figure
 %             fig = uifigure("WindowStyle","alwaysontop");
 %             % create a PeaksPlotContainer in the figure
-%             peaksPlot = widgets.PeaksPlotContainer(fig,'Data',peaksData);
+%             peaksPlot = desmostorm.widgets.PeaksPlotContainer(fig,'Data',peaksData);
 %         end
 %     end
 % 
@@ -292,7 +292,7 @@ classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
     %% data used to build the plot
     properties(AbortSet)
         % PeaksData object, empty by default
-        Data model.analysis.PeaksData = model.analysis.PeaksData.empty()
+        Data desmostorm.analysis.PeaksData = desmostorm.analysis.PeaksData.empty()
     end
 
     %% axes appearance properties
@@ -333,7 +333,7 @@ classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
     properties(Access = private,Transient,NonCopyable)
         Grid        (1,1) matlab.ui.container.GridLayout
         MainAxes    (1,1) matlab.ui.control.UIAxes
-        PeaksPlot   (:,1) widgets.PeaksPlot
+        PeaksPlot   (:,1) desmostorm.widgets.PeaksPlot
         AxesTitle   (1,1) matlab.graphics.primitive.Text
     end
 
@@ -364,7 +364,7 @@ classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
             obj.MainAxes.XLabel.String = 'Distance';
             obj.MainAxes.YLabel.String = 'Intensity';
             % the dedicated class for our PeaksData plot
-            obj.PeaksPlot = widgets.PeaksPlot(obj.MainAxes,model.analysis.PeaksData.empty());
+            obj.PeaksPlot = desmostorm.widgets.PeaksPlot(obj.MainAxes,desmostorm.analysis.PeaksData.empty());
             % set up a title for the axes
             obj.AxesTitle = title(obj.MainAxes,'',...
                 "BackgroundColor","none",...
@@ -413,7 +413,7 @@ classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
     methods
         function export(obj,filename,opts)
             arguments
-                obj (1,1) widgets.PeaksPlotContainer
+                obj (1,1) desmostorm.widgets.PeaksPlotContainer
                 filename (1,:) char = 'peaks-plot.pdf'
                 opts.ContentType = "vector"
                 opts.Append = false
@@ -436,9 +436,9 @@ classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
     methods (Static)
         function [peaksData,peaksPlot] = demo()
             % generate some random sample data
-            [X,Y] = model.analysis.PeaksData.generateRandomGaussPeaks(1001,10,0.2);
+            [X,Y] = desmostorm.analysis.PeaksData.generateRandomGaussPeaks(1001,10,0.2);
             % create an instance of PeaksData
-            peaksData = model.analysis.PeaksData(Y,X,...
+            peaksData = desmostorm.analysis.PeaksData(Y,X,...
                 "MinPeakHeight",0.2,...
                 "MinPeakDistance",25,...
                 "PeakSmoothing",15,...
@@ -448,18 +448,18 @@ classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
             % create new figure
             fig = uifigure("WindowStyle","alwaysontop");
             % create a PeaksPlotContainer in the figure
-            peaksPlot = widgets.PeaksPlotContainer(fig,'Data',peaksData);
+            peaksPlot = desmostorm.widgets.PeaksPlotContainer(fig,'Data',peaksData);
         end
 
 
         function [peaksData,peaksPlotContainer] = demo2()
             % generate some random sample data
-            [X,Y,data] = model.analysis.PeaksData.generateRandomGaussPeaks(...
+            [X,Y,data] = desmostorm.analysis.PeaksData.generateRandomGaussPeaks(...
                 "N",1001,...
                 "nPeaks",10,...
                 "noiseSigma",0.05);
             % create an instance of PeaksData
-            peaksData = model.analysis.PeaksData(Y,X,...
+            peaksData = desmostorm.analysis.PeaksData(Y,X,...
                 "MinPeakHeight",0.2,...
                 "MinPeakDistance",25,...
                 "PeakSmoothing",15,...
@@ -478,7 +478,7 @@ classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
                 "RowHeight",{'1x'},...
                 "Padding",[0 0 0 0]);
             % create a PeaksPlotContainer in the figure
-            peaksPlotContainer = widgets.PeaksPlotContainer(g,...
+            peaksPlotContainer = desmostorm.widgets.PeaksPlotContainer(g,...
                 "Data",peaksData);
 
             matlabx.struct.prettyPrint(data);
