@@ -232,7 +232,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
 
 
     properties (Dependent, GetAccess=public, SetAccess=private)
-        RegionArray     % [1×M desmostorm.model.STORMRegion] in RegionOrder
+        RegionArray     % [Nx1 desmostorm.model.STORMRegion] in RegionOrder
         ActiveRegion    % desmostorm.model.STORMRegion or []
     end
 
