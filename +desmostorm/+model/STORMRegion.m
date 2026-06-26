@@ -13,11 +13,6 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
         LabelSource (1,1) string = "user"
     end
 
-    % props derived from parent
-    properties (Dependent=true)
-        PixelSize (1,1) desmostorm.model.units.PixelSize
-    end
-
     %% Classification/auto-detection
     properties
         Score (1,1) = NaN
@@ -39,9 +34,10 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
         LinescanResults (:,1) desmostorm.analysis.PeaksData = desmostorm.analysis.PeaksData.empty()
     end
 
-    %% Derived outputs
+    %% Derived properties
     properties(Dependent)
         SummaryTable (:,:) table
+        PixelSize (1,1) desmostorm.model.units.PixelSize
     end
 
     %% Lifecycle
@@ -91,9 +87,7 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
             end
             % Update the region linescan results with the values in data
             obj.LinescanResults = data;
-
         end
-
 
         function resetROI(obj)
             % reset the linescan ROI params
@@ -267,13 +261,12 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
             T = matlabx.utils.table.rotate(T,'ColumnNames',{'Values'});
         end
 
-
-
         function ps = get.PixelSize(obj)
             ps = obj.Parent.PixelSize;
         end
 
     end
+
 
     methods
 
@@ -283,6 +276,10 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
             names = T.Properties.RowNames;
             vals = T.Values;
             out = matlabx.utils.text.formatKeyValueText(names,vals);
+        end
+
+        function str = getBaseExportName(obj)
+            str = obj.Parent.shortName() + "_" + obj.Name;
         end
 
     end
