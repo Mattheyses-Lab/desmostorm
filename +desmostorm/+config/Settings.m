@@ -134,18 +134,6 @@ classdef Settings < handle
 
         function [S, migrated] = migrate(S)
             migrated = false;
-            
-            % old = string(S.Version);
-
-            % --- Example migration ---
-            % From any version older than 1.0.0: add IO.AutoSave
-            % if desmostorm.app.Version.compare(old, "1.0.0") < 0
-            %     warning('Migrating settings to v1.0.0...')
-            %     if ~isfield(S,'IO') || ~isfield(S.IO,'AutoSave')
-            %         S.IO.AutoSave = true;
-            %         migrated = true;
-            %     end
-            % end
 
             old = string(S.Version);
 
@@ -157,7 +145,10 @@ classdef Settings < handle
                 S.Box.EdgeColor     = S.Box.BoxEdgeColor;
                 S.Box.ShowTitle     = defaultBox.ShowTitle;
                 S.Box.TitleContent  = defaultBox.TitleContent;
-
+                % Analysis settings
+                defaultAnalysis = desmostorm.config.Analysis;
+                S.Analysis.NormalizeLinescan = defaultAnalysis.NormalizeLinescan;
+                % indicate migration has been performed
                 migrated = true;
             end
 

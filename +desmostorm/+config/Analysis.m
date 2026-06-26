@@ -2,12 +2,13 @@ classdef Analysis < handle
 
     % Group analysis parameters; validate on set; raise Changed.
     properties (Access=private)
-        MinPeakDistance_ (1,1) double {mustBeNonnegative} = 15
-        MinPeakHeight_   (1,1) double {mustBeNonnegative} = 0.4
-        BoxSize_         (1,1) double {mustBePositive}    = 300
-        PeakSmoothing_   (1,1) double {mustBeNonnegative} = 15
-        PixelSizeValue_ (1,1) double {mustBePositive} = 1
-        PixelSizeUnit_  (1,:) char = 'px'
+        MinPeakDistance_    (1,1) double {mustBeNonnegative} = 15
+        MinPeakHeight_      (1,1) double {mustBeNonnegative} = 0.4
+        BoxSize_            (1,1) double {mustBePositive}    = 300
+        NormalizeLinescan_  (1,1) logical = true
+        PeakSmoothing_      (1,1) double {mustBeNonnegative} = 15
+        PixelSizeValue_     (1,1) double {mustBePositive} = 1
+        PixelSizeUnit_      (1,:) char = 'px'
     end
 
     events
@@ -19,6 +20,7 @@ classdef Analysis < handle
         MinPeakDistance
         MinPeakHeight
         BoxSize
+        NormalizeLinescan
         PeakSmoothing
         PixelSizeValue   % numeric, e.g. 4
         PixelSizeUnit    % string, e.g. 'nm'
@@ -26,12 +28,13 @@ classdef Analysis < handle
 
     methods
         % Getters
-        function v = get.MinPeakDistance(this), v = this.MinPeakDistance_; end
-        function v = get.MinPeakHeight(this),   v = this.MinPeakHeight_;   end
-        function v = get.BoxSize(this),         v = this.BoxSize_;         end
-        function v = get.PeakSmoothing(this),   v = this.PeakSmoothing_;   end
-        function v = get.PixelSizeValue(this),   v = this.PixelSizeValue_;   end
-        function v = get.PixelSizeUnit(this),   v = this.PixelSizeUnit_;   end
+        function v = get.MinPeakDistance(this),     v = this.MinPeakDistance_;      end
+        function v = get.MinPeakHeight(this),       v = this.MinPeakHeight_;        end
+        function v = get.BoxSize(this),             v = this.BoxSize_;              end
+        function v = get.NormalizeLinescan(this),   v = this.NormalizeLinescan_;    end
+        function v = get.PeakSmoothing(this),       v = this.PeakSmoothing_;        end
+        function v = get.PixelSizeValue(this),      v = this.PixelSizeValue_;       end
+        function v = get.PixelSizeUnit(this),       v = this.PixelSizeUnit_;        end
 
         % Setters (with any extra cross-field validation)
         function set.MinPeakDistance(this,v)
@@ -52,6 +55,13 @@ classdef Analysis < handle
             old = this.BoxSize_;
             this.BoxSize_ = v;
             ev = desmostorm.config.ChangeEvent("Analysis","BoxSize",old,v);
+            notify(this,'AnalysisChanged',ev);
+            notify(this,'Changed');
+        end
+        function set.NormalizeLinescan(this,v)
+            old = this.NormalizeLinescan_;
+            this.NormalizeLinescan_ = v;
+            ev = desmostorm.config.ChangeEvent("Analysis","NormalizeLinescan",old,v);
             notify(this,'AnalysisChanged',ev);
             notify(this,'Changed');
         end
@@ -80,12 +90,13 @@ classdef Analysis < handle
         % Serialization helpers
         function S = toStruct(this)
             S = struct( ...
-                'MinPeakDistance', this.MinPeakDistance, ...
-                'MinPeakHeight',   this.MinPeakHeight, ...
-                'BoxSize',         this.BoxSize, ...
-                'PeakSmoothing',   this.PeakSmoothing, ...
-                'PixelSizeValue',  this.PixelSizeValue, ...
-                'PixelSizeUnit',   this.PixelSizeUnit);
+                'MinPeakDistance',      this.MinPeakDistance, ...
+                'MinPeakHeight',        this.MinPeakHeight, ...
+                'BoxSize',              this.BoxSize, ...
+                'NormalizeLinescan',    this.NormalizeLinescan, ...
+                'PeakSmoothing',        this.PeakSmoothing, ...
+                'PixelSizeValue',       this.PixelSizeValue, ...
+                'PixelSizeUnit',        this.PixelSizeUnit);
         end
         
         function fromStruct(this,S)
