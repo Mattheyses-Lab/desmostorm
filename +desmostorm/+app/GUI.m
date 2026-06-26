@@ -255,8 +255,10 @@ classdef GUI < handle
             % --- File -> Export ---
             obj.MenubarUI.File_Export = uimenu(obj.MenubarUI.File,'Text','Export');
             obj.MenubarUI.File_Export_Measurements = uimenu(obj.MenubarUI.File_Export,'Text','Measurements (.xlsx)', 'MenuSelectedFcn',@(~,~) obj.onExportMeasurements());
-            obj.MenubarUI.File_Export_PeakPlots    = uimenu(obj.MenubarUI.File_Export,'Text','Peak Plots (.pdf)',    'MenuSelectedFcn',@(~,~) obj.onExportPeakPlots());
+            obj.MenubarUI.File_Export_SumaryPDF    = uimenu(obj.MenubarUI.File_Export,'Text','Summary PDF',          'MenuSelectedFcn',@(~,~) obj.onExportSummaryPDF());
             obj.MenubarUI.File_Export_RegionImages = uimenu(obj.MenubarUI.File_Export,'Text','Region Images (.tif)', 'MenuSelectedFcn',@(~,~) obj.onExportRegionImages());
+
+            obj.MenubarUI.File_Export_LinescanPlot = uimenu(obj.MenubarUI.File_Export,'Text','Linescan Plot...',     'MenuSelectedFcn',@(~,~) obj.onExportLinescanPlot());
 
             % --- Run ---
             obj.MenubarUI.Run = uimenu(obj.Fig,'Text','Run');
@@ -2292,7 +2294,7 @@ classdef GUI < handle
             obj.Project.exportRegionTableToXlsx(fname);
         end
 
-        function onExportPeakPlots(obj, ~, ~)
+        function onExportSummaryPDF(obj, ~, ~)
 
             obj.Fig.Visible = 'off';
 
@@ -2462,6 +2464,22 @@ classdef GUI < handle
             % export region images to folderName
             obj.Project.exportRegionImages(folderName);
 
+        end
+
+        function onExportLinescanPlot(obj, ~, ~)
+
+            % cleanup upon function completion
+            c = onCleanup(@() figure(obj.Fig));
+
+            desmostorm.Log.INFO("Exporting region linescan plot...");
+            try
+                desmostorm.export.Exporter.exportRegionLinescanPlot(obj.Project,obj.Settings);
+            catch ME
+                desmostorm.Log.ERROR(ME);
+                obj.guialert("Title",'Error',"Message",ME.message,"Icon",'error');
+                return
+            end
+            desmostorm.Log.INFO("Successfully exported region linescan plot.");
         end
 
     end
