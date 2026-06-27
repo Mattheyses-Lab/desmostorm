@@ -4,8 +4,9 @@ classdef Analysis < handle
     properties (Access=private)
         MinPeakDistance_    (1,1) double {mustBeNonnegative} = 15
         MinPeakHeight_      (1,1) double {mustBeNonnegative} = 0.4
+        MinPeakProminence_  (1,1) double {mustBeNonnegative} = 0
         BoxSize_            (1,1) double {mustBePositive}    = 300
-        NormalizeLinescan_  (1,1) logical = true
+        Normalize_          (1,1) logical = true
         PeakSmoothing_      (1,1) double {mustBeNonnegative} = 15
         PixelSizeValue_     (1,1) double {mustBePositive} = 1
         PixelSizeUnit_      (1,:) char = 'px'
@@ -19,8 +20,9 @@ classdef Analysis < handle
     properties (Dependent)
         MinPeakDistance
         MinPeakHeight
+        MinPeakProminence
         BoxSize
-        NormalizeLinescan
+        Normalize
         PeakSmoothing
         PixelSizeValue   % numeric, e.g. 4
         PixelSizeUnit    % string, e.g. 'nm'
@@ -30,8 +32,9 @@ classdef Analysis < handle
         % Getters
         function v = get.MinPeakDistance(this),     v = this.MinPeakDistance_;      end
         function v = get.MinPeakHeight(this),       v = this.MinPeakHeight_;        end
+        function v = get.MinPeakProminence(this),   v = this.MinPeakProminence_;        end
         function v = get.BoxSize(this),             v = this.BoxSize_;              end
-        function v = get.NormalizeLinescan(this),   v = this.NormalizeLinescan_;    end
+        function v = get.Normalize(this),           v = this.Normalize_;    end
         function v = get.PeakSmoothing(this),       v = this.PeakSmoothing_;        end
         function v = get.PixelSizeValue(this),      v = this.PixelSizeValue_;       end
         function v = get.PixelSizeUnit(this),       v = this.PixelSizeUnit_;        end
@@ -51,6 +54,13 @@ classdef Analysis < handle
             notify(this,'AnalysisChanged',ev);
             notify(this,'Changed');
         end
+        function set.MinPeakProminence(this,v)
+            old = this.MinPeakProminence_;
+            this.MinPeakProminence_ = v;
+            ev = desmostorm.config.ChangeEvent("Analysis","MinPeakProminence",old,v);
+            notify(this,'AnalysisChanged',ev);
+            notify(this,'Changed');
+        end
         function set.BoxSize(this,v)
             old = this.BoxSize_;
             this.BoxSize_ = v;
@@ -58,10 +68,10 @@ classdef Analysis < handle
             notify(this,'AnalysisChanged',ev);
             notify(this,'Changed');
         end
-        function set.NormalizeLinescan(this,v)
-            old = this.NormalizeLinescan_;
-            this.NormalizeLinescan_ = v;
-            ev = desmostorm.config.ChangeEvent("Analysis","NormalizeLinescan",old,v);
+        function set.Normalize(this,v)
+            old = this.Normalize_;
+            this.Normalize_ = v;
+            ev = desmostorm.config.ChangeEvent("Analysis","Normalize",old,v);
             notify(this,'AnalysisChanged',ev);
             notify(this,'Changed');
         end
@@ -92,8 +102,9 @@ classdef Analysis < handle
             S = struct( ...
                 'MinPeakDistance',      this.MinPeakDistance, ...
                 'MinPeakHeight',        this.MinPeakHeight, ...
+                'MinPeakProminence',    this.MinPeakProminence, ...
                 'BoxSize',              this.BoxSize, ...
-                'NormalizeLinescan',    this.NormalizeLinescan, ...
+                'Normalize',            this.Normalize, ...
                 'PeakSmoothing',        this.PeakSmoothing, ...
                 'PixelSizeValue',       this.PixelSizeValue, ...
                 'PixelSizeUnit',        this.PixelSizeUnit);

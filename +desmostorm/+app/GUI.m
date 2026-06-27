@@ -258,7 +258,12 @@ classdef GUI < handle
             obj.MenubarUI.File_Export_SumaryPDF    = uimenu(obj.MenubarUI.File_Export,'Text','Summary PDF',          'MenuSelectedFcn',@(~,~) obj.onExportSummaryPDF());
             obj.MenubarUI.File_Export_RegionImages = uimenu(obj.MenubarUI.File_Export,'Text','Region Images (.tif)', 'MenuSelectedFcn',@(~,~) obj.onExportRegionImages());
 
-            obj.MenubarUI.File_Export_LinescanPlot = uimenu(obj.MenubarUI.File_Export,'Text','Linescan Plot...',     'MenuSelectedFcn',@(~,~) obj.onExportLinescanPlot());
+            obj.MenubarUI.File_Export_LinescanPlot = uimenu(obj.MenubarUI.File_Export, ...
+                'Text','Linescan Plot...', ...
+                'MenuSelectedFcn',@(~,~) obj.onExportLinescanPlot());
+            obj.MenubarUI.File_Export_RegionSubimageWithROI = uimenu(obj.MenubarUI.File_Export, ...
+                'Text','Region Image + ROI...', ...
+                'MenuSelectedFcn',@(~,~) obj.onExportRegionSubimageWithROI());
 
             % --- Run ---
             obj.MenubarUI.Run = uimenu(obj.Fig,'Text','Run');
@@ -480,6 +485,14 @@ classdef GUI < handle
                 "ValueChangedFcn",@(o,~) obj.AnalysisSettingsChanged(o,"BoxSize"),...
                 "Value",obj.Settings.Analysis.BoxSize);
 
+            uilabel(item.Pane,"Text","Normalize Linescan","FontColor",[0.85 0.85 0.85]);
+            obj.SettingsUI.Analysis.NormalizeDropDown = uidropdown(...
+                item.Pane,...
+                "Items",{'true', 'false'}, ...
+                "ItemsData",{true, false}, ...
+                "ValueChangedFcn",@(o,~) obj.AnalysisSettingsChanged(o,"Normalize"),...
+                "Value",obj.Settings.Analysis.Normalize);
+
             uilabel(item.Pane,"Text","Minimum Peak Distance","FontColor",[0.85 0.85 0.85]);
             obj.SettingsUI.Analysis.MinPeakDistanceEditField = uieditfield(...
                 item.Pane,...
@@ -493,6 +506,13 @@ classdef GUI < handle
                 "numeric",...
                 "ValueChangedFcn",@(o,~) obj.AnalysisSettingsChanged(o,"MinPeakHeight"),...
                 "Value",obj.Settings.Analysis.MinPeakHeight);
+
+            uilabel(item.Pane,"Text","Minimum Peak Prominence","FontColor",[0.85 0.85 0.85]);
+            obj.SettingsUI.Analysis.MinPeakProminenceEditField = uieditfield(...
+                item.Pane,...
+                "numeric",...
+                "ValueChangedFcn",@(o,~) obj.AnalysisSettingsChanged(o,"MinPeakProminence"),...
+                "Value",obj.Settings.Analysis.MinPeakProminence);
 
             uilabel(item.Pane,"Text","Peak Smoothing","FontColor",[0.85 0.85 0.85]);
             obj.SettingsUI.Analysis.PeakSmoothingEditField = uieditfield(...
@@ -511,7 +531,7 @@ classdef GUI < handle
             uilabel(item.Pane,"Text","Pixel Size Unit","FontColor",[0.85 0.85 0.85]);
             obj.SettingsUI.Analysis.PixelSizeUnitDropDown = uidropdown(...
                 item.Pane,...
-                "Items", {'px', 'nm', 'µm'}, ...
+                "Items",{'px', 'nm', 'µm'}, ...
                 "ValueChangedFcn",@(o,~) obj.AnalysisSettingsChanged(o,"PixelSizeUnit"),...
                 "Value",obj.Settings.Analysis.PixelSizeUnit);
         end
@@ -909,6 +929,8 @@ classdef GUI < handle
             obj.SettingsUI.Analysis.BoxSizeEditField.Value = S.Analysis.BoxSize;
             obj.SettingsUI.Analysis.MinPeakDistanceEditField.Value = S.Analysis.MinPeakDistance;
             obj.SettingsUI.Analysis.MinPeakHeightEditField.Value = S.Analysis.MinPeakHeight;
+            obj.SettingsUI.Analysis.MinPeakProminenceEditField.Value = S.Analysis.MinPeakProminence;
+            obj.SettingsUI.Analysis.NormalizeDropDown.Value = S.Analysis.Normalize;
             obj.SettingsUI.Analysis.PeakSmoothingEditField.Value = S.Analysis.PeakSmoothing;
             obj.SettingsUI.Analysis.PixelSizeValueEditField.Value = S.Analysis.PixelSizeValue;
             obj.SettingsUI.Analysis.PixelSizeUnitDropDown.Value = S.Analysis.PixelSizeUnit;
@@ -1038,6 +1060,8 @@ classdef GUI < handle
                 opts.Icon (1,:) char {mustBeMember(opts.Icon,{'error','warning','info','message','success',''})} = ''
             end
 
+            % give focus to figure
+            figure(obj.Fig);
             % uialert dialog, closing will resume interaction on main window
             uialert(obj.Fig,...
                 opts.Message,...
@@ -1377,6 +1401,12 @@ classdef GUI < handle
                     obj.RegionLinescanPanelGrid.RowHeight(C) = {'1x'};
                 end
 
+                if obj.Settings.Analysis.Normalize
+                    obj.RegionLinescanPlot(C).YLabel = "Normalized intensity";
+                else
+                    obj.RegionLinescanPlot(C).YLabel = "Intensity";
+                end
+
                 obj.RegionLinescanPlot(C).XLabel = sprintf("Distance (%s)",img.PixelSize.Unit);
                 obj.RegionLinescanPlot(C).Data = reg.LinescanResults(C);
                 obj.RegionLinescanPlot(C).Title = matlabx.utils.text.texFriendly(img.Name) + " | " + reg.Name + "(" + img.ImageData.Components(C).Name + ")";
@@ -1647,7 +1677,7 @@ classdef GUI < handle
 
         function onAnalysisChanged(obj,e)
             switch e.Name
-                case {"MinPeakDistance","MinPeakHeight","PeakSmoothing"}
+                case {"MinPeakDistance","MinPeakHeight","MinPeakProminence","PeakSmoothing","Normalize"}
                     % immediately re-process all existing regions when analysis settings change
                     obj.processAllRegions();
                 case "BoxSize"
@@ -1693,7 +1723,7 @@ classdef GUI < handle
         function AnalysisSettingsChanged(obj,src,stgName)
             % for certain settings, prompt for confirmation before updating
             switch stgName
-                case {"MinPeakDistance","MinPeakHeight","PeakSmoothing"}
+                case {"MinPeakDistance","MinPeakHeight","MinPeakProminence","PeakSmoothing","Normalize"}
                     msg1 = sprintf('New %s value will be applied to all regions. Continue?',stgName);
                     msg2 = sprintf('Confirm %s Change',stgName);
                     selection = uiconfirm(obj.Fig, ...
@@ -2473,14 +2503,37 @@ classdef GUI < handle
 
             desmostorm.Log.INFO("Exporting region linescan plot...");
             try
-                desmostorm.export.Exporter.exportRegionLinescanPlot(obj.Project,obj.Settings);
+                success = desmostorm.export.Exporter.exportRegionLinescanPlot(obj.Project,obj.Settings);
+                if success
+                    desmostorm.Log.INFO("Success.");
+                else
+                    desmostorm.Log.INFO("Export cancelled.");
+                end
             catch ME
                 desmostorm.Log.ERROR(ME);
                 obj.guialert("Title",'Error',"Message",ME.message,"Icon",'error');
-                return
             end
-            desmostorm.Log.INFO("Successfully exported region linescan plot.");
         end
+
+        function onExportRegionSubimageWithROI(obj, ~, ~)
+
+            % cleanup upon function completion
+            c = onCleanup(@() figure(obj.Fig));
+
+            desmostorm.Log.INFO("Exporting region subimage with ROI overlay...");
+            try
+                success = desmostorm.export.Exporter.exportRegionSubimageWithROI(obj.Project,obj.Settings);
+                if success
+                    desmostorm.Log.INFO("Success.");
+                else
+                    desmostorm.Log.INFO("Export cancelled.");
+                end
+            catch ME
+                desmostorm.Log.ERROR(ME);
+                obj.guialert("Title",'Error',"Message",ME.message,"Icon",'error');
+            end
+        end
+
 
     end
 

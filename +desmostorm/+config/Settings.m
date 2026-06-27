@@ -147,7 +147,8 @@ classdef Settings < handle
                 S.Box.TitleContent  = defaultBox.TitleContent;
                 % Analysis settings
                 defaultAnalysis = desmostorm.config.Analysis;
-                S.Analysis.NormalizeLinescan = defaultAnalysis.NormalizeLinescan;
+                S.Analysis.Normalize            = defaultAnalysis.Normalize;
+                S.Analysis.MinPeakProminence    = defaultAnalysis.MinPeakProminence;
                 % indicate migration has been performed
                 migrated = true;
             end
