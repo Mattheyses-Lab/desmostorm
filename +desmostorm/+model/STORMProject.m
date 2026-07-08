@@ -883,6 +883,9 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
                 proj.setActiveImage(string(P.ActiveImageID));
             end
 
+            % update project-wide image stats
+            proj.updateImageStats();
+
             % indicate file exists on disk at SourcePath
             proj.isOnDisk = true;
 
