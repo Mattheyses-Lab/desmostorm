@@ -1,64 +1,26 @@
 classdef Zoom < matlabx.ui.widgets.ImageAxesTool
-% matlabx.ui.widgets.tools.Zoom
-% when Enabled: 
-%   left-click      increase zoom 
-%   right-click     decrease zoom
-%   view box follows cursor when Pan Mode is on (on by default)
-%   shift-click to enable/disable Pan
-%   can also increase/decrease zoom with scroll wheel
+%ZOOM Zoom/pan navigation tool for matlabx.ui.widgets.ImageAxes.
+%
+%   When enabled:
+%       left-click      increase zoom
+%       right-click     decrease zoom
+%       shift-click     toggle cursor-follow panning
+%       scroll wheel    increase/decrease zoom
+%
+%   Zoom is intentionally non-exclusive so it can coexist with interaction
+%   tools such as Pick or DrawRectangle. Its toggle hotkey is handled as a
+%   passive key interception so the tool can be enabled while inactive.
 
-
-    % --- Zoom functionality ---
     properties
-        ZoomLevelIdx (1,1) double = 1
-        ZoomLevels (1,:) double = [1 1/2 1/3 1/4 1/5 1/10 1/15 1/20]
-        ZoomPanLim (1,2) double = [0.25 0.75]
+        ScrollEventsPerZoomStep (1,1) double {mustBeInteger, mustBePositive} = 5
     end
 
-    properties (SetAccess=private, Dependent)
-        ZoomLevel
-        ZoomFactor
-    end
-
-    % Private properties for internal behavior
     properties (Access=private)
-        lastCursorPosition = []
+        ScrollEventCount (1,1) double {mustBeNonnegative, mustBeInteger} = 0
+        LastScrollDirection (1,1) double {mustBeMember(LastScrollDirection,[-1,0,1])} = 0
     end
 
-    % --- veiw box properties ---
-
-    % Graphics objects
-    properties (Access=private, Transient, NonCopyable)
-        FullBox (1,1) matlab.graphics.primitive.Patch
-        ZoomBox (1,1) matlab.graphics.primitive.Patch
-    end
-
-    % Appearance
-    properties
-        BoxSize = 0.1
-        BoxEdgeColor = [0 0 0]
-        BoxFaceColor = [1 1 1]
-        BoxFaceAlpha = 0.25
-        BoxLineWidth = 1
-
-        BoxPositionTop = 0.05
-        BoxPositionLeft = 0.01
-
-
-        ImageHeight
-        ImageWidth
-        Top
-        Left
-        XBase
-        YBase
-        XFull
-        YFull
-        XZoomBase
-        YZoomBase
-    end
-
-
-    %% Constructor / onEnabled / onDisabled / onInstall / onUninstall
+    %% Lifecycle
     methods
 
         function obj = Zoom(host)
@@ -68,85 +30,39 @@ classdef Zoom < matlabx.ui.widgets.ImageAxesTool
                 'Priority',         1, ...
                 'ToggleHotkey',     matlabx.keyboard.normalize('z','',{'shift','meta'}), ...
                 'IsExclusive',      false, ...
-                'CapturesMove',     true, ...
-                'CapturesDown',     true, ...
-                'CapturesScroll',   true, ...
-                'CapturesKey',      true, ...
-                'DistractsMove',    false, ...
-                'DistractsKey',     true, ...
-                'DistractsDown',    true);
-
-            % set up view box patches
-            obj.FullBox = patch(host.getOverlayAxes(), ...
-                'XData',NaN, ...
-                'YData',NaN, ...
-                'EdgeColor',obj.BoxEdgeColor, ...
-                'FaceColor',obj.BoxFaceColor, ...
-                'FaceAlpha',obj.BoxFaceAlpha, ...
-                'HitTest','on', ...
-                'PickableParts','all', ...
-                'LineWidth', obj.BoxLineWidth, ...
-                'Tag','ViewBoxFull');
-            obj.ZoomBox = patch(host.getOverlayAxes(), ...
-                'XData',NaN, ...
-                'YData',NaN, ...
-                'EdgeColor',obj.BoxEdgeColor, ...
-                'FaceColor',obj.BoxFaceColor, ...
-                'FaceAlpha',obj.BoxFaceAlpha, ...
-                'HitTest','on', ...
-                'PickableParts','all', ...
-                'LineWidth', obj.BoxLineWidth, ...
-                'Tag','ViewBoxZoom');
-            % store image height
-            obj.ImageHeight = obj.Host.ImageHeight;
-            obj.ImageWidth = obj.Host.ImageWidth;
+                'InterceptsMove',   false, ...
+                'InterceptsDown',   true, ...
+                'InterceptsScroll', true, ...
+                'InterceptsKey',    true, ...
+                'PassivelyInterceptsKey', true);
         end
 
-        % Toggled Enabled=true via toolbar button
         function onEnabled(obj)
+        %ONENABLED  Enable Zoom when toolbar button is enabled.
+            obj.ScrollEventCount = 0;
+            obj.LastScrollDirection = 0;
             obj.Host.setMode('Zoom', true);
-            % update view box patch base coordinates
-            obj.ImageHeight = obj.Host.ImageHeight;
-            obj.ImageWidth = obj.Host.ImageWidth;
-            obj.updateViewBoxBaseCoordinates();
-            set([obj.FullBox,obj.ZoomBox],"Visible","on")
-            % set view
-            if ~obj.Host.Mode.Pan % Pan Mode is off -> use stored cursor position
-                obj.updateLimits(obj.lastCursorPosition)
-            else % otherwise -> use current cursor position
-                obj.moveViewToCursor();
-            end
+            obj.Host.enableZoom();
         end
 
-        % Toggled Enabled=false via toolbar button
         function onDisabled(obj)
-            % clear and hide patches if they exist
-            if isvalid(obj.FullBox)
-                set([obj.FullBox],"XData",NaN,"YData",NaN,"Visible","off")
-            end
-
-            if isvalid(obj.ZoomBox)
-                set([obj.ZoomBox],"XData",NaN,"YData",NaN,"Visible","off")
-            end
-
-            % restore Host limits and Zoom mode
+        %ONDISABLED  Disable Zoom when toolbar button is disabled.
+            obj.ScrollEventCount = 0;
+            obj.LastScrollDirection = 0;
             if isvalid(obj.Host)
-                obj.Host.restoreDefaultLimits();
                 obj.Host.setMode('Zoom', false);
+                obj.Host.disableZoom();
             end
         end
 
-        % Called AFTER installed from Host, use for any extra required startup actions
         function onInstall(obj)
+        %ONINSTALL  Register Zoom mode with the host.
             obj.Host.addMode('Zoom');
-            obj.Host.addMode('Pan');
-            obj.Host.setMode('Pan', true); % Pan Mode is On by default
         end
 
-        % Called AFTER uninstalled from Host, use for any extra required cleanup actions
         function onUninstall(obj)
+        %ONUNINSTALL  Remove Zoom mode from the host.
             obj.Host.removeMode('Zoom');
-            obj.Host.removeMode('Pan');
         end
 
     end
@@ -156,64 +72,66 @@ classdef Zoom < matlabx.ui.widgets.ImageAxesTool
 
         function onDown(obj, E)
 
-            obj.printStatus(sprintf('%s.onDown()\n',obj.Name));
-
-            if isempty(obj.Host.cursorPositionStatic)
-                return
-            end
-
-            switch E.SelectionType
-                case 'normal'
-                    obj.increaseZoom();
-                case 'alt'
-                    obj.decreaseZoom();
-                case 'extend'
-                    obj.togglePan();
-            end
-
-        end
-
-        function onScroll(obj, E)
-            % keep track of calls to control how many calls = one zoom increment
-            persistent callCount
-
-            obj.printStatus(sprintf('%s.onScroll()\n',obj.Name));
+            obj.printStatus(sprintf('%s.onDown()', obj.Name));
 
             H = obj.Host;
             if isempty(H.cursorPositionStatic)
                 return
             end
 
-            callCount = callCount+1;
-            if callCount < 5
+            switch E.SelectionType
+                case 'normal'
+                    H.increaseZoom();
+                case 'alt'
+                    H.decreaseZoom();
+                case 'extend'
+                    obj.Host.togglePanEnabled();
+            end
+
+        end
+
+        function onScroll(obj, E)
+            obj.printStatus(sprintf('%s.onScroll()', obj.Name));
+
+            H = obj.Host;
+            if isempty(H.cursorPositionStatic)
                 return
             end
 
-            callCount = 0;
+            scrollDirection = sign(E.VerticalScrollCount);
+
+            if scrollDirection == 0
+                return
+            end
+
+            if scrollDirection ~= obj.LastScrollDirection
+                obj.ScrollEventCount = 0;
+                obj.LastScrollDirection = scrollDirection;
+            end
+
+            obj.ScrollEventCount = obj.ScrollEventCount + 1;
+            if obj.ScrollEventCount < obj.ScrollEventsPerZoomStep
+                return
+            end
+
+            obj.ScrollEventCount = 0;
 
             % Adjust zoom level based on scroll direction
-            if E.VerticalScrollCount < 0
-                obj.increaseZoom();
-            elseif E.VerticalScrollCount > 0
-                obj.decreaseZoom();
-            end
-        end
-
-        function onMove(obj, ~)
-            obj.printStatus(sprintf('%s.onMove()\n',obj.Name));
-            if obj.Host.Mode.Pan
-                obj.moveViewToCursor();
+            if scrollDirection < 0
+                H.increaseZoom();
+            elseif scrollDirection > 0
+                H.decreaseZoom();
             end
         end
 
         function onKey(obj, E)
-            obj.printStatus(sprintf('%s.onKey()\n',obj.Name));
+            obj.printStatus(sprintf('%s.onKey()', obj.Name));
 
             switch E.Hotkey
                 case "meta+equal"
-                    obj.increaseZoom();
+                    obj.Host.increaseZoom();
                 case "meta+hyphen"
-                    obj.decreaseZoom();
+                    obj.Host.decreaseZoom();
                 case "escape"
                     obj.disable();
             end
@@ -222,19 +140,13 @@ classdef Zoom < matlabx.ui.widgets.ImageAxesTool
 
     end
 
-    %% Passive event hooks (only when Installed==true && IsDistractor==true)
+    %% Passive event hooks (only when Installed==true && IsPassiveInterceptor==true)
     methods
 
-        function tf = onDistractDown(obj,~)
-            obj.printStatus(sprintf('%s.onDistractDown()\n',obj.Name));
-            tf = false;
-        end
-
-        function tf = onDistractKey(obj,E)
+        function onPassiveKey(obj,E)
             if obj.ToggleHotkey == E.Hotkey
-                tf = true;
+                E.stop();
             else
-                tf = false;
                 return
             end
 
@@ -248,134 +160,7 @@ classdef Zoom < matlabx.ui.widgets.ImageAxesTool
 
     end
 
-    %% Private helpers
-    methods (Access=private)
-
-        function moveViewToCursor(obj)
-            XY = obj.Host.cursorPositionStatic;
-            if ~isempty(XY)
-                obj.updateLimits(XY);
-            end
-        end
-
-        function increaseZoom(obj)
-            obj.ZoomLevelIdx = min(obj.ZoomLevelIdx + 1, numel(obj.ZoomLevels));
-            obj.updateViewBoxBaseCoordinates();
-            obj.moveViewToCursor();
-            obj.Host.updateFromTool();
-        end
-
-        function decreaseZoom(obj)
-            obj.ZoomLevelIdx = max(obj.ZoomLevelIdx-1,1);
-            obj.updateViewBoxBaseCoordinates();
-            obj.moveViewToCursor();
-            obj.Host.updateFromTool();
-        end
-
-        function togglePan(obj)
-            obj.Host.setMode('Pan', ~obj.Host.Mode.Pan);
-            obj.moveViewToCursor();
-            obj.Host.updateFromTool();
-        end
-
-        function updateViewBoxBaseCoordinates(obj)
-            H = obj.ImageHeight;
-            W = obj.ImageWidth;
-            obj.Top = (obj.BoxPositionTop*H) + 0.5;
-            obj.Left = (obj.BoxPositionLeft*W) + 0.5;
-            obj.XBase = [0 0 W W] .* obj.BoxSize;
-            obj.YBase = [0 H H 0] .* obj.BoxSize;
-            obj.XFull = obj.XBase + obj.Left;
-            obj.YFull = obj.YBase + obj.Top;
-            obj.XZoomBase = obj.XBase.*obj.ZoomLevel + obj.Left;
-            obj.YZoomBase = obj.YBase.*obj.ZoomLevel + obj.Top;
-            set(obj.FullBox,"XData",obj.XFull,"YData",obj.YFull);
-        end
-
-
-        function [XLim,YLim] = getZoomLims(obj,XY)
-            % image dimensions
-            W = obj.Host.ImageWidth;
-            H = obj.Host.ImageHeight;
-            % zoom level | e.g. 0.5 means 2X zoom
-            z = obj.ZoomLevel;
-            % pan limits in normalized coordinates
-            a = obj.ZoomPanLim(1);
-            b = obj.ZoomPanLim(2);
-            % width of zoomed window
-            WZ = z * W;
-            % height of zoomed window
-            HZ = z * H;
-            % calculate limits
-            XYL = repmat((((clip((XY-0.5)./[W,H],a,b)-a)/(b - a)).*[W-WZ,H-HZ])',1,2) + [0,WZ;0,HZ] + 0.5;
-            XLim = XYL(1,:);
-            YLim = XYL(2,:);
-
-            % XYL = ((clip((XY-0.5)./[W,H], a, b) - a) / (b - a)) .* [W-WZ,H-HZ];
-            % XLim = [XYL(1),XYL(1)+WZ] + 0.5;
-            % YLim = [XYL(2),XYL(2)+HZ] + 0.5;
-        end
-
-    end
-
-
-    %%
-    methods
-
-        function z = get.ZoomLevel(obj)
-            z = obj.ZoomLevels(obj.ZoomLevelIdx);
-        end
-
-        function f = get.ZoomFactor(obj)
-            f = 1/obj.ZoomLevel;
-        end
-
-    end
-
-    %% Host-fired events
-
-    methods
-
-        function onHostCDataChanged(obj,evt)
-            if ~obj.Enabled
-                return
-            end
-
-            oldSize = size(evt.oldCData,[1 2]);
-            newSize = size(evt.newCData,[1 2]);
-
-            if isempty(obj.lastCursorPosition)
-                return
-            end
-
-            oldX = obj.lastCursorPosition(1);
-            oldY = obj.lastCursorPosition(2);
-
-            % new image is same size as the previous image
-            if isequal(oldSize,newSize)
-                % set limits using prior cursor position
-                obj.updateLimits([oldX,oldY]);
-                return
-            end
-
-            % otherwise, re-map previous cursor position to hit the same relative spot in new image
-            newY = oldY*(newSize(1)/oldSize(1));
-            newX = oldX*(newSize(2)/oldSize(2));
-
-            % update view box patch base coordinates before updating view box
-            obj.ImageHeight = newSize(1);
-            obj.ImageWidth = newSize(2);
-            obj.updateViewBoxBaseCoordinates();
-
-            % set new limits using new cursor position
-            obj.updateLimits([newX,newY]);
-            
-            obj.printStatus(sprintf('Host CData changed\n'))
-        end
-
-    end
-
-    %% Host update helpers
+    %% Host display helpers
     methods
 
         function pointer = getPreferredPointer(obj)
@@ -387,41 +172,22 @@ classdef Zoom < matlabx.ui.widgets.ImageAxesTool
         end
 
         function str = getLabelString(obj)
-            % return char vector with info on zoom level
+            % Return char vector with info on zoom level.
             switch obj.Host.Mode.Zoom
                 case true
-                    str = sprintf('Zoom: %iX',obj.ZoomFactor);
+                    str = 'Zoom: on';
                 case false
                     str = 'Zoom: off';
             end
         end
 
-        function updateLimits(obj,XY)
-            [XLim,YLim] = obj.getZoomLims(XY);
-            set(obj.Host.mainAxes,'XLim',XLim,'YLim',YLim);
-
-            % update inner view box
-            set(obj.ZoomBox,...
-                "XData",obj.XZoomBase+(XLim(1)-0.5)*obj.BoxSize,...
-                "YData",obj.YZoomBase+(YLim(1)-0.5)*obj.BoxSize);
-
-
-            % save last cursor position used to set limits
-            obj.lastCursorPosition = XY;
-        end
-
     end
-
-
-
     %% Teardown
     methods (Access = protected)
 
         % called at the beginning of superclass delete()
         function teardown(obj)
-            % delete patches
-            delete(obj.FullBox(isvalid(obj.FullBox)));
-            delete(obj.ZoomBox(isvalid(obj.ZoomBox)));
+            % extra required cleanup on teardown
         end
 
     end

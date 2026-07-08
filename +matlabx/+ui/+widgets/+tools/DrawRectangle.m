@@ -84,9 +84,10 @@ classdef DrawRectangle < matlabx.ui.widgets.ImageAxesTool
                 'Icon',matlabx.internal.Paths.icons('RectangleROIIcon.png'),...
                 'Priority',10,...
                 'IsExclusive',true,...
-                'CapturesDown',true,...
-                'CapturesUp',true,...
-                'DistractsMove',true);
+                'InterceptsDown',true,...
+                'InterceptsUp',true,...
+                'PassivelyInterceptsMove',true,...
+                'PassivelyInterceptsDown',true);
             % rectangular ROI
             obj.RectROI = images.roi.Rectangle.empty();
             % annotation lines
@@ -155,10 +156,9 @@ classdef DrawRectangle < matlabx.ui.widgets.ImageAxesTool
                 return
             end
 
-            % if hovering on existing ROI, return
+            % if hovering on existing ROI -> stop propagation and return
             if obj.Host.Mode.HoverRectangle
-                % clicks on existing ROI should not open host context menu
-                E.StopPropagation = true;
+                E.stop(); % clicks on existing ROI should not open host context menu
                 return
             end
 
@@ -190,11 +190,10 @@ classdef DrawRectangle < matlabx.ui.widgets.ImageAxesTool
 
     end
 
-    %% Passive event hooks (only when Installed==true && IsDistractor==true)
+    %% Passive event hooks (only when Installed==true && IsPassiveInterceptor==true)
     methods
 
-        function tf = onDistractMove(obj,E)
-            tf = false;
+        function onPassiveMove(obj,E)
 
             % cursor target (parent) is our obj.RectROI
             if isa(E.Target.Parent,'images.roi.Rectangle') && strcmp(E.Target.Parent.Tag,'RectROI')
@@ -203,6 +202,14 @@ classdef DrawRectangle < matlabx.ui.widgets.ImageAxesTool
                 obj.Host.setMode('HoverRectangle',false);
             end
 
+        end
+
+        function onPassiveDown(obj,E)
+            % if hovering on existing ROI -> stop propagation and return
+            if obj.Host.Mode.HoverRectangle
+                E.stop(); % clicks on existing ROI should not open host context menu
+                return
+            end
         end
 
     end

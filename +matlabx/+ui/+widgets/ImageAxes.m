@@ -1,20 +1,27 @@
 classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
-%%IMAGEAXES  Dedicated image viewer with custom tool hosting and figure-level event routing via FigureEventHub
+%IMAGEAXES Image5D-backed UI image display and interaction component.
 %
+%   matlabx.ui.widgets.ImageAxes displays a selected 2-D plane or RGB
+%   composite from a matlabx.image.Image5D object. It also hosts
+%   ImageAxesTool subclasses and receives figure-level mouse/key events
+%   through matlabx.ui.control.FigureEventHub.
 %
+%   Data terminology
+%   ----------------
+%   ImageData      Canonical source image object. Prefer this for new code.
+%   RenderSource   Current selected source plane or computed RGB composite.
+%   DisplayCData   Graphics-ready data assigned to the MATLAB image object.
+%                  Scalar RenderSource data are contrast-rescaled here.
+%   CData          Compatibility alias for setting ImageData from raw MATLAB
+%                  image arrays/cells. New code should prefer ImageData.
 %
-%   Notes:
-%
-%   Make sure CData argument comes before CLim when calling the constructor
-%
-%   If you use multiple instances of ImageAxes in the same figure window, 
-%   make sure the Name property of each is unique
-%
-%
+%   Notes
+%   -----
+%   If multiple ImageAxes instances share a figure, give each a unique Name
+%   so figure-event hit testing can distinguish their axes/toolbars.
 
 
-
-    %% Tool Management
+    %% Tools
 
     properties (SetAccess=?matlabx.ui.widgets.ImageAxesTool)
         % struct() of installed tools, fieldnames match tool Name
@@ -42,12 +49,12 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
         ToolbarButtons struct = struct()
     end
 
-    %% Public Parameters
+    %% Public configuration
     properties (AbortSet)
         Name (1,1) string = ""
     end
 
-    % Passthroughs
+    % Graphics passthroughs
     properties (Dependent)
         ImageVisible
         AxesVisible
@@ -56,31 +63,38 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
         MaxRenderedResolution
     end
 
-    %% CData management
+    %% Image model, render state, and display state
 
+    % Canonical image data and compatibility input.
     properties (Dependent, AbortSet)
-        CLim                (1,2) double
-        CanMergeComponents  (1,1) logical
-    
+        ImageData           (1,1) matlabx.image.Image5D
         CData               {mustBeA(CData,{'double','single','uint8','uint16','logical','cell'})}
-        CLimMode            (1,:) char
+    end
+
+    % Observable view/display controls.
+    properties (Dependent, AbortSet, SetObservable)
+        C (1,1) double
+        Z (1,1) double
+        T (1,1) double
         ShowComposite       (1,1) matlab.lang.OnOffSwitchState
+        CLim                (1,2) double
+        CLimMode            (1,:) char {mustBeMember(CLimMode,{'auto','manual'})}
+        ComponentCLims      (1,:) cell
         ComponentColors     (1,:) cell
         ComponentColormaps  (1,:) cell
         ComponentColorMode  (1,:) char {mustBeMember(ComponentColorMode,{'colors','luts'})}
-
-        ComponentIdx        (1,1) double
-        Z                   (1,1) double
-        T                   (1,1) double
     end
 
-    properties (Dependent)
-        ImageData
-    end
-
-    % read-only
+    % Read-only render/display information.
     properties (Dependent, SetAccess=private)
+        RenderSource
+        RenderSourceKind       (1,:) char {mustBeMember(RenderSourceKind,{'scalar','rgb'})}
+        RenderSourceSize       (1,:) double
+        RenderSourceClass      (1,:) char {mustBeMember(RenderSourceClass,{'double','single','uint8','uint16','logical',''})}
         DisplayCData
+        CanMergeComponents  (1,1) logical
+
+        % Compatibility aliases for RenderSource* metadata.
         CDataKind       (1,:) char {mustBeMember(CDataKind,{'scalar','rgb'})}
         CDataSize       (1,:) double
         CDataClass      (1,:) char {mustBeMember(CDataClass,{'double','single','uint8','uint16','logical',''})}
@@ -91,7 +105,7 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
     end
 
     properties (Access=private)
-        % small internal view state
+        % Current view coordinates and display modes.
         ViewState_ struct = struct( ...
             'C', 1, ...
             'Z', 1, ...
@@ -99,11 +113,14 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
             'ShowComposite', false, ...
             'CLimMode', 'auto', ...
             'ComponentColorMode', 'colors');
-        % image data structure
+
+        % Canonical Image5D data model.
         ImageData_ (1,1) matlabx.image.Image5D = matlabx.image.Image5D.fromComponents(zeros(256,256,3))
-        % currently rendered source image (active component plane or computed composite)
+
+        % Selected source plane or computed composite, before display scaling.
         RenderSource_ (:,:,:) = matlabx.ui.widgets.ImageAxes.placeholderImage
-        % per-component display state
+
+        % Per-component contrast/color/LUT display state.
         ComponentDisplay_ (1,:) struct = struct( ...
             'CLim', {}, ...
             'ColorName', {}, ...
@@ -116,17 +133,22 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
 
     % private
     properties (Access=private, Transient, NonCopyable)
+        % UI components
         Grid matlab.ui.container.GridLayout
         Panel matlab.ui.container.Panel
         staticAxes matlab.ui.control.UIAxes
         hImage matlab.graphics.primitive.Image
-        L event.listener
-        %TopLabel (1,1) matlab.graphics.primitive.Text
         BottomLabel (1,1) matlab.graphics.primitive.Text
         Colorbar matlab.graphics.illustration.ColorBar
-
         sizingGrid matlab.ui.container.GridLayout
+        ViewBoxFull (1,1) matlab.graphics.primitive.Patch
+        ViewBoxZoom (1,1) matlab.graphics.primitive.Patch
 
+
+        % listeners
+        L event.listener
+
+        % structs of extra UI handles that do not have a named property
         ContextMenuUI struct
     end
 
@@ -164,7 +186,7 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
         metadataWindow matlabx.app.TextWindow
     end
 
-    properties
+    properties (Access=private)
         contrastToolOpen (1,1) logical = false
         metadataWindowOpen (1,1) logical = false
     end
@@ -202,7 +224,7 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
 
     %% Events
     events (NotifyAccess=protected)
-        CDataChanged
+        RenderSourceChanged
     end
 
     %% ComponentContainer lifecycle (setup/update)
@@ -243,7 +265,7 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
             obj.Panel.Layout.Row = 2;
             obj.Panel.Layout.Column = 2;
 
-            obj.Panel.Title = "TEST TITLE";
+            obj.Panel.Title = "";
 
             % Main axes
             obj.mainAxes = uiaxes(obj.Panel, ...
@@ -331,17 +353,36 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
                 'HorizontalAlignment','left',...
                 'VerticalAlignment','bottom');
 
+            % set up ViewBox patches
+            obj.ViewBoxFull = patch(obj.staticAxes, ...
+                'XData',NaN, ...
+                'YData',NaN, ...
+                'EdgeColor',obj.ViewBoxEdgeColor, ...
+                'FaceColor',obj.ViewBoxFaceColor, ...
+                'FaceAlpha',obj.ViewBoxFaceAlpha, ...
+                'HitTest','on', ...
+                'PickableParts','all', ...
+                'LineWidth', obj.ViewBoxLineWidth, ...
+                'Tag','ViewBoxFull');
+            obj.ViewBoxZoom = patch(obj.staticAxes, ...
+                'XData',NaN, ...
+                'YData',NaN, ...
+                'EdgeColor',obj.ViewBoxEdgeColor, ...
+                'FaceColor',obj.ViewBoxFaceColor, ...
+                'FaceAlpha',obj.ViewBoxFaceAlpha, ...
+                'HitTest','on', ...
+                'PickableParts','all', ...
+                'LineWidth', obj.ViewBoxLineWidth, ...
+                'Tag','ViewBoxZoom');           
+
             % set up ContextMenu
             obj.setupContextMenu();
-
-            % set default colormap
-            obj.Colormap = gray;
 
             % initialize display state from ImageData
             obj.syncViewStateToImageData();
             
             % initial render
-            obj.syncRenderSourceToView();
+            obj.syncRenderSourceToView(ResetView=true);
         end
 
         function update(obj)
@@ -349,11 +390,12 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
                 obj.FontSize_ = obj.FontSize;
                 obj.uipanelOverheadPx_ = obj.UICal.uipanelTopChromeHeightPx(obj.FontSize_);
                 obj.inStartup = false;
-                % obj.updateOnResize();
+                obj.updateOnResize();
             end
 
-            % set the Tag property of the mainAxes
+            % set the Tag property of the axes used for event routing
             obj.mainAxes.Tag = obj.Name;
+            obj.staticAxes.Tag = obj.Name;
 
             % set BackgroundColor
             obj.Grid.BackgroundColor = obj.BackgroundColor;
@@ -361,12 +403,9 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
 
             obj.sizingGrid.BackgroundColor = obj.BackgroundColor;
 
-            % % set FontSize and update calibrated values
-            % obj.FontSize_ = obj.FontSize;
+            %obj.updateOnResize();
 
-            obj.updateOnResize();
         end
-
 
         function setupContextMenu(obj)
 
@@ -389,8 +428,651 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
 
         end
 
+    end
+
+
+
+    %% Zoom functionality
+
+    properties (Access=private)
+        Zoom_ = struct( ...
+            'Idx', 1, ...
+            'Levels', [1 1/2 1/3 1/4 1/5 1/10 1/15 1/20], ...
+            'PanLims', [0.25 0.75], ...
+            'LastCursorXY', [], ...
+            'Enabled', false)
+        Pan_ = struct( ...
+            'Lims', [0.25 0.75], ...
+            'Enabled', true, ...
+            'OffsetXY', [0,0], ...
+            'LastCursorXY', [])
+        ViewBoxBase_ = struct( ...
+            'Top', [], ...
+            'Left', [], ...
+            'XBase', [], ...
+            'YBase', [], ...
+            'XFull', [], ...
+            'YFull', [], ...
+            'XZoomBase', [], ...
+            'YZoomBase', [])
+    end
+
+    properties (Dependent)
+        ZoomEnabled
+        ZoomLevel
+        ZoomFactor
+
+        PanEnabled
+        PanLims
+    end
+
+    % ViewBox appearance
+    properties
+        ViewBoxSize = 0.1
+        ViewBoxEdgeColor = [0 0 0]
+        ViewBoxFaceColor = [1 1 1]
+        ViewBoxFaceAlpha = 0.25
+        ViewBoxLineWidth = 1
+
+        ViewBoxTop = 0.05
+        ViewBoxLeft = 0.01
+    end
+
+    % Private Zoom/Pan helpers
+    methods
+        function moveViewToCursor(obj)
+            %MOVEVIEWTOCURSOR  Pan the view according to static-axes cursor position
+
+            XY = obj.cursorPositionStatic;
+
+            if isempty(XY)
+                return
+            end
+
+            obj.setZoomLims(XY);
+        end
+
+        function zoomViewToCursor(obj)
+            %ZOOMVIEWTOCURSOR  Change zoom while preserving the pixel under the cursor
+
+            XY = obj.cursorPosition;
+
+            if isempty(XY)
+                return
+            end
+
+            % These are still the limits from the previous zoom level because the
+            % axes limits have not yet been updated.
+            oldXLim = obj.mainAxes.XLim;
+            oldYLim = obj.mainAxes.YLim;
+
+            obj.setZoomLims2(XY,oldXLim,oldYLim);
+        end
+
+        function [XLim,YLim] = getZoomLims(obj,XY)
+            %GETZOOMLIMS  Calculate cursor-following pan limits
+            %
+            %   [XLim,YLim] = getZoomLims(obj,XY) maps XY from the full-sized static
+            %   axes into the available pan range. A stored pan offset reconciles this
+            %   absolute mapping with any previous cursor-anchored zoom operation.
+            %
+            %   XY must be expressed in the coordinate system of the full-sized static
+            %   axes.
+
+            arguments
+                obj
+                XY (1,2) double
+            end
+
+            % Image dimensions
+            sz = obj.RenderSourceSize;
+            H = sz(1);
+            W = sz(2);
+
+            % Current zoomed-window dimensions
+            viewWidth  = obj.ZoomLevel * W;
+            viewHeight = obj.ZoomLevel * H;
+
+            % Full image limits
+            defXLim = [0.5, W + 0.5];
+            defYLim = [0.5, H + 0.5];
+
+            % Calculate the uncorrected lower limits from the static cursor
+            lower = obj.getCursorMappedLowerLimit(XY);
+
+            % Reconcile the cursor mapping with the current zoom-anchored view
+            offset = obj.getPanOffset();
+            lower = lower + offset;
+
+            % Constrain the view to the full image
+            lower(1) = min(max(lower(1),defXLim(1)), ...
+                defXLim(2) - viewWidth);
+
+            lower(2) = min(max(lower(2),defYLim(1)), ...
+                defYLim(2) - viewHeight);
+
+            % Construct limits
+            XLim = lower(1) + [0,viewWidth];
+            YLim = lower(2) + [0,viewHeight];
+        end
+
+        function [XLim,YLim] = getZoomLims2(obj,XY,oldXLim,oldYLim)
+            %GETZOOMLIMS2  Calculate cursor-anchored zoom limits
+            %
+            %   [XLim,YLim] = getZoomLims2(obj,XY,oldXLim,oldYLim) calculates new
+            %   limits such that the image coordinate XY remains at approximately the
+            %   same screen position after the zoom level changes.
+            %
+            %   XY must be expressed in image/data coordinates.
+
+            arguments
+                obj
+                XY (1,2) double
+                oldXLim (1,2) double
+                oldYLim (1,2) double
+            end
+
+            % Image dimensions
+            sz = obj.RenderSourceSize;
+            H = sz(1);
+            W = sz(2);
+
+            % Full image limits
+            defXLim = [0.5, W + 0.5];
+            defYLim = [0.5, H + 0.5];
+
+            % New visible dimensions
+            newWidth  = obj.ZoomLevel * W;
+            newHeight = obj.ZoomLevel * H;
+
+            % Cursor position within the current visible window
+            xFrac = (XY(1) - oldXLim(1)) / diff(oldXLim);
+            yFrac = (XY(2) - oldYLim(1)) / diff(oldYLim);
+
+            % Guard against a cursor coordinate slightly outside the axes
+            xFrac = min(max(xFrac,0),1);
+            yFrac = min(max(yFrac,0),1);
+
+            % Preserve the cursor's fractional position within the view
+            xLower = XY(1) - xFrac * newWidth;
+            yLower = XY(2) - yFrac * newHeight;
+
+            % Constrain the view to the full image
+            xLower = min(max(xLower,defXLim(1)), ...
+                defXLim(2) - newWidth);
+
+            yLower = min(max(yLower,defYLim(1)), ...
+                defYLim(2) - newHeight);
+
+            % Construct limits
+            XLim = xLower + [0,newWidth];
+            YLim = yLower + [0,newHeight];
+        end
+
+        function lower = getCursorMappedLowerLimit(obj,XY)
+            %GETCURSORMAPPEDLOWERLIMIT  Map static cursor position into pan range
+            %
+            %   This is the uncorrected version of the original absolute cursor-follow
+            %   calculation. It does not include the stored pan offset.
+
+            % Image dimensions
+            sz = obj.RenderSourceSize;
+            H = sz(1);
+            W = sz(2);
+
+            % Current zoomed-window dimensions
+            viewWidth  = obj.ZoomLevel * W;
+            viewHeight = obj.ZoomLevel * H;
+
+            % Available travel of the zoomed view
+            travel = [W - viewWidth, H - viewHeight];
+
+            % Pan limits in normalized static-axes coordinates
+            panLims = obj.PanLims;
+            a = panLims(1);
+            b = panLims(2);
+
+            if b <= a
+                error('PanLims must contain two increasing values.')
+            end
+
+            % Normalize static-axes cursor coordinates to the full image
+            XYNorm = (XY - 0.5) ./ [W,H];
+
+            % Apply the pan dead-zone/range
+            XYNorm = min(max(XYNorm,a),b);
+
+            % Remap [a,b] to [0,1]
+            panFrac = (XYNorm - a) ./ (b - a);
+
+            % Lower limits before application of the reconciliation offset
+            lower = [0.5,0.5] + panFrac .* travel;
+        end
+
+        function offset = getPanOffset(obj)
+            %GETPANOFFSET  Return the stored pan reconciliation offset
+
+            if ~isfield(obj.Pan_,'OffsetXY') || ...
+                    isempty(obj.Pan_.OffsetXY) || ...
+                    numel(obj.Pan_.OffsetXY) ~= 2
+
+                obj.Pan_.OffsetXY = [0,0];
+            end
+
+            offset = obj.Pan_.OffsetXY;
+        end
+
+        function calibratePanOffset(obj,XYStatic)
+            %CALIBRATEPANOFFSET  Align cursor-follow mapping with current axes limits
+            %
+            %   XYStatic is the cursor position in the full-sized static axes. The
+            %   resulting offset ensures that calling getZoomLims with this same cursor
+            %   position reproduces the current axes position rather than snapping to
+            %   the original absolute mapping.
+
+            if isempty(XYStatic)
+                return
+            end
+
+            mappedLower = obj.getCursorMappedLowerLimit(XYStatic);
+            currentLower = [obj.mainAxes.XLim(1), obj.mainAxes.YLim(1)];
+
+            obj.Pan_.OffsetXY = currentLower - mappedLower;
+            obj.Pan_.LastCursorXY = XYStatic;
+        end
+
+        function setZoomLims(obj,XY)
+            %SETZOOMLIMS  Apply cursor-following pan limits
+            %
+            %   XY must be expressed in full-sized static-axes coordinates.
+
+            if nargin < 2 || isempty(XY)
+                XY = obj.cursorPositionStatic;
+            end
+
+            if isempty(XY)
+                return
+            end
+
+            [XZoomLim,YZoomLim] = obj.getZoomLims(XY);
+            obj.applyZoomLims(XZoomLim,YZoomLim);
+
+            % This field now always contains static-axes coordinates
+            obj.Pan_.LastCursorXY = XY;
+        end
+
+        function setZoomLims2(obj,XY,oldXLim,oldYLim)
+            %SETZOOMLIMS2  Apply cursor-anchored zoom limits
+            %
+            %   XY must be expressed in image/data coordinates.
+
+            if nargin < 2 || isempty(XY)
+                XY = obj.cursorPosition;
+            end
+
+            if isempty(XY)
+                return
+            end
+
+            if nargin < 3 || isempty(oldXLim)
+                oldXLim = obj.mainAxes.XLim;
+            end
+
+            if nargin < 4 || isempty(oldYLim)
+                oldYLim = obj.mainAxes.YLim;
+            end
+
+            [XZoomLim,YZoomLim] = ...
+                obj.getZoomLims2(XY,oldXLim,oldYLim);
+
+            obj.applyZoomLims(XZoomLim,YZoomLim);
+
+            % This field now always contains image/data coordinates
+            obj.Zoom_.LastCursorXY = XY;
+
+            % Reconcile the static cursor-follow mapping with the new view. This is
+            % the step that prevents the next mouse movement from causing a jump.
+            obj.calibratePanOffset(obj.cursorPositionStatic);
+        end
+
+        function applyZoomLims(obj,XLim,YLim)
+            %APPLYZOOMLIMS  Apply axes limits and synchronize the zoom view box
+
+            set(obj.mainAxes,...
+                'XLim',XLim,...
+                'YLim',YLim);
+
+            % Update inner view box
+            XZoomBase = obj.ViewBoxBase_.XZoomBase;
+            YZoomBase = obj.ViewBoxBase_.YZoomBase;
+
+            set(obj.ViewBoxZoom,...
+                "XData",XZoomBase + (XLim(1) - 0.5)*obj.ViewBoxSize,...
+                "YData",YZoomBase + (YLim(1) - 0.5)*obj.ViewBoxSize);
+        end
+
+        function updateViewBoxBaseCoordinates(obj)
+            %UPDATEVIEWBOXBASECOORDINATES  Update full and zoomed view-box geometry
+
+            sz = obj.RenderSourceSize;
+            H = sz(1);
+            W = sz(2);
+
+            S = struct();
+
+            S.Top  = (obj.ViewBoxTop  * H) + 0.5;
+            S.Left = (obj.ViewBoxLeft * W) + 0.5;
+
+            S.XBase = [0,0,W,W] .* obj.ViewBoxSize;
+            S.YBase = [0,H,H,0] .* obj.ViewBoxSize;
+
+            S.XFull = S.XBase + S.Left;
+            S.YFull = S.YBase + S.Top;
+
+            zoomLevel = obj.ZoomLevel;
+
+            S.XZoomBase = S.XBase .* zoomLevel + S.Left;
+            S.YZoomBase = S.YBase .* zoomLevel + S.Top;
+
+            % Update coordinates struct
+            obj.ViewBoxBase_ = S;
+
+            % Always update full-size box when coordinates change
+            set(obj.ViewBoxFull,...
+                "XData",S.XFull,...
+                "YData",S.YFull);
+        end
 
     end
+
+    % Public Zoom/Pan API
+    methods
+
+        function z = get.ZoomEnabled(obj)
+            z = obj.Zoom_.Enabled;
+        end
+
+        function set.ZoomEnabled(obj,tf)
+            if tf
+                obj.enableZoom();
+            else
+                obj.disableZoom();
+            end
+        end
+
+        function p = get.PanEnabled(obj)
+            p = obj.Pan_.Enabled;
+        end
+
+        function set.PanEnabled(obj,tf)
+            if tf
+                obj.enablePan();
+            else
+                obj.disablePan();
+            end
+        end
+
+        function p = get.PanLims(obj)
+            p = obj.Pan_.Lims;
+        end
+
+        function set.PanLims(obj,lims)
+            obj.Pan_.Lims = lims;
+
+            % PanLims changes the absolute cursor mapping. Recalibrate the offset
+            % so changing PanLims does not immediately move the current view.
+            if obj.ZoomEnabled
+                obj.calibratePanOffset(obj.cursorPositionStatic);
+            end
+        end
+
+        function z = get.ZoomLevel(obj)
+            z = obj.Zoom_.Levels(obj.Zoom_.Idx);
+        end
+
+        function f = get.ZoomFactor(obj)
+            f = 1 / obj.ZoomLevel;
+        end
+
+        function enableZoom(obj)
+            %ENABLEZOOM  Enable zoom functionality
+
+            if obj.ZoomEnabled
+                return
+            end
+
+            % Update view-box base coordinates for the current zoom level
+            obj.updateViewBoxBaseCoordinates();
+
+            % Show view boxes
+            set([obj.ViewBoxFull,obj.ViewBoxZoom],...
+                "Visible","on");
+
+            oldXLim = obj.mainAxes.XLim;
+            oldYLim = obj.mainAxes.YLim;
+
+            % Prefer the current image coordinate under the cursor
+            XY = obj.cursorPosition;
+
+            % Fall back to the most recent image-space zoom anchor
+            if isempty(XY) && isfield(obj.Zoom_,'LastCursorXY')
+                XY = obj.Zoom_.LastCursorXY;
+            end
+
+            % Final fallback: center of the image
+            if isempty(XY)
+                sz = obj.RenderSourceSize;
+                XY = [(sz(2) + 1)/2, (sz(1) + 1)/2];
+            end
+
+            obj.setZoomLims2(XY,oldXLim,oldYLim);
+
+            obj.Zoom_.Enabled = true;
+        end
+
+        function disableZoom(obj)
+            %DISABLEZOOM  Disable zoom functionality
+
+            if ~obj.ZoomEnabled
+                return
+            end
+
+            % Clear and hide patches
+            if isvalid(obj.ViewBoxFull)
+                set(obj.ViewBoxFull,...
+                    "XData",NaN,...
+                    "YData",NaN,...
+                    "Visible","off");
+            end
+
+            if isvalid(obj.ViewBoxZoom)
+                set(obj.ViewBoxZoom,...
+                    "XData",NaN,...
+                    "YData",NaN,...
+                    "Visible","off");
+            end
+
+            % Restore limits
+            obj.restoreDefaultLimits();
+
+            % The offset belongs to the current zoomed view and is no longer valid
+            obj.Pan_.OffsetXY = [0,0];
+            obj.Pan_.LastCursorXY = [];
+
+            obj.Zoom_.Enabled = false;
+        end
+
+        function toggleZoomEnabled(obj)
+            %TOGGLEZOOMENABLED  Flip state of ZoomEnabled
+
+            obj.ZoomEnabled = ~obj.Zoom_.Enabled;
+        end
+
+        function increaseZoom(obj)
+            %INCREASEZOOM  Step forward to the next ZoomLevel
+
+            oldIdx = obj.Zoom_.Idx;
+
+            obj.Zoom_.Idx = min(...
+                obj.Zoom_.Idx + 1,...
+                numel(obj.Zoom_.Levels));
+
+            % Do nothing if already at the final zoom level
+            if obj.Zoom_.Idx == oldIdx
+                return
+            end
+
+            obj.updateViewBoxBaseCoordinates();
+            obj.zoomViewToCursor();
+        end
+
+        function decreaseZoom(obj)
+            %DECREASEZOOM  Step backward to the previous ZoomLevel
+
+            oldIdx = obj.Zoom_.Idx;
+
+            obj.Zoom_.Idx = max(obj.Zoom_.Idx - 1,1);
+
+            % Do nothing if already at the first zoom level
+            if obj.Zoom_.Idx == oldIdx
+                return
+            end
+
+            obj.updateViewBoxBaseCoordinates();
+            obj.zoomViewToCursor();
+        end
+
+        function enablePan(obj)
+            %ENABLEPAN  Enable pan functionality
+
+            if obj.PanEnabled
+                return
+            end
+
+            obj.Pan_.Enabled = true;
+
+            % Establish the current cursor/view relationship without moving the
+            % view when pan is first enabled.
+            if obj.ZoomEnabled
+                obj.calibratePanOffset(obj.cursorPositionStatic);
+            end
+        end
+
+        function disablePan(obj)
+            %DISABLEPAN  Disable pan functionality
+
+            if ~obj.PanEnabled
+                return
+            end
+
+            obj.Pan_.Enabled = false;
+            obj.Pan_.LastCursorXY = [];
+        end
+
+        function togglePanEnabled(obj)
+            %TOGGLEPANENABLED  Flip state of PanEnabled
+
+            obj.PanEnabled = ~obj.Pan_.Enabled;
+        end
+
+    end
+
+
+
+
+
+
+    %% Axes linking
+    properties (SetAccess=private)
+        hasLinks        (1,1) logical = false
+    end
+
+    properties (Access=private)
+        linkedAxes      (1,:) = []
+        linkedProps     (1,:) cell = {}
+        LinkListener    event.listener
+    end
+
+    methods
+
+        function addLink(obj,links,props)
+            arguments
+                obj     (1,1) matlabx.ui.widgets.ImageAxes
+                links   (1,:) matlabx.ui.widgets.ImageAxes
+                props   (1,:) cell = matlabx.ui.widgets.ImageAxes.getLinkableProperties()
+            end
+
+            if obj.hasLinks
+                error("matlabx:ui:widgets:ImageAxes:UnableToLink","Axes is already linked");
+            end
+
+            if isempty(links) || isempty(props)
+                return
+            end
+
+            obj.linkedAxes = links;
+            obj.linkedProps = props;
+
+            % listens to props for this object, updates links on change
+            obj.LinkListener = addlistener(obj, props, 'PostSet', @(src,evt) obj.syncSlavesToSelf(src,evt));
+
+            % indicate that this object has links
+            obj.hasLinks = true;
+
+            for i = 1:numel(links)
+                if i==1
+                    links(1).linkedAxes = [obj,links(2:end)];
+                else
+                    links(i).linkedAxes = [links(1:i-1),obj,links(i+1:end)];
+                end
+                links(i).linkedProps = props;
+                links(i).LinkListener = addlistener(links(i), props, 'PostSet', @(src,evt) links(i).syncSlavesToSelf(src,evt));
+                links(i).hasLinks = true;
+            end
+
+        end
+
+
+        function removeLinks(obj)
+            if ~obj.hasLinks, return; end
+            for i = 1:numel(obj.linkedAxes)
+                obj.linkedAxes(i).linkedAxes = [];
+                obj.linkedAxes(i).linkedProps = {};
+                delete(obj.linkedAxes(i).LinkListener(isvalid(obj.linkedAxes(i).LinkListener)));
+                obj.linkedAxes(i).hasLinks = false;
+            end
+            obj.linkedAxes = [];
+            obj.linkedProps = {};
+            delete(obj.LinkListener(isvalid(obj.LinkListener)));
+            obj.hasLinks = false;
+        end
+
+        function syncSlavesToSelf(obj,~,evt)
+            % for each linked ImageAxes
+            for i = 1:numel(obj.linkedAxes)
+                % disable slave LinkListener while setting properties
+                obj.linkedAxes(i).LinkListener.Enabled = false;
+                % attempt to sync changed property value with each linked axes
+                try
+                    % name of the changed property
+                    propName = evt.Source.Name;
+                    % sync value of linked axes to value of this axes
+                    obj.linkedAxes(i).(propName) = obj.(propName);
+                catch
+                    error('Failed to sync linked axes')
+                end
+                % re-enable slave LinkListener
+                obj.linkedAxes(i).LinkListener.Enabled = true;
+            end
+        end
+
+    end
+
+
+
+
+
+
 
     %% UI helpers
     methods (Access=private)
@@ -459,9 +1141,9 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
                 activeKind = obj.ImageData_.getComponentKind(obj.ViewState_.C);
                 activeClass = obj.ImageData_.getComponentClass(obj.ViewState_.C);
             else
-                activeData = obj.CData;
-                activeKind = obj.CDataKind;
-                activeClass = obj.CDataClass;
+                activeData = obj.RenderSource;
+                activeKind = obj.RenderSourceKind;
+                activeClass = obj.RenderSourceClass;
             end
         
             switch activeKind
@@ -580,25 +1262,51 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
         end
 
         function updateFontSizes(obj)
-            fprintf('updateFontSizes() FontSize_: %i\n',obj.FontSize_)
             obj.Panel.FontSize = obj.FontSize_;
             obj.BottomLabel.FontSize = obj.FontSize_;
             obj.uipanelOverheadPx_ = obj.UICal.uipanelTopChromeHeightPx(obj.FontSize_);
         end
 
         function refreshView(obj)
-            % update the CData of the Image
-            obj.updateImageCData();
-            % update the Colormap of the Axes
-            obj.updateAxesColormap();
-            % update the Colorbar
-            obj.updateColorbar();
-            % update axes limits
-            obj.restoreDefaultLimits();
-            % update image info label
-            obj.updateTopLabelText();
-            % update ContextMenu
-            obj.refreshContextMenu();
+            %REFRESHVIEW Compatibility wrapper for a full view refresh.
+            obj.refreshDisplay(ResetView=true);
+        end
+
+        function refreshDisplay(obj, opts)
+            %REFRESHDISPLAY Update graphics that depend on current render/display state.
+            arguments
+                obj
+                opts.ResetView (1,1) logical = false
+                opts.UpdateImage (1,1) logical = true
+                opts.UpdateColormap (1,1) logical = true
+                opts.UpdateColorbar (1,1) logical = true
+                opts.UpdateTopLabel (1,1) logical = true
+                opts.UpdateContextMenu (1,1) logical = true
+            end
+
+            if opts.UpdateImage
+                obj.updateImageCData();
+            end
+
+            if opts.UpdateColormap
+                obj.updateAxesColormap();
+            end
+
+            if opts.UpdateColorbar
+                obj.updateColorbar();
+            end
+
+            if opts.ResetView
+                obj.restoreDefaultLimits();
+            end
+
+            if opts.UpdateTopLabel
+                obj.updateTopLabelText();
+            end
+
+            if opts.UpdateContextMenu
+                obj.refreshContextMenu();
+            end
         end
 
         function refreshContextMenu(obj)
@@ -615,19 +1323,19 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
         %% --- UI text helpers ---
 
         function s = getImageInfoString(obj)
-            s1 = sprintf(strjoin(repmat({'%i'},1,numel(obj.CDataSize)),'x'),obj.CDataSize);
-            s2 = sprintf('%s (%s)',obj.CDataClass,obj.CDataKind);
+            s1 = sprintf(strjoin(repmat({'%i'},1,numel(obj.RenderSourceSize)),'x'),obj.RenderSourceSize);
+            s2 = sprintf('%s (%s)',obj.RenderSourceClass,obj.RenderSourceKind);
             s = [s1,' ',s2];
         end
 
         function s = getComponentInfoString(obj)
-            C = obj.ViewState_.C;
-            nm = obj.ImageData_.getComponentName(C);
+            c = obj.ViewState_.C;
+            nm = obj.ImageData_.getComponentName(c);
         
             if strlength(nm) > 0
-                base = sprintf('C: %i/%i (%s)', C, obj.NumComponents, char(nm));
+                base = sprintf('C: %i/%i (%s)', c, obj.NumComponents, char(nm));
             else
-                base = sprintf('C: %i/%i', C, obj.NumComponents);
+                base = sprintf('C: %i/%i', c, obj.NumComponents);
             end
         
             if obj.ViewState_.ShowComposite
@@ -654,7 +1362,7 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
         end
 
         function s = getImageSizeString(obj)
-            sz = obj.CDataSize;
+            sz = obj.RenderSourceSize;
             % list size up to but not including the first singleton dimension
             idx = find(sz==1,1,"first");
             if ~isempty(idx) && idx>2
@@ -666,12 +1374,12 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
 
         function s = getImageBitDepthString(obj)
 
-            if strcmpi(obj.CDataKind,'rgb')
+            if strcmpi(obj.RenderSourceKind,'rgb')
                 s = '';
                 return
             end
 
-            switch obj.CDataClass
+            switch obj.RenderSourceClass
                 case 'uint8'
                     s = '8-bit';
                 case 'uint16'
@@ -687,10 +1395,10 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
 
     end
 
-    %% Public API: ImageData/DisplayState/ViewState
+    %% Public API: image model, render source, and display state
     methods
     
-        % --- ImageData ---
+        % --- ImageData: canonical source image object ---
         function v = get.ImageData(obj), v = obj.ImageData_; end
     
         function set.ImageData(obj, val)
@@ -701,13 +1409,14 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
 
             obj.ImageData_ = val;
             obj.syncViewStateToImageData();
-            obj.syncRenderSourceToView();
+            obj.syncRenderSourceToView(ResetView=true);
         end
     
-        % --- CData ---
-        function v = get.CData(obj), v = obj.RenderSource_; end
+        % --- CData: compatibility alias for raw image input/current source ---
+        function v = get.CData(obj), v = obj.RenderSource; end
     
         function set.CData(obj, cdata)
+            % Convenience wrapper to set ImageData without constructing an Image5D.
             if isempty(cdata)
                 cdata = matlabx.ui.widgets.ImageAxes.placeholderImage();
             end
@@ -715,11 +1424,13 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
             obj.ImageData_ = matlabx.image.Image5D.fromComponents(cdata);
 
             obj.syncViewStateToImageData();
-            obj.syncRenderSourceToView();
+            obj.syncRenderSourceToView(ResetView=true);
         end
 
-        % --- CDataSize ---
-        function v = get.CDataSize(obj)
+        % --- RenderSource: selected plane or computed composite ---
+        function v = get.RenderSource(obj), v = obj.RenderSource_; end
+
+        function v = get.RenderSourceSize(obj)
             if obj.ViewState_.ShowComposite
                 v = size(obj.RenderSource_);
             else
@@ -727,8 +1438,7 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
             end
         end
     
-        % --- CDataKind ---
-        function v = get.CDataKind(obj)
+        function v = get.RenderSourceKind(obj)
             if obj.ViewState_.ShowComposite
                 v = 'rgb';
             else
@@ -736,8 +1446,7 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
             end
         end
     
-        % --- CDataClass ---
-        function v = get.CDataClass(obj)
+        function v = get.RenderSourceClass(obj)
             if obj.ViewState_.ShowComposite
                 v = class(obj.RenderSource_);
             else
@@ -745,7 +1454,12 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
             end
         end
 
-        % --- DisplayCData ---
+        % --- CData metadata compatibility aliases ---
+        function v = get.CDataSize(obj),  v = obj.RenderSourceSize;  end
+        function v = get.CDataKind(obj),  v = obj.RenderSourceKind;  end
+        function v = get.CDataClass(obj), v = obj.RenderSourceClass; end
+
+        % --- DisplayCData: graphics-ready image CData ---
         function v = get.DisplayCData(obj)
             if obj.ViewState_.ShowComposite
                 v = obj.RenderSource_;
@@ -755,7 +1469,7 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
             clim = obj.ComponentDisplay_(obj.ViewState_.C).CLim;
             comp = obj.ImageData_.Components(obj.ViewState_.C);
 
-            I = obj.ImageData_.getPlane(obj.ViewState_.C,obj.ViewState_.Z,obj.ViewState_.T);
+            I = obj.RenderSource_;
 
             switch comp.Kind
                 case 'scalar'
@@ -783,23 +1497,12 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
     
         function set.CLim(obj, val)
             idx = obj.ViewState_.C;
-            comp = obj.ImageData_.getComponent(idx);
 
-
-            % meaningless for rgb/logical
-            if strcmp(comp.Kind, 'rgb') || strcmp(comp.Class, 'logical')
-                return
-            end
-    
-            obj.ComponentDisplay_(idx).CLim = double(val);
+            changed = obj.setComponentCLims_({double(val)}, idx);
             obj.ViewState_.CLimMode = 'manual';
-    
-            if obj.ViewState_.ShowComposite
-                obj.RenderSource_ = obj.getCompositeImage();
-                obj.refreshView();
-            else
-                obj.updateImageCData();
-                obj.updateColorbar();
+
+            if changed
+                obj.updateDisplayMapping();
             end
         end
 
@@ -809,19 +1512,24 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
         end
     
         function set.CLimMode(obj, val)
+            if strcmp(obj.ViewState_.CLimMode, val)
+                return
+            end
+
             obj.ViewState_.CLimMode = val;
+            changed = true;
     
             if strcmp(val, 'auto')
+                clims = cell(1, obj.NumComponents);
                 for i = 1:obj.NumComponents
-                    obj.ComponentDisplay_(i).CLim = obj.ImageData_.getComponentDataRange(i);
+                    clims{i} = obj.ImageData_.getComponentDataRange(i);
                 end
+                changed = obj.setComponentCLims_(clims, 1:obj.NumComponents);
             end
-    
-            if obj.ViewState_.ShowComposite
-                obj.RenderSource_ = obj.getCompositeImage();
+
+            if changed
+                obj.updateDisplayMapping();
             end
-    
-            obj.refreshView();
         end
     
         % --- NumComponents ---
@@ -841,7 +1549,13 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
         function v = get.ShowComposite(obj), v = matlab.lang.OnOffSwitchState(obj.ViewState_.ShowComposite); end
     
         function set.ShowComposite(obj, val)
-            obj.ViewState_.ShowComposite = logical(val) && obj.CanMergeComponents;
+            newVal = logical(val) && obj.CanMergeComponents;
+
+            if obj.ViewState_.ShowComposite == newVal
+                return
+            end
+
+            obj.ViewState_.ShowComposite = newVal;
             obj.syncRenderSourceToView();
         end
     
@@ -849,21 +1563,25 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
         function toggleComposite(obj), obj.ShowComposite = ~obj.ViewState_.ShowComposite; end
 
 
-
-
         %% C/Z/T control
 
         % --- nextComponent ---
-        function nextComponent(obj), obj.ComponentIdx = matlabx.utils.math.wrapStep(obj.ComponentIdx,1,1,obj.NumComponents); end
+        function nextComponent(obj), obj.C = matlabx.utils.math.wrapStep(obj.C,1,1,obj.NumComponents); end
     
         % --- previousComponent ---
-        function previousComponent(obj), obj.ComponentIdx = matlabx.utils.math.wrapStep(obj.ComponentIdx,-1,1,obj.NumComponents); end
+        function previousComponent(obj), obj.C = matlabx.utils.math.wrapStep(obj.C,-1,1,obj.NumComponents); end
     
-        % --- ComponentIdx ---
-        function v = get.ComponentIdx(obj), v = obj.ViewState_.C; end
+        % --- C ---
+        function v = get.C(obj), v = obj.ViewState_.C; end
     
-        function set.ComponentIdx(obj, val)
-            obj.ViewState_.C = clip(val, 1, obj.NumComponents);
+        function set.C(obj, val)
+            newVal = clip(val, 1, obj.NumComponents);
+
+            if obj.ViewState_.C == newVal
+                return
+            end
+
+            obj.ViewState_.C = newVal;
             obj.syncRenderSourceToView();
         end
 
@@ -878,7 +1596,13 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
         function v = get.Z(obj), v = obj.ViewState_.Z; end
     
         function set.Z(obj, val)
-            obj.ViewState_.Z = clip(val, 1, obj.ImageData_.SizeZ);
+            newVal = clip(val, 1, obj.ImageData_.SizeZ);
+
+            if obj.ViewState_.Z == newVal
+                return
+            end
+
+            obj.ViewState_.Z = newVal;
             obj.syncRenderSourceToView();
         end
 
@@ -892,10 +1616,26 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
         function v = get.T(obj), v = obj.ViewState_.T; end
     
         function set.T(obj, val)
-            obj.ViewState_.T = clip(val, 1, obj.ImageData_.SizeT);
+            newVal = clip(val, 1, obj.ImageData_.SizeT);
+
+            if obj.ViewState_.T == newVal
+                return
+            end
+
+            obj.ViewState_.T = newVal;
             obj.syncRenderSourceToView();
         end
 
+
+        %% Component-specific set/get
+
+        % --- Colormap ---
+        function v = get.Colormap(obj), v = obj.ComponentDisplay_(obj.ViewState_.C).DisplayMap; end
+
+        function set.Colormap(obj, val)
+            idx = obj.ViewState_.C;
+            obj.setColormap(double(val), idx);
+        end
 
 
         % --- ComponentColors ---
@@ -907,17 +1647,14 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
         end
     
         function set.ComponentColors(obj, val)
-            if isempty(val)
-                return
+            obj.validateFullComponentCell(val, 'ComponentColors');
+
+            changed = obj.setComponentColors_(val, 1:obj.NumComponents);
+
+            if changed
+                obj.updateAllDisplayMaps();
+                obj.updateDisplayMapping();
             end
-    
-            n = min(numel(val), obj.NumComponents);
-            for i = 1:n
-                obj.ComponentDisplay_(i).ColorName = string(val{i});
-            end
-    
-            obj.updateAllDisplayMaps();
-            obj.syncRenderSourceToView();
         end
     
         % --- ComponentColormaps ---
@@ -929,58 +1666,52 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
         end
     
         function set.ComponentColormaps(obj, val)
-            if isempty(val)
-                return
+            obj.validateFullComponentCell(val, 'ComponentColormaps');
+
+            changed = obj.setComponentColormaps_(val, 1:obj.NumComponents);
+
+            if changed
+                obj.updateAllDisplayMaps();
+                obj.updateDisplayMapping();
             end
-    
-            n = min(numel(val), obj.NumComponents);
-            for i = 1:n
-                obj.ComponentDisplay_(i).Colormap = val{i};
-            end
-    
-            obj.updateAllDisplayMaps();
-            obj.syncRenderSourceToView();
-        end
-    
-        % --- Colormap ---
-        function v = get.Colormap(obj), v = obj.ComponentDisplay_(obj.ViewState_.C).DisplayMap; end
-    
-        % function set.Colormap(obj, val)
-        %     idx = obj.ViewState_.C;
-        %     obj.ComponentDisplay_(idx).Colormap = double(val);
-        % 
-        %     % setting Colormap switches mode to LUTs
-        %     obj.ViewState_.ComponentColorMode = 'luts';
-        % 
-        %     obj.updateAllDisplayMaps();
-        % 
-        %     if obj.ViewState_.ShowComposite
-        %         obj.RenderSource_ = obj.getCompositeImage();
-        %         obj.refreshView();
-        %     else
-        %         obj.updateAxesColormap();
-        %     end
-        % end
-
-        function set.Colormap(obj, val)
-            idx = obj.ViewState_.C;
-            obj.ComponentDisplay_(idx).Colormap = double(val);
-            obj.ComponentColorMode = "luts";
-
-
-            obj.updateAllDisplayMaps();
-            obj.syncRenderSourceToView();
         end
 
-    
         % --- ComponentColorMode ---
         function v = get.ComponentColorMode(obj), v = obj.ViewState_.ComponentColorMode; end
     
         function set.ComponentColorMode(obj, val)
+            if strcmp(obj.ViewState_.ComponentColorMode, val)
+                return
+            end
+
             obj.ViewState_.ComponentColorMode = val;
             obj.updateAllDisplayMaps();
-            obj.syncRenderSourceToView();
+            obj.updateDisplayMapping();
         end
+
+        % --- ComponentCLims ---
+        function val = get.ComponentCLims(obj)
+            val = cell(1, obj.NumComponents);
+            for i = 1:obj.NumComponents
+                val{i} = obj.ComponentDisplay_(i).CLim;
+            end
+        end
+    
+        function set.ComponentCLims(obj, val)
+            obj.validateFullComponentCell(val, 'ComponentCLims');
+
+            changed = obj.setComponentCLims_(val, 1:obj.NumComponents);
+            obj.ViewState_.CLimMode = 'manual';
+
+            if changed
+                obj.updateDisplayMapping();
+            end
+        end
+
+
+
+
+
     
         % --- setCLim ---
         function setCLim(obj, clim, idx)
@@ -991,34 +1722,16 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
             end
     
             if isempty(idx)
-                idx = obj.ComponentIdx;
+                idx = obj.C;
             end
     
-            for k = 1:numel(idx)
-                ii = idx(k);
-    
-                if ii < 1 || ii > obj.NumComponents
-                    error('ImageAxes:InvalidComponentIndex', ...
-                        'Index %i does not refer to an existing component', ii)
-                end
-    
-                comp = obj.ImageData_.Components(ii);
-    
-                if strcmp(comp.Kind, 'rgb') || strcmp(comp.Class, 'logical')
-                    continue
-                end
-    
-                obj.ComponentDisplay_(ii).CLim = clim;
-            end
-    
+            idx = obj.validateComponentIndices(idx);
+            clims = repmat({double(clim)}, 1, numel(idx));
+            changed = obj.setComponentCLims_(clims, idx);
             obj.ViewState_.CLimMode = 'manual';
-    
-            if obj.ViewState_.ShowComposite
-                obj.RenderSource_ = obj.getCompositeImage();
-                obj.refreshView();
-            else
-                obj.updateImageCData();
-                obj.updateColorbar();
+
+            if changed
+                obj.updateDisplayMapping();
             end
         end
 
@@ -1032,20 +1745,44 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
             end
 
             if isempty(idx)
-                idx = obj.ComponentIdx;
+                idx = obj.C;
             end
 
-            if idx < 1 || idx > obj.NumComponents
-                error('ImageAxes:InvalidComponentIndex', ...
-                    'Index %i does not refer to an existing component', ii)
+            idx = obj.validateComponentIndices(idx);
+
+            modeChanged = ~strcmp(obj.ViewState_.ComponentColorMode, 'luts');
+            obj.ViewState_.ComponentColorMode = 'luts';
+
+            cmaps = repmat({double(cmap)}, 1, numel(idx));
+            changed = obj.setComponentColormaps_(cmaps, idx);
+
+            if changed || modeChanged
+                obj.updateAllDisplayMaps();
+                obj.updateDisplayMapping();
             end
 
-            obj.ComponentDisplay_(idx).Colormap = double(cmap);
-            obj.ComponentColorMode = "luts";
+        end
 
-            obj.updateAllDisplayMaps();
-            obj.syncRenderSourceToView();
+        % --- setComponentColor ---
+        function setComponentColor(obj, colorName, idx)
+            arguments
+                obj (1,1) matlabx.ui.widgets.ImageAxes
+                colorName
+                idx (:,1) = []
+            end
 
+            if isempty(idx)
+                idx = obj.C;
+            end
+
+            idx = obj.validateComponentIndices(idx);
+            colors = repmat({colorName}, 1, numel(idx));
+            changed = obj.setComponentColors_(colors, idx);
+
+            if changed
+                obj.updateAllDisplayMaps();
+                obj.updateDisplayMapping();
+            end
         end
 
 
@@ -1097,13 +1834,13 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
                 % Color/ColorName
                 if ~isempty(comp.Color)
                     displayState(i).Color = comp.Color;
-                    displayState(i).ColorName = matlabx.colors.names.fromRGB(comp.Color);
+                    displayState(i).ColorName = matlabx.colors.names.fromRGB(comp.Color,"Palette","MATLAB");
                 elseif hasOldEntry && ~isempty(old(i).Color)
                     displayState(i).Color = old(i).Color;
-                    displayState(i).ColorName = matlabx.colors.names.fromRGB(old(i).Color);
+                    displayState(i).ColorName = matlabx.colors.names.fromRGB(old(i).Color,"Palette","MATLAB");
                 else
                     displayState(i).ColorName = string(defaultColors{1 + mod(i-1, numel(defaultColors))});
-                    displayState(i).Color = matlabx.colors.names.toRGB(displayState(i).ColorName);
+                    displayState(i).Color = matlabx.colors.names.toRGB(displayState(i).ColorName,"Palette","MATLAB");
                 end
 
                 % LUT/Colormap
@@ -1121,23 +1858,222 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
                 displayState(i).DisplayMap = obj.getDisplayMap(displayState(i), obj.ViewState_.ComponentColorMode);
             end
         end
+
+        function validateFullComponentCell(obj, val, propertyName)
+        %VALIDATEFULLCOMPONENTCELL Validate bulk per-component property input.
+            if ~iscell(val) || numel(val) ~= obj.NumComponents
+                error('ImageAxes:InvalidComponentPropertySize', ...
+                    '%s must be a cell array with one entry per component (%d entries).', ...
+                    propertyName, obj.NumComponents);
+            end
+        end
+
+        function idx = validateComponentIndices(obj, idx)
+        %VALIDATECOMPONENTINDICES Validate and row-vectorize component indices.
+            idx = idx(:).';
+
+            if isempty(idx)
+                return
+            end
+
+            if any(idx < 1) || any(idx > obj.NumComponents) || any(mod(idx,1) ~= 0)
+                error('ImageAxes:InvalidComponentIndex', ...
+                    'Component indices must be positive integers between 1 and NumComponents (%d).', ...
+                    obj.NumComponents);
+            end
+        end
+
+        function changed = setComponentCLims_(obj, clims, idx)
+        %SETCOMPONENTCLIMS_ Set CLim entries without refreshing.
+            changed = false;
+
+            for k = 1:numel(idx)
+                ii = idx(k);
+                comp = obj.ImageData_.Components(ii);
+
+                % CLim is meaningless for RGB/logical components.
+                if strcmp(comp.Kind, 'rgb') || strcmp(comp.Class, 'logical')
+                    continue
+                end
+
+                newVal = double(clims{k});
+
+                if ~isequal(size(newVal), [1 2])
+                    error('ImageAxes:InvalidCLim', ...
+                        'ComponentCLims{%d} must be a 1x2 numeric vector.', ii);
+                end
+
+                if isequaln(obj.ComponentDisplay_(ii).CLim, newVal)
+                    continue
+                end
+
+                obj.ComponentDisplay_(ii).CLim = newVal;
+                changed = true;
+            end
+        end
+
+        function changed = setComponentColors_(obj, colors, idx)
+        %SETCOMPONENTCOLORS_ Set component color names without refreshing.
+            changed = false;
+
+            for k = 1:numel(idx)
+                ii = idx(k);
+                newName = string(colors{k});
+
+                if ~isscalar(newName)
+                    error('ImageAxes:InvalidComponentColor', ...
+                        'ComponentColors{%d} must be a text scalar.', ii);
+                end
+
+                if strcmp(obj.ComponentDisplay_(ii).ColorName, newName)
+                    continue
+                end
+
+                obj.ComponentDisplay_(ii).ColorName = newName;
+                obj.ComponentDisplay_(ii).Color = ...
+                    matlabx.colors.names.toRGB(char(newName), "Palette", "MATLAB");
+                changed = true;
+            end
+        end
+
+        function changed = setComponentColormaps_(obj, cmaps, idx)
+        %SETCOMPONENTCOLORMAPS_ Set component colormaps without refreshing.
+            changed = false;
+
+            for k = 1:numel(idx)
+                ii = idx(k);
+                newMap = double(cmaps{k});
+
+                if size(newMap, 2) ~= 3
+                    error('ImageAxes:InvalidComponentColormap', ...
+                        'ComponentColormaps{%d} must be an N-by-3 numeric colormap.', ii);
+                end
+
+                if isequaln(obj.ComponentDisplay_(ii).Colormap, newMap)
+                    continue
+                end
+
+                obj.ComponentDisplay_(ii).Colormap = newMap;
+                changed = true;
+            end
+        end
     
-        function syncRenderSourceToView(obj)
+        function syncRenderSourceToView(obj, opts)
+        %SYNCRENDERSOURCETOVIEW  Synchronize RenderSource_ with current view.
+            arguments
+                obj
+                opts.ResetView (1,1) logical = false
+            end
+        
             oldData = obj.RenderSource_;
-    
+        
             if obj.ViewState_.ShowComposite
                 newData = obj.getCompositeImage();
             else
-                newData = obj.ImageData_.getPlane(obj.ViewState_.C,obj.ViewState_.Z,obj.ViewState_.T);
+                newData = obj.ImageData_.getPlane(...
+                    obj.ViewState_.C,...
+                    obj.ViewState_.Z,...
+                    obj.ViewState_.T);
             end
-    
+        
+            oldSz = size(oldData,[1,2]);
+            newSz = size(newData,[1,2]);
+        
+            sizeChanged = ~isequal(oldSz,newSz);
+        
+            % Preserve the current view in normalized image coordinates before
+            % changing the render source. Pixel-centered image limits are assumed:
+            %
+            %   XLim = [0.5, W + 0.5]
+            %   YLim = [0.5, H + 0.5]
+            preserveView = sizeChanged && ...
+                           all(oldSz > 0) && ...
+                           obj.ZoomEnabled && ...
+                           ~opts.ResetView;
+        
+            if preserveView
+                oldXLim = obj.mainAxes.XLim;
+                oldYLim = obj.mainAxes.YLim;
+        
+                normalizedXLim = (oldXLim - 0.5) ./ oldSz(2);
+                normalizedYLim = (oldYLim - 0.5) ./ oldSz(1);
+            end
+        
+            % Scale the stored image-space zoom anchor independently of the view
+            % limits. Zoom_.LastCursorXY must always remain in image coordinates.
+            lastZoomAnchor = obj.Zoom_.LastCursorXY;
+        
+            if sizeChanged && ~isempty(lastZoomAnchor) && all(oldSz > 0)
+                anchorNorm = (lastZoomAnchor - 0.5) ./ [oldSz(2),oldSz(1)];
+        
+                obj.Zoom_.LastCursorXY = ...
+                    0.5 + anchorNorm .* [newSz(2),newSz(1)];
+            end
+        
+            % Update rendered data and perform the normal display refresh.
             obj.RenderSource_ = newData;
-            obj.refreshView();
-    
-            evtData = matlabx.ui.widgets.events.CDataChangedEventData(oldData, newData);
-            notify(obj, 'CDataChanged', evtData);
+            obj.refreshDisplay(ResetView=opts.ResetView || (sizeChanged && ~preserveView));
+        
+            if preserveView
+                % Reconstruct the same relative view for the new image dimensions
+                newXLim = 0.5 + normalizedXLim .* newSz(2);
+                newYLim = 0.5 + normalizedYLim .* newSz(1);
+        
+                % Guard against small floating-point excursions
+                defXLim = [0.5, newSz(2) + 0.5];
+                defYLim = [0.5, newSz(1) + 0.5];
+        
+                viewWidth  = min(diff(newXLim),diff(defXLim));
+                viewHeight = min(diff(newYLim),diff(defYLim));
+        
+                xLower = min(max(newXLim(1),defXLim(1)), ...
+                             defXLim(2) - viewWidth);
+        
+                yLower = min(max(newYLim(1),defYLim(1)), ...
+                             defYLim(2) - viewHeight);
+        
+                newXLim = xLower + [0,viewWidth];
+                newYLim = yLower + [0,viewHeight];
+        
+                % refreshView may have updated image-dependent geometry, so apply
+                % the restored limits only after it completes.
+                obj.updateViewBoxBaseCoordinates();
+                obj.applyZoomLims(newXLim,newYLim);
+        
+                % Reconcile cursor-follow panning with the restored view so the
+                % next cursor movement does not cause a jump.
+                obj.calibratePanOffset(obj.cursorPositionStatic);
+            elseif sizeChanged
+                % No active zoomed view to preserve. Keep the stored anchor valid,
+                % defaulting to the center when no previous anchor exists.
+                if isempty(obj.Zoom_.LastCursorXY)
+                    obj.Zoom_.LastCursorXY = ...
+                        [(newSz(2) + 1)/2, (newSz(1) + 1)/2];
+                end
+            end
+        
+            evtData = matlabx.ui.widgets.events.RenderSourceChangedEventData(...
+                oldData,newData);
+        
+            notify(obj,'RenderSourceChanged',evtData);
         end
-    
+
+        function updateDisplayMapping(obj)
+        %UPDATEDISPLAYMAPPING Refresh display after CLim/color/LUT changes.
+            if obj.ViewState_.ShowComposite
+                obj.syncRenderSourceToView();
+                return
+            end
+
+            obj.refreshDisplay( ...
+                ResetView=false, ...
+                UpdateImage=true, ...
+                UpdateColormap=true, ...
+                UpdateColorbar=true, ...
+                UpdateTopLabel=false, ...
+                UpdateContextMenu=true);
+        end
+
         function updateAllDisplayMaps(obj)
             for i = 1:obj.NumComponents
                 obj.ComponentDisplay_(i).DisplayMap = obj.getDisplayMap( ...
@@ -1150,7 +2086,7 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
                 case 'colors'
                     map = matlabx.colors.ops.colorGradient( ...
                         [0 0 0], ...
-                        matlabx.colors.names.toRGB(char(displayState.ColorName)), ...
+                        matlabx.colors.names.toRGB(char(displayState.ColorName),"Palette","MATLAB"), ...
                         256);
                 case 'luts'
                     map = displayState.Colormap;
@@ -1180,7 +2116,7 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
                 case 'colors'
                     colors = zeros(obj.NumComponents, 3);
                     for i = 1:obj.NumComponents
-                        colors(i,:) = matlabx.colors.names.toRGB(char(obj.ComponentDisplay_(i).ColorName));
+                        colors(i,:) = matlabx.colors.names.toRGB(char(obj.ComponentDisplay_(i).ColorName),"Palette","MATLAB");
                     end
                     I = matlabx.image.compose.mergeChannelsRGB_add(data, clims, colors);
     
@@ -1272,7 +2208,7 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
         end
 
         % image dimensions
-        function s = get.ImageSize(obj),    s = obj.CDataSize;    end
+        function s = get.ImageSize(obj),    s = obj.RenderSourceSize;    end
         function h = get.ImageHeight(obj),  h = obj.ImageSize(1); end
         function w = get.ImageWidth(obj),   w = obj.ImageSize(2); end
 
@@ -1313,7 +2249,7 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
 
     end
 
-    %% Hub-facing event handlers (matches | onDown | onMove | onUp | onScroll | onKeyPress | onEnter | onLeave)
+    %% Hub-facing event handlers (matches | onDown | onMove | onUp | onScroll | onKey | onEnter | onLeave)
     methods
 
         % determine whether this instance should claim event from FigureEventHub
@@ -1339,13 +2275,8 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
         end
 
         function onMove(obj, E)
-            % get the ancestor toolbar button clicked, if it exists
-            % look for "state" buttons first
-            btn = ancestor(E.Target,'matlab.ui.controls.ToolbarStateButton');
-            % none found -> look for "push" buttons
-            if isempty(btn)
-                btn = ancestor(E.Target,'matlab.ui.controls.ToolbarPushButton');
-            end
+            % get the ancestor toolbar button from event target, if it exists
+            btn = obj.getToolbarButtonFromTarget(E.Target);
 
             % button exists
             if ~isempty(btn)
@@ -1353,10 +2284,17 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
                 obj.BottomLabel.String = sprintf(' %s',btn.Tooltip); return
             end
 
+
+            % set axes limits and view box before routing to tools
+            if obj.ZoomEnabled && obj.PanEnabled
+                % obj.moveViewToCursor();
+                obj.moveViewToCursor();
+            end
+
             obj.routeEventToTools(E);
 
             % Host maintenance (update label/pointer/etc. on move if desired)
-            obj.onMouseMove();
+            obj.onMove_();
         end
 
         function onUp(obj, E)
@@ -1409,13 +2347,18 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
     %% Internal behaviors
     methods (Access=private)
 
-        % executes on mouse move after Distractors/Interceptors
-        function onMouseMove(obj)
+        % executes on mouse move after PassiveInterceptors/Interceptors
+        function onMove_(obj)
             obj.updateBottomLabelText();
             obj.updatePointer();
         end
 
         function onDown_(obj,E)
+
+            if E.StopPropagation
+                return
+            end
+
             if strcmp(E.SelectionType,'alt')
                 XY = E.CurrentPointFigure;
                 open(obj.ContextMenu,XY(1),XY(2));
@@ -1455,17 +2398,25 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
                 ~isempty(ancestor(h,'matlab.ui.controls.ToolbarPushButton'));
         end
 
+        function btn = getToolbarButtonFromTarget(~,target)
+            % get the ancestor toolbar button from event target, if it exists
+            % look for "state" buttons first
+            btn = ancestor(target,'matlab.ui.controls.ToolbarStateButton');
+            % none found -> look for "push" buttons
+            if isempty(btn)
+                btn = ancestor(target,'matlab.ui.controls.ToolbarPushButton');
+            end
+        end
+
     end
 
     %% Tool event routing
     methods
 
         function routeEventToTools(obj,E)
-            skipInterceptor = obj.routeToDistractors(E);
-            if skipInterceptor
-                E.StopPropagation = true;
-                return; 
-            end
+
+            obj.routeToPassiveInterceptors(E);
+            if E.StopPropagation, return; end
 
             % get highest priority Interceptor for event kind
             t = obj.getPriorityInterceptor(E.Kind);
@@ -1476,18 +2427,16 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
             end
         end
 
-        function tf = routeToDistractors(obj,E)
-            % cell array of Distractors for this eventType, sorted by Priority
-            distractors = obj.getPriorityDistractors(E.Kind);
+        function routeToPassiveInterceptors(obj,E)
+            % cell array of PassiveInterceptors for this eventType, sorted by Priority
+            passiveInterceptors = obj.getPriorityPassiveInterceptors(E.Kind);
 
-            % whether to bypass the active Interceptor after Distraction event
-            tf = false;
+            % no PassiveInterceptors for this eventType, return early
+            if isempty(passiveInterceptors), return; end
 
-            % no Distractors for this eventType, return early
-            if isempty(distractors), return; end
-
-            for i = 1:numel(distractors)
-                tf = distractors{i}.("onDistract"+E.Kind)(E) | tf;
+            % pass event to each PassiveInterceptor
+            for i = 1:numel(passiveInterceptors)
+                passiveInterceptors{i}.("onPassive"+E.Kind)(E);
             end
 
         end
@@ -1758,7 +2707,7 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
             % no Installed tools, exit early
             if isempty(toolsCell), tool = []; return; end
             % get logical idx of Installed, Enabled tools that can Intercept the given eventType
-            idx = cellfun(@(t) t.Enabled & t.("Captures"+eventType) ,toolsCell,'UniformOutput',true);
+            idx = cellfun(@(t) t.Enabled & t.("Intercepts"+eventType) ,toolsCell,'UniformOutput',true);
             % no matching tools, exit early
             if ~any(idx), tool = []; return; end
             % sort the tools by priority (descending order)
@@ -1767,14 +2716,14 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
             tool = tools{1};
         end
 
-        % get cell array of Distractors for the specified eventType, sorted by descending Priority
-        function toolsCell = getPriorityDistractors(obj,eventType)
+        % get cell array of PassiveInterceptors for the specified eventType, sorted by descending Priority
+        function toolsCell = getPriorityPassiveInterceptors(obj,eventType)
             % cell array of Installed tools
             toolsCell = obj.ToolRegistry.values;
             % no Installed tools, exit early
             if isempty(toolsCell), return; end
-            % get logical idx of Installed tools that can Distract the given eventType
-            idx = cellfun(@(t) t.("Distracts"+eventType),toolsCell,'UniformOutput',true);
+            % get logical idx of Installed tools that passively intercept the given eventType
+            idx = cellfun(@(t) t.("PassivelyIntercepts"+eventType),toolsCell,'UniformOutput',true);
             % no matching tools, exit early
             if ~any(idx), toolsCell = {}; return; end
             % sort the tools by priority (descending order)
@@ -1938,11 +2887,11 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
         end
 
         function onContrastToolValueChanged(obj,o,e)
-            obj.setCLim(o.Value,e.ID);
+            obj.setCLim(o.Value, e.ID);
         end
 
         function onContrastToolValueChanging(obj,o,e)
-            obj.setCLim(o.Value,e.ID);
+            obj.setCLim(o.Value, e.ID);
         end
 
         % --- MetadataWindow ---
@@ -1950,14 +2899,6 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
             if obj.metadataWindowOpen
                 return
             end
-
-            % metadata = obj.ImageData_.OriginalMetadata;
-            % metadataLines = cellstr(matlabx.struct.prettyPrint(metadata));
-            % 
-            % obj.metadataWindow = matlabx.app.TextWindow( ...
-            %     "Title","Metadata", ...
-            %     "Text",metadataLines, ...
-            %     "ClosedFcn",@(~,~) obj.onMetadataWindowClosed());
 
             metadata = obj.ImageData_.AllMetadata;
             metadataLines = cellstr(matlabx.struct.prettyPrint(metadata));
@@ -1967,6 +2908,7 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
                 "Text",metadataLines, ...
                 "ClosedFcn",@(~,~) obj.onMetadataWindowClosed());
 
+            obj.metadataWindowOpen = true;
         end
 
         function onMetadataWindowClosed(obj)
@@ -1974,7 +2916,6 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
         end
 
     end
-
 
     %% Context menu callbacks
     methods
@@ -1990,15 +2931,12 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
 
     end
 
-
-
     %% Hidden entrypoint for debugging
     methods (Hidden)
         function DEBUG_(obj)
             debug
         end
     end
-
 
     %% Private static helpers
     methods (Static, Access=private)
@@ -2078,7 +3016,19 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
         end
 
         function names = getDefaultTools()
-            names = {'Zoom','Colorbar'};
+            names = {'Zoom','Colorbar','ChooseColormap'};
+        end
+
+        function props = getLinkableProperties()
+            props = { ...
+                'C', ...
+                'Z', ...
+                'T', ...
+                'ComponentColorMode', ...
+                'ComponentColormaps', ...
+                'ComponentColors', ...
+                'ShowComposite', ...
+                'ComponentCLims'};
         end
 
         function ax = demo(name)
@@ -2123,6 +3073,23 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
 
         end
 
+        function [viewer1,viewer2] = linkDemo()
+            I = matlabx.image.Image5D.demo();
+
+            [viewer1,~] = matlabx.app.quickshow(I,"Title","Viewer 1","Location","west");
+
+            [viewer2,~] = matlabx.app.quickshow(I,"Title","Viewer 2","Location","east");
+
+            viewer1.addLink(viewer2,{'C','Z','T',...
+                'ShowComposite','ComponentColors',...
+                'ComponentColormaps','ComponentCLims'});
+        end
+
+        function ax = demoImage5D()
+            I = matlabx.image.Image5D.demo();
+            ax = matlabx.app.quickshow(I,"Title","Example 5D Image");
+        end
+
 
     end
 
@@ -2136,12 +3103,15 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
             % replace listener property with empty array of event.listener
             obj.L = event.listener.empty;
 
-            % contrast tool
+            % contrastTool
             if ~isempty(obj.contrastTool), delete(obj.contrastTool(isvalid(obj.contrastTool))); end
 
-            % metadata window
+            % metadataWindow
             if ~isempty(obj.metadataWindow), delete(obj.metadataWindow(isvalid(obj.metadataWindow))); end
 
+            % ViewBox
+            delete(obj.ViewBoxFull(isvalid(obj.ViewBoxFull)));
+            delete(obj.ViewBoxZoom(isvalid(obj.ViewBoxZoom)));
 
             % Unregister from hub (safe if figure already gone)
             try
