@@ -32,8 +32,8 @@ classdef Paths
             p = fullfile(desmostorm.Paths.assets,'ml');
         end
 
-        function p = external()
-            p = fullfile(desmostorm.Paths.root(), 'external');
+        function p = external(varargin)
+            p = fullfile(desmostorm.Paths.root(), 'external', varargin{:});
         end
 
     end

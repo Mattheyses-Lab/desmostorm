@@ -5,7 +5,10 @@ function setupSearchPath()
 addpath(desmostorm.Paths.root());
 
 % add external libraries to MATLAB search path
-addpath(genpath(desmostorm.Paths.external()));
+% matlabx
+addpath(desmostorm.Paths.external('matlabx'));
+
+% save path
 savepath();
 
 end
