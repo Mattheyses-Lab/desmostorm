@@ -927,7 +927,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             end
 
             % find the GUI window
-            fig = app.GUI.findGUI();
+            fig = desmostorm.app.GUI.findGUI();
 
             % user prompt (modal dialog)
             selection = uiconfirm(fig,...

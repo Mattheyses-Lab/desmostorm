@@ -623,7 +623,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
             % number of positive patches detected
             nFound = size(ctrs,1);
 
-            app.Log.INFO(sprintf("Detected %d region(s) containing class: %s",nFound,propOpts.PositiveClass));
+            desmostorm.Log.INFO(sprintf("Detected %d region(s) containing class: %s",nFound,propOpts.PositiveClass));
 
             % return if none found
             if isempty(ctrs)
