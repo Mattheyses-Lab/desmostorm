@@ -1,8 +1,5 @@
-function setup()
-%SETUP Performs setup actions for a new installation of matlabx
-
-% add necessary folders to search path
-matlabx.internal.setupSearchPath();
+function uiCalibration()
+%UICALIBRATION  Performs UI calibration needed for matlabx and stores results
 
 % run UI calibration
 cal = matlabx.ui.calibration.UICalibration();

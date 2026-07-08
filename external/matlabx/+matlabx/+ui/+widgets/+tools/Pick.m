@@ -54,10 +54,10 @@ classdef Pick < matlabx.ui.widgets.ImageAxesTool
                 'Icon',matlabx.internal.Paths.icons('AddRectangleIcon.png'),...
                 'Priority',10,...
                 'IsExclusive',true,...
-                'CapturesDown',true,...
-                'DistractsDown',true,...
-                'DistractsMove',true,...
-                'DistractsUp',true);
+                'InterceptsDown',true,...
+                'PassivelyInterceptsDown',true,...
+                'PassivelyInterceptsMove',true,...
+                'PassivelyInterceptsUp',true);
 
             % ROIBox array (empty to start)
             obj.BoxROI = matlabx.ui.widgets.overlays.ROIBox.empty();
@@ -127,22 +127,19 @@ classdef Pick < matlabx.ui.widgets.ImageAxesTool
 
     end
 
-    %% Passive event hooks (only when Installed==true && IsDistractor==true)
+    %% Passive event hooks (only when Installed==true && IsPassiveInterceptor==true)
     methods
 
-        function tf = onDistractDown(obj,E)
-            obj.printStatus(sprintf('%s.onDistractDown()\n',obj.Name));
+        function onPassiveDown(obj,E)
+            obj.printStatus(sprintf('%s.onPassiveDown()', obj.Name));
 
             % ROIBox clicks handled by patch (drag/delete)
             if isprop(E.Target,'ID') && obj.hasBox(E.Target.ID)
-                tf = true;
-            else
-                tf = false;
+                E.stop();
             end
         end
 
-        function tf = onDistractMove(obj,E)
-            tf = false;
+        function onPassiveMove(obj,E)
 
             % if we are primed for drag (button down on box with no cursor movement)
             if obj.Host.Mode.PrimedForDrag
@@ -169,11 +166,10 @@ classdef Pick < matlabx.ui.widgets.ImageAxesTool
 
         end
 
-        function tf = onDistractUp(obj,~)
-            tf = false;
+        function onPassiveUp(obj,~)
 
             if obj.Host.Mode.PrimedForDrag
-                % un-prime
+                % no longer primed for drag
                 obj.Host.setMode('PrimedForDrag',false);
                 return
             end
