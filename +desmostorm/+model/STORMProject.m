@@ -483,7 +483,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
                 return;
             end
 
-            desc = cellfun(@utils.formatColumnName, T.Properties.VariableNames, 'UniformOutput', false);
+            desc = cellfun(@desmostorm.utils.formatColumnName, T.Properties.VariableNames, 'UniformOutput', false);
             T.Properties.VariableNames = desc;
 
             % write table to the given filename - will overwrite if file already exists
