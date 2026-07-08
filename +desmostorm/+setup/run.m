@@ -8,6 +8,6 @@ function run()
     desmostorm.setup.setupSearchPath();
 
     % setup matlabx
-    matlabx.setup();
+    matlabx.setup.run();
 
 end
