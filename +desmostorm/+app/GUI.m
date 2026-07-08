@@ -1152,7 +1152,7 @@ classdef GUI < handle
             % if empty, clear view and return
             if isempty(img), obj.Ax.CData = []; return, end
             % get channel index of ImageViewer
-            C = obj.Ax.ComponentIdx;
+            C = obj.Ax.C;
             % get CLim
             switch obj.Settings.Display.AutoScaleDisplayIntensity
                 case true
@@ -1342,7 +1342,7 @@ classdef GUI < handle
                 obj.clearRegionViewer(); return
             end
             % get channel index from RegionViewer
-            C = obj.RegionViewer.ComponentIdx;
+            C = obj.RegionViewer.C;
             % update ImageViewer CData and CLim
             switch obj.Settings.Display.AutoScaleDisplayIntensity
                 case true
@@ -1643,7 +1643,7 @@ classdef GUI < handle
                     cmap = obj.Settings.Display.Colormap;
                     obj.ExampleColormapAxes.Colormap = cmap;
 
-                    C = obj.Ax.ComponentIdx;
+                    C = obj.Ax.C;
                     obj.Ax.setColormap(cmap,C);
 
                     if C <= obj.RegionViewer.NumComponents
