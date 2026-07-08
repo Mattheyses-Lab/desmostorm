@@ -12,8 +12,4 @@ desmostorm.setup.matlabx();
 desmostorm.Log.INFO("Restoring default desmostorm settings...");
 desmostorm.config.Settings.restore();
 
-% setup MATLAB path
-desmostorm.Log.INFO("Setting up desmostorm search path...");
-desmostorm.setup.setupSearchPath();
-
 end
