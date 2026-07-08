@@ -815,7 +815,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
 
 
             % warn on version mismatch
-            if app.Version.compare(S.Project.Version, desmostorm.Info.Version) < 0
+            if desmostorm.Version.compare(S.Project.Version, desmostorm.Info.Version) < 0
                 desmostorm.Log.WARN(sprintf("Project version (%s) does not match current app version (%s)",S.Project.Version,desmostorm.Info.Version));
             end
 

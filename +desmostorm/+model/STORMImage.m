@@ -830,7 +830,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
 
             % rebuild regions
             if isfield(S,'Regions') && ~isempty(S.Regions)
-                app.Log.INFO("Rebuilding regions...")
+                desmostorm.Log.INFO("Rebuilding regions...")
                 % number of Regions (one struct entry each)
                 nRegions = numel(S.Regions);
                 % iterate over all entries
@@ -838,7 +838,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
                     % get struct for this Region
                     R = S.Regions(r);
                     % update log
-                    app.Log.INFO(sprintf("Region (%i/%i): %s",r,nRegions,R.Name));
+                    desmostorm.Log.INFO(sprintf("Region (%i/%i): %s",r,nRegions,R.Name));
                     % create Region from struct
                     reg = desmostorm.model.STORMRegion.fromStruct(R,img);
                     % add it to the Regions dictionary
