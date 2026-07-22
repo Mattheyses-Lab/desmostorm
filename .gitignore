@@ -43,3 +43,18 @@ codegen/
 .DS_Store
 **/.DS_Store
 external/matlabx/**/.DS_Store
+
+# Generated app data; keep directory placeholders only.
+assets/**
+!assets/
+!assets/.gitkeep
+!assets/ml/
+!assets/ml/.gitkeep
+
+user/**
+!user/
+!user/.gitkeep
+
+data/**
+!data/
+!data/.gitkeep
