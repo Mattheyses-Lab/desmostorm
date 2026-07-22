@@ -4,7 +4,7 @@ function [ax,fig] = quickshow(I,opts)
         opts.Colormap (256,3) double
         opts.Title (1,:) char = 'Viewer'
         opts.Tools (1,:) cell {mustBeMember(opts.Tools,{'Zoom','Colorbar','ChooseColormap','Pick','DrawRectangle'})} ...
-            = matlabx.ui.widgets.ImageAxes.getDefaultTools()
+            = matlabx.ui.axes.ImageAxes.getDefaultTools()
         opts.WindowStyle (1,:) char {mustBeMember(opts.WindowStyle,{'normal','alwaysontop'})} = 'alwaysontop'
         opts.Visible (1,1) matlab.lang.OnOffSwitchState = "on"
         opts.Size (1,1) double = 500
@@ -25,15 +25,12 @@ function [ax,fig] = quickshow(I,opts)
             'To set figure Size or Units, you must provide both as input arguments');
     end
 
-    % get ui calibration helper
-    cal = matlabx.ui.calibration.getCalibration();
-
     % convert size to pixels
     switch opts.Units
         case "inches"
-            opts.Size = opts.Size * cal.PixelsPerInch;
+            opts.Size = opts.Size * matlabx.UICal.pixelsPerInch();
         case "points"
-            opts.Size = opts.Size * cal.PixelsPerPoint;
+            opts.Size = opts.Size * matlabx.UICal.pixelsPerPoint();
     end
     
 
@@ -46,14 +43,14 @@ function [ax,fig] = quickshow(I,opts)
         "Name",                 opts.Title);
 
     if isa(I,"matlabx.image.Image5D")
-        ax = matlabx.ui.widgets.ImageAxes(fig,...
+        ax = matlabx.ui.axes.ImageAxes(fig,...
             "ToolBelt",     opts.Tools,...
             "ImageData",    I,...
             "Units",        "normalized",...
             "Position",     [0 0 1 1],...
             "Name",         opts.Title);
     else
-        ax = matlabx.ui.widgets.ImageAxes(fig,...
+        ax = matlabx.ui.axes.ImageAxes(fig,...
             "ToolBelt",     opts.Tools,...
             "CData",        I,...
             "Units",        "normalized",...
@@ -62,8 +59,7 @@ function [ax,fig] = quickshow(I,opts)
             "Name",         opts.Title);
     end
 
-    % cal = matlabx.ui.calibration.getCalibration();
-    panelTopChromePx = cal.uipanelTopChromeHeightPx(ax.FontSize,"FontUnits","pixels");
+    panelTopChromePx = matlabx.UICal.panelChromeHeight(ax.FontSize,"FontUnits","pixels");
     fig.Position(4) = fig.Position(3) + panelTopChromePx;
 
 

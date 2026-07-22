@@ -3,6 +3,7 @@ classdef Settings
 %
 %   Get a setting:
 %       value = matlabx.Settings.Logging("ShowDebugOutput")
+%       settings = matlabx.Settings.get()
 %
 %   Set a setting on the cached settings object:
 %       matlabx.Settings.Logging("ShowDebugOutput", true)
@@ -11,6 +12,10 @@ classdef Settings
 %   Discover settings:
 %       matlabx.Settings.categories()
 %       matlabx.Settings.names("Logging")
+%
+%   Print settings:
+%       matlabx.Settings.print()
+%       matlabx.Settings.print("Logging")
 
     methods (Static)
 
@@ -41,8 +46,8 @@ classdef Settings
             end
         end
 
-        function obj = object()
-        %OBJECT Return the cached matlabx.config.Settings object.
+        function obj = get()
+        %GET Return the cached matlabx.config.Settings object.
             obj = matlabx.config.Settings.get();
         end
 
@@ -68,14 +73,14 @@ classdef Settings
 
         function names = categories()
         %CATEGORIES Return available top-level setting categories.
-            obj = matlabx.Settings.object();
+            obj = matlabx.Settings.get();
             names = string(properties(obj)).';
         end
 
         function names = names(category)
         %NAMES Return setting names for a category.
             category = matlabx.Settings.validateCategory_(category);
-            obj = matlabx.Settings.object();
+            obj = matlabx.Settings.get();
             names = string(properties(obj.(category))).';
         end
 
@@ -90,15 +95,48 @@ classdef Settings
             end
         end
 
+        function txt = print(category)
+        %PRINT Print current settings, optionally limited to one category.
+        %
+        %   matlabx.Settings.print() prints all setting categories.
+        %   matlabx.Settings.print("Logging") prints only Logging settings.
+        %   txt = matlabx.Settings.print(...) returns the formatted text.
+
+            if nargin < 1
+                S = matlabx.Settings.toStruct_();
+            else
+                category = matlabx.Settings.validateCategory_(category);
+                obj = matlabx.Settings.get();
+                S = obj.(category).toStruct();
+            end
+
+            if nargout == 0
+                matlabx.struct.prettyPrint(S);
+            else
+                txt = matlabx.struct.prettyPrint(S);
+            end
+        end
+
     end
 
     methods (Static, Access=private)
+
+        function S = toStruct_()
+            obj = matlabx.Settings.get();
+            categories = matlabx.Settings.categories();
+
+            S = struct();
+            for k = 1:numel(categories)
+                category = char(categories(k));
+                S.(category) = obj.(category).toStruct();
+            end
+        end
 
         function value = getCategoryValue_(category, name)
             category = matlabx.Settings.validateCategory_(category);
             name = matlabx.Settings.validateName_(category, name);
 
-            obj = matlabx.Settings.object();
+            obj = matlabx.Settings.get();
             value = obj.(category).(name);
         end
 
@@ -106,7 +144,7 @@ classdef Settings
             category = matlabx.Settings.validateCategory_(category);
             name = matlabx.Settings.validateName_(category, name);
 
-            obj = matlabx.Settings.object();
+            obj = matlabx.Settings.get();
             obj.(category).(name) = value;
         end
 
@@ -119,7 +157,7 @@ classdef Settings
             end
 
             category = char(category);
-            obj = matlabx.Settings.object();
+            obj = matlabx.Settings.get();
 
             if ~isprop(obj, category)
                 error('matlabx:Settings:UnknownCategory', ...
@@ -136,7 +174,7 @@ classdef Settings
             end
 
             name = char(name);
-            obj = matlabx.Settings.object();
+            obj = matlabx.Settings.get();
 
             if ~isprop(obj.(category), name)
                 error('matlabx:Settings:UnknownName', ...
