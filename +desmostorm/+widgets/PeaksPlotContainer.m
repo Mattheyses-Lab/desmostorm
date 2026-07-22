@@ -476,7 +476,7 @@ classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
                 "MinPeakProminence",0.05,...
                 "Normalize",false);
 
-            pos = matlabx.ui.calibration.getCenteredFigOuterPosition(750,350);
+            pos = matlabx.UICal.centeredFigOuterPosition(750,350);
 
             % create new figure
             fig = uifigure(...

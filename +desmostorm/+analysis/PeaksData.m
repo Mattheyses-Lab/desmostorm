@@ -193,7 +193,7 @@ classdef PeaksData
             end
 
             if isempty(opts.Parent)
-                pos = matlabx.ui.calibration.getCenteredFigOuterPosition(750,350);
+                pos = matlabx.UICal.centeredFigOuterPosition(750,350);
                 fig = uifigure(...
                     "WindowStyle","alwaysontop",...
                     "Units","pixels",...
@@ -705,4 +705,3 @@ classdef PeaksData
     end
 
 end
-

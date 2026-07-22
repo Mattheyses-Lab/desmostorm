@@ -13,7 +13,7 @@ classdef GUI < handle
         RegionGrid matlab.ui.container.GridLayout
 
         % --- listbox/settings accordion ---
-        SettingsAccordion matlabx.ui.widgets.uiaccordion
+        SettingsAccordion matlabx.ui.container.Accordion
 
         % --- Log ---
         LogPanel matlab.ui.container.Panel
@@ -34,11 +34,11 @@ classdef GUI < handle
         % ImageViewer
         ImageViewerPanel matlab.ui.container.Panel
         ImageViewerPanelGrid matlab.ui.container.GridLayout
-        Ax matlabx.ui.widgets.ImageAxes
+        Ax matlabx.ui.axes.ImageAxes
         % RegionViewer
         RegionViewerPanel matlab.ui.container.Panel
         RegionViewerPanelGrid matlab.ui.container.GridLayout
-        RegionViewer matlabx.ui.widgets.ImageAxes
+        RegionViewer matlabx.ui.axes.ImageAxes
 
         % --- region table ---
         RegionSummaryPanel matlab.ui.container.Panel
@@ -55,7 +55,7 @@ classdef GUI < handle
         ExampleColormapAxes matlab.ui.control.UIAxes
         ExampleColormapImage matlab.graphics.primitive.Image
         ColormapTree matlab.ui.container.Tree
-        IntensitySliders matlabx.ui.widgets.uirangeslidereditfield
+        IntensitySliders matlabx.ui.control.Slider
         LabelsTree matlab.ui.container.Tree
         
         % Extra graphics handles, stored as struct to reduce clutter
@@ -96,7 +96,7 @@ classdef GUI < handle
 
     % CommnadRouter, Calibration, Log
     properties (Access=private)
-        CommandRouter matlabx.ui.control.CommandRouter
+        CommandRouter matlabx.ui.interaction.CommandRouter
         UICal matlabx.ui.calibration.UICalibration
         Log matlabx.logging.Logger
     end
@@ -151,7 +151,7 @@ classdef GUI < handle
         end
 
         function setupUICalibration(obj)
-            obj.UICal = matlabx.ui.calibration.getCalibration();
+            obj.UICal = matlabx.UICal.get();
         end
 
         function buildGUI(obj)
@@ -201,7 +201,7 @@ classdef GUI < handle
 
         function setupFigure(obj)
             % need to add a more elegant way to set window size once app components are finalized
-            s = matlabx.ui.calibration.getScreenSize();
+            s = matlabx.UICal.screenSize();
             % obj.Fig = uifigure(...
             %     'WindowStyle','alwaysontop',...
             %     'Tag',desmostorm.Info.Name,...
@@ -233,7 +233,7 @@ classdef GUI < handle
         end
 
         function setupCommandRouter(obj)
-            obj.CommandRouter = matlabx.ui.control.CommandRouter('Parent',obj.Fig);
+            obj.CommandRouter = matlabx.ui.interaction.CommandRouter('Parent',obj.Fig);
         end
 
         function setupMenubar(obj)
@@ -314,7 +314,7 @@ classdef GUI < handle
 
         function setupSettingsControllers(obj)
             % create the accordion and parent it to the grid
-            obj.SettingsAccordion = matlabx.ui.widgets.uiaccordion(obj.LeftPane,...
+            obj.SettingsAccordion = matlabx.ui.container.Accordion(obj.LeftPane,...
                 'ItemSpacing',5,...
                 'BorderWidth',0,...
                 'BorderColor',[.18 .18 .18],...
@@ -558,7 +558,7 @@ classdef GUI < handle
         function setupIntensitySliders(obj)
             item = obj.SettingsAccordion.getItem("Image Display");
             for C = 1:3
-                obj.IntensitySliders(C) = matlabx.ui.widgets.uirangeslidereditfield(item.Pane,...
+                obj.IntensitySliders(C) = matlabx.ui.control.Slider(item.Pane,...
                     "Title",sprintf("Channel %i",C),...
                     "FontColor",[1 1 1],...
                     "BackgroundColor",[.18 .18 .18],...
@@ -663,7 +663,7 @@ classdef GUI < handle
                 "Padding",[0 0 0 0]);
 
             % ImageAxes to view active image CData, select Regions
-            obj.Ax = matlabx.ui.widgets.ImageAxes(obj.ImageViewerPanelGrid,...
+            obj.Ax = matlabx.ui.axes.ImageAxes(obj.ImageViewerPanelGrid,...
                 'Name','ImageViewer',...
                 'CData',[],...
                 'ToolBelt',{'Zoom','Pick','Colorbar'},...
@@ -710,7 +710,7 @@ classdef GUI < handle
                 "Padding",[0 0 0 0]);
 
             % ImageAxes to show active region CData, make region measurements
-            obj.RegionViewer = matlabx.ui.widgets.ImageAxes(obj.RegionViewerPanelGrid,...
+            obj.RegionViewer = matlabx.ui.axes.ImageAxes(obj.RegionViewerPanelGrid,...
                 'Name','RegionViewer',...
                 'CData',[],...
                 'ToolBelt',{'DrawRectangle'},...
@@ -2370,7 +2370,7 @@ classdef GUI < handle
             p.Layout.Column = 1;
 
             % ImageAxes to show region CData and ROI position
-            ax = matlabx.ui.widgets.ImageAxes(g,...
+            ax = matlabx.ui.axes.ImageAxes(g,...
                 'Name','RegionViewer',...
                 'ToolBox',{'DrawRectangle'},...
                 'ToolBelt',{'DrawRectangle'},...
