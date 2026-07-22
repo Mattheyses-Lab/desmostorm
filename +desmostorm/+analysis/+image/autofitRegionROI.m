@@ -1,4 +1,10 @@
-function ROI = autofitRegionROI(I,config)
+function ROI = autofitRegionROI(I,config,opts)
+
+arguments
+    I
+    config
+    opts.ShowPlots (1,1) logical = false
+end
 
 % --- preprocess image to improve fitting ---
 
@@ -28,7 +34,7 @@ maxPeakDist = 0;
 
 % --- temp debug ui ---
 
-showPlots = true;
+showPlots = opts.ShowPlots;
 
 if showPlots
     f = uifigure("WindowStyle","alwaysontop",...

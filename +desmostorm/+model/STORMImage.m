@@ -579,41 +579,12 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
     %% Image-level processing
     methods
 
-        %!!! DEPRECATED !!!
-        function detectRegions(obj, config)
-            arguments
-                obj desmostorm.model.STORMImage
-                config desmostorm.config.RunConfig
-            end
-
-            % remove any existing regions first
-            obj.removeAllRegions();
-
-            % detect new region locations
-            ctrs = desmostorm.analysis.image.detectRegions(obj.CData,"BoxSize",config.BoxSize);
-
-            % return if none found
-            if isempty(ctrs)
-                return
-            end
-
-            % add a new region for each location
-            for i = 1:size(ctrs,1)
-                ctr = ctrs(i,:);
-                obj.addRegionSilent(string(char(java.util.UUID.randomUUID())), ctr, config.BoxSize);
-            end
-
-            % notify self -> RegionAdded
-            notify(obj,'RegionAdded');
-
-        end
-
         function runClassifier(obj, net, propOpts)
 
             % remove any existing regions first
             obj.removeAllRegions();
 
-            [ctrs,scores] = desmostorm.model.ml.proposePatchCenters(obj.SourcePath,net,...
+            [ctrs,scores] = desmostorm.ml.proposePatchCenters(obj.SourcePath,net,...
                 "BoxSize",          propOpts.BoxSize, ...
                 "Stride",           propOpts.Stride, ...
                 "ScoreThreshold",   propOpts.ScoreThreshold, ...
@@ -864,4 +835,3 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
     end
 
 end
-

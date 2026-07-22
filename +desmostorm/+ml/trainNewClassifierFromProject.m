@@ -21,7 +21,7 @@ function [pkg, out] = trainNewClassifierFromProject(project, opts)
         opts.IoUMax (1,1) double {mustBeGreaterThanOrEqual(opts.IoUMax,0), mustBeLessThanOrEqual(opts.IoUMax,1)} = 0.05
         opts.ValFrac (1,1) double {mustBeGreaterThan(opts.ValFrac,0), mustBeLessThan(opts.ValFrac,1)} = 0.2
     
-        opts.SaveDir (1,1) string = app.Paths.ml
+        opts.SaveDir (1,1) string = desmostorm.Paths.ml
     
         opts.MaxEpochs (1,1) double {mustBePositive} = 15
         opts.MiniBatchSize (1,1) double {mustBePositive} = 8

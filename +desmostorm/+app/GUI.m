@@ -1984,15 +1984,6 @@ classdef GUI < handle
             obj.processActiveRegion();
         end
 
-        function onAutopickRegions(obj)
-            % create progress dialog
-            h = uiprogressdlg(obj.Fig,"Message",'Please wait...','Indeterminate','on');
-            % detect regions for the active image
-            obj.Project.detectRegions(obj.getRunConfig(),h);
-            % close the progress dialog
-            close(h);
-        end
-
         function onRunClassifier(obj)
             imgs = obj.Project.ImageArray;
             if isempty(imgs), return; end
