@@ -216,20 +216,11 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
         RegionsDict = dictionary   % string id -> desmostorm.model.STORMRegion
     end
 
-    % properties
-    %     RegionOrder (1,:) string = string.empty(1,0)
-    %     % ActiveRegionID (1,1) string = ""
-    %     ActiveRegionID (1,:) string = string.empty(1,0)
-    %     SelectedRegionIDs (1,:) string = string.empty(1,0)
-    % end
-
     properties
         RegionOrder (:,1) string = string.empty(0,1)
-        % ActiveRegionID (1,1) string = ""
         ActiveRegionID (:,1) string = string.empty(0,1)
         SelectedRegionIDs (:,1) string = string.empty(0,1)
     end
-
 
     properties (Dependent, GetAccess=public, SetAccess=private)
         RegionArray     % [Nx1 desmostorm.model.STORMRegion] in RegionOrder
@@ -668,21 +659,6 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
         function set.PixelSize(obj, ps)
             % convenience: assigning PixelSize sets the override
             obj.PixelSizeOverride = ps;
-        end
-
-    end
-
-    %% Export data
-    methods
-
-        function T = exportRegionTable(obj)
-            regs = obj.RegionArray;
-            if isempty(regs)
-                T = table();
-                return
-            end
-
-            T = cell2mat(arrayfun(@(r) struct2table(r.exportRow()),regs,'UniformOutput',false));
         end
 
     end

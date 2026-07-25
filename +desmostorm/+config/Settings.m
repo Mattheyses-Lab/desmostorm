@@ -4,7 +4,6 @@ classdef Settings < handle
         Analysis  desmostorm.config.Analysis   % analysis settings
         Display   desmostorm.config.Display    % general display settings
         IO        desmostorm.config.IO         % import/export settings
-
         PeaksPlot desmostorm.config.PeaksPlot  % PeaksPlot appearance settings
         Box       desmostorm.config.Box        % region selection box settings
     end
@@ -141,14 +140,17 @@ classdef Settings < handle
                 desmostorm.Log.WARN("Migrating settings to v1.1.0")
                 % Box settings
                 defaultBox = desmostorm.config.Box;
-                S.Box.FaceColor     = S.Box.BoxFaceColor;
-                S.Box.EdgeColor     = S.Box.BoxEdgeColor;
-                S.Box.ShowTitle     = defaultBox.ShowTitle;
-                S.Box.TitleContent  = defaultBox.TitleContent;
+                S.Box.FaceColor     = S.Box.BoxFaceColor;       % property rename
+                S.Box.EdgeColor     = S.Box.BoxEdgeColor;       % property rename
+                S.Box.ShowTitle     = defaultBox.ShowTitle;     % new property
+                S.Box.TitleContent  = defaultBox.TitleContent;  % new property
                 % Analysis settings
                 defaultAnalysis = desmostorm.config.Analysis;
-                S.Analysis.Normalize            = defaultAnalysis.Normalize;
-                S.Analysis.MinPeakProminence    = defaultAnalysis.MinPeakProminence;
+                S.Analysis.Normalize            = defaultAnalysis.Normalize;            % new property
+                S.Analysis.MinPeakProminence    = defaultAnalysis.MinPeakProminence;    % new property
+                % Display settings
+                defaultDisplay = desmostorm.config.Display;
+                S.Display.AutoScaleDisplayIntensity = defaultDisplay.AutoScaleDisplayIntensity; % new property
                 % indicate migration has been performed
                 migrated = true;
             end
@@ -163,7 +165,6 @@ classdef Settings < handle
             % save the new file (will overwrite current settings if it exists)
             obj.save(file);
         end
-
-
+        
     end
 end

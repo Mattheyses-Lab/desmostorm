@@ -1029,11 +1029,7 @@ classdef GUI < handle
 
         end
 
-
-
-
         % clear / reset
-
         function clearUI(obj)
             obj.refreshMenubar();
             obj.refreshWindowName();
@@ -1043,7 +1039,6 @@ classdef GUI < handle
             obj.clearRegionViewer();
             obj.clearRegionLinescanPlot();
             obj.clearRegionSummaryTable();
-            % LabelsTree
             obj.clearLabelsTree();
         end
 
@@ -1185,24 +1180,12 @@ classdef GUI < handle
                 return
             end
 
-            % % add a box for each region, colored according to its label
-            % regs = img.RegionArray;
-            % for i = 1:numel(regs)
-            %     r = regs(i);
-            %     boxColor = obj.Project.LabelBank.getByID(r.LabelID).Color;
-            %     obj.Ax.Tools.Pick.addBox(r.ID, r.Center, r.BoxSize, ...
-            %         "EdgeColor", boxColor, "FaceColor", boxColor, "Label", r.Name);
-            % end
-
-
             % add a box for each region, colored according to its label
             for r = img.RegionArray'
                 boxColor = obj.Project.LabelBank.getByID(r.LabelID).Color;
                 obj.Ax.Tools.Pick.addBox(r.ID, r.Center, r.BoxSize, ...
                     "EdgeColor", boxColor, "FaceColor", boxColor, "Label", r.Name);
             end
-
-
 
             % apply selection status to region boxes
             obj.Ax.Tools.Pick.setSelectedBoxIDs(img.SelectedRegionIDs);
@@ -2224,9 +2207,9 @@ classdef GUI < handle
                 img.setActiveRegion(regionID);
             else
                 % update listbox
-                obj.RegionListBox.Value = [];
+                obj.RegionListBox.Value = string.empty();
                 % set active region to empty
-                img.setActiveRegion(string.empty(1,0));
+                img.setActiveRegion(string.empty());
             end
         end
 
@@ -2299,202 +2282,58 @@ classdef GUI < handle
 
         function onExportMeasurements(obj, ~, ~)
 
-            obj.Fig.Visible = 'off';
-
-            defaultName = fullfile(obj.Settings.IO.DefaultFolder, 'region_measurements.xlsx');
-            [file, path] = uiputfile('*.xlsx', ...
-                'Export region measurements', defaultName);
-
-            obj.Fig.Visible = 'on';
-
-            if isequal(file,0)
-                return;  % user cancelled
+            desmostorm.Log.INFO("Exporting region measurements...");
+            try
+                success = desmostorm.export.Exporter.exportRegionMeasurements(obj.Project,obj.Settings,obj.Fig);
+                if success
+                    desmostorm.Log.INFO("Success.");
+                else
+                    desmostorm.Log.INFO("Export cancelled.");
+                end
+            catch ME
+                desmostorm.Log.ERROR(ME);
+                obj.guialert("Title",'Error',"Message",ME.message,"Icon",'error');
             end
-
-            fname = fullfile(path, file);
-            obj.Project.exportRegionTableToXlsx(fname);
         end
 
         function onExportSummaryPDF(obj, ~, ~)
 
-            obj.Fig.Visible = 'off';
-
-            defaultName = fullfile(obj.Settings.IO.DefaultFolder, 'peak_plots.pdf');
-            [file, path] = uiputfile('*.pdf', ...
-                'Export peak plots', defaultName);
-
-            obj.Fig.Visible = 'on';
-
-            if isequal(file,0)
-                return;  % user cancelled
-            end
-
-            outputFile = fullfile(path,file);
-
-            fNames = {};
-
-            f = uifigure("WindowStyle","normal",...
-                "Visible","on",...
-                "Position",[0 0 1065 400]);
-
-            movegui(f,'center')
-
-            g = uigridlayout(f,[2,2],...
-                "RowHeight",{250,140},...
-                "RowSpacing",5,...
-                "ColumnWidth",{800,250},...
-                "ColumnSpacing",5,...
-                "Padding",[5 5 5 5],...
-                "BackgroundColor",[1 1 1]);
-
-            p = desmostorm.widgets.PeaksPlotContainer(g,...
-                "RawLineWidth",obj.Settings.PeaksPlot.RawLineWidth, ...
-                "RawLineColor",obj.Settings.PeaksPlot.RawLineColor, ...
-                "SmoothLineWidth",obj.Settings.PeaksPlot.SmoothLineWidth, ...
-                "SmoothLineColor",obj.Settings.PeaksPlot.SmoothLineColor, ...
-                "BackgroundColor",obj.Settings.PeaksPlot.BackgroundColor, ...
-                "ForegroundColor",obj.Settings.PeaksPlot.ForegroundColor, ...
-                "XLabel",sprintf("Distance (%s)",obj.Settings.Analysis.PixelSizeUnit), ...
-                "YLabel","Normalized Intensity",...
-                "FontSize",10);
-            p.Layout.Row = [1 2];
-            p.Layout.Column = 1;
-
-            % ImageAxes to show region CData and ROI position
-            ax = matlabx.ui.axes.ImageAxes(g,...
-                'Name','RegionViewer',...
-                'ToolBox',{'DrawRectangle'},...
-                'ToolBelt',{'DrawRectangle'},...
-                'Colormap',obj.Settings.Display.Colormap,...
-                'CLim',[0 1],...
-                'CData',[]);
-            ax.Layout.Row = 1;
-            ax.Layout.Column = 2;
-            % set options for RegionViewer DrawRectangle tool
-            ax.Tools.DrawRectangle.RotationAngleMode = 'half-circle';
-            % enable the DrawRectangle tool
-            ax.Tools.DrawRectangle.enable();
-            % set the FontSize on the DrawRectangle tool
-            ax.Tools.DrawRectangle.FontSize = 10;
-
-            % uilabel to show region measurements
-            l = uilabel(g,...
-                "Text",'',...
-                "BackgroundColor",[1 1 1],...
-                "FontColor",[0 0 0],...
-                "HorizontalAlignment","left",...
-                "VerticalAlignment","top",...
-                "FontName","courier",...
-                "FontSize",10);
-            l.Layout.Column = 2;
-            l.Layout.Row = 2;
-
-            % hide the figure after adding all components
-            f.Visible = 'off';
-
-            % create progress dialog
-            h = uiprogressdlg(obj.Fig,"Message",'Exporting peak plots. Please wait...','Indeterminate','on');
-
-            imgs = obj.Project.ImageArray;
-
-            if isempty(imgs)
-                return
-            end
-
-            for i = 1:numel(imgs)
-                regs = imgs(i).RegionArray;
-
-                if isempty(regs)
-                    continue
+            desmostorm.Log.INFO("Exporting summary PDF...");
+            try
+                success = desmostorm.export.Exporter.exportSummaryPDF(obj.Project,obj.Settings,obj.Fig);
+                if success
+                    desmostorm.Log.INFO("Success.");
+                else
+                    desmostorm.Log.INFO("Export cancelled.");
                 end
-
-                for j = 1:numel(regs)
-
-                    % update region linescan plot and title
-                    p.Data = regs(j).LinescanResults;
-                    p.Title = matlabx.utils.text.texFriendly(imgs(i).Name) + " | " + regs(j).Name;
-
-                    % update region CData and CLim
-                    ax.CData = imgs(i).regionSubimage(regs(j));
-
-                    % get CLim
-                    switch obj.Settings.Display.AutoScaleDisplayIntensity
-                        case true
-                            ax.CLim = imgs(i).AutoDisplayRange;
-                        case false
-                            ax.CLim = imgs(i).DisplayRange;
-                    end
-
-                    % update linescan ROI position
-                    ax.Tools.DrawRectangle.setROIPosition(regs(j).ROI);
-
-                    % update uilabel Text
-                    l.Text = regs(j).TextSummaryTable;
-
-                    % create a temporary unique name for each PDF
-                    tempName = fullfile(path,[matlabx.utils.text.uniqueID("char"),'.pdf']);
-
-                    drawnow
-                    if i==1 && j==1
-                        pause(1)
-                    else
-                        pause(0.1)
-                    end
-
-
-                    % export the figure content to PDF
-                    exportapp(f,tempName);
-
-                    % store the temporary name so we can merge the PDFs at the end
-                    fNames{end+1} = tempName;
-
-                end
-
+            catch ME
+                desmostorm.Log.ERROR(ME);
+                obj.guialert("Title",'Error',"Message",ME.message,"Icon",'error');
             end
-
-            delete(f); % delete the figure
-
-            % merge the PDFs
-            memSet = org.apache.pdfbox.io.MemoryUsageSetting.setupMainMemoryOnly();
-            merger = org.apache.pdfbox.multipdf.PDFMergerUtility;
-            cellfun(@(fN) merger.addSource(fN), fNames)
-            merger.setDestinationFileName(outputFile)
-            merger.mergeDocuments(memSet)
-
-            % delete the temporary PDFs
-            cellfun(@(fN) delete(fN),fNames);
-
-            % close the progress dialog
-            close(h);
 
         end
 
         function onExportRegionImages(obj, ~, ~)
 
-            obj.Fig.Visible = 'off';
-
-            folderName = uigetdir(obj.Settings.IO.DefaultFolder, 'Export region images');
-
-            obj.Fig.Visible = 'on';
-
-            % invalid folder -> return
-            if ~isfolder(folderName)
-                return
+            desmostorm.Log.INFO("Exporting region images...");
+            try
+                success = desmostorm.export.Exporter.exportRegionImages(obj.Project,obj.Settings,obj.Fig);
+                if success
+                    desmostorm.Log.INFO("Success.");
+                else
+                    desmostorm.Log.INFO("Export cancelled.");
+                end
+            catch ME
+                desmostorm.Log.ERROR(ME);
+                obj.guialert("Title",'Error',"Message",ME.message,"Icon",'error');
             end
-
-            % export region images to folderName
-            obj.Project.exportRegionImages(folderName);
-
         end
 
         function onExportLinescanPlot(obj, ~, ~)
 
-            % cleanup upon function completion
-            c = onCleanup(@() figure(obj.Fig));
-
             desmostorm.Log.INFO("Exporting region linescan plot...");
             try
-                success = desmostorm.export.Exporter.exportRegionLinescanPlot(obj.Project,obj.Settings);
+                success = desmostorm.export.Exporter.exportRegionLinescanPlot(obj.Project,obj.Settings,obj.Fig);
                 if success
                     desmostorm.Log.INFO("Success.");
                 else
@@ -2508,12 +2347,9 @@ classdef GUI < handle
 
         function onExportRegionSubimageWithROI(obj, ~, ~)
 
-            % cleanup upon function completion
-            c = onCleanup(@() figure(obj.Fig));
-
             desmostorm.Log.INFO("Exporting region subimage with ROI overlay...");
             try
-                success = desmostorm.export.Exporter.exportRegionSubimageWithROI(obj.Project,obj.Settings);
+                success = desmostorm.export.Exporter.exportRegionSubimageWithROI(obj.Project,obj.Settings,obj.Fig);
                 if success
                     desmostorm.Log.INFO("Success.");
                 else
@@ -2524,7 +2360,6 @@ classdef GUI < handle
                 obj.guialert("Title",'Error',"Message",ME.message,"Icon",'error');
             end
         end
-
 
     end
 

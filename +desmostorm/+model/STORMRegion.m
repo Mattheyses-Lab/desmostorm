@@ -127,65 +127,59 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
             out = obj.Parent.Parent;
         end
 
-    end
+        function T = getChannelPeakStatsTable(obj)
+            % --- peak stats table (for all channels) --- 
+            % get max number of channels in the project
+            proj = obj.getParentProject();
+            nChannels = proj.MaxSizeC;
+            % cell array to hold tables for each channel
+            channelTableCells = cell(1,nChannels);
+            for C = 1:nChannels
+                channelTableCells{C} = obj.getSingleChannelPeakStatsTable(C);
+            end
+            % concatenate horizontally to form final channels table 
+            T = [channelTableCells{:}];
+        end
 
-    %% Derived getters
+        function T = getSingleChannelPeakStatsTable(obj,C)
+            arguments
+                obj (1,1) desmostorm.model.STORMRegion
+                C (1,1) double
+            end
 
-    methods
+            peakStatNames = cell(5,1);
+            peakStatValues = cell(1,5);
 
-        % function T = get.SummaryTable(obj)
-        %     % get summary table for use in app uitable
-        %     % variable names to act as row names when the table is rotated
-        %     VariableNames = {...
-        %         'Name';...
-        %         'Label';...
-        %         'LabelSource';...
-        %         'Score';...
-        %         'Region center (x,y)';...
-        %         'Region width';...
-        %         'Region height';...
-        %         'ROI center';...
-        %         'ROI width';...
-        %         'ROI height';...
-        %         'ROI rotation angle';...
-        %         'Peak distance';...
-        %         'Peak 1 width (FWHM)';...
-        %         'Peak 2 width (FWHM)';...
-        %         };
-        % 
-        %     if isempty(obj.LinescanResults) || obj.LinescanResults(1).nPeaks ~= 2
-        %         PeakDistance = NaN;
-        %         PeakWidth1 = NaN;
-        %         PeakWidth2 = NaN;
-        %     else
-        %         PeakDistance = obj.LinescanResults(1).PeakDistances;
-        %         PeakWidth1 = obj.LinescanResults(1).PeakWidths(1);
-        %         PeakWidth2 = obj.LinescanResults(1).PeakWidths(2);
-        %     end
-        %     % the actual table data (with distance measurements formatted according to PixelSize)
-        %     T = table(...
-        %         {char(obj.Name)},...
-        %         {char(obj.LabelID)},...
-        %         {char(obj.LabelSource)},...
-        %         {sprintf('%.2f',obj.Score)},...
-        %         {sprintf('(%.1f, %.1f)',obj.Center(1),obj.Center(2))},...
-        %         {sprintf('%i px',obj.BoxSize)},...
-        %         {sprintf('%i px',obj.BoxSize)},...
-        %         {sprintf('(%.1f, %.1f)',obj.ROI.CenterX,obj.ROI.CenterY)},...
-        %         {obj.formatLength(obj.ROI.Width)},...
-        %         {obj.formatLength(obj.ROI.Height)},...
-        %         {obj.formatAngle(obj.ROI.RotationAngle)},...
-        %         {obj.formatLength(PeakDistance)},...
-        %         {obj.formatLength(PeakWidth1)},...
-        %         {obj.formatLength(PeakWidth2)},...
-        %         'VariableNames',VariableNames);
-        %     % rotate the table before returning
-        %     T = matlabx.utils.table.rotate(T,'ColumnNames',{'Values'});
-        % end
+            % variable names per channel
+            peakStatNames{1} = sprintf('Peak distance (C%i)',C);
+            peakStatNames{2} = sprintf('Peak L FWHM (C%i)',C);
+            peakStatNames{3} = sprintf('Peak L location (C%i)',C);
+            peakStatNames{4} = sprintf('Peak R FWHM (C%i)',C);
+            peakStatNames{5} = sprintf('Peak R location (C%i)',C);
 
-        function T = get.SummaryTable(obj)
-        %SUMMARYTABLE Get summary table for use in app uitable
-            % table variable names, excluding peak stats
+            if C <= length(obj.LinescanResults)
+                if obj.LinescanResults(C).hasCentralPeakPair
+                    peakStatValues{1} = obj.LinescanResults(C).CentralPeakPairDistance;
+                end
+                if obj.LinescanResults(C).hasLeftPeak
+                    peakStatValues{2} = obj.LinescanResults(C).LeftPeakWidth;
+                    peakStatValues{3} = obj.LinescanResults(C).LeftPeakLocation;
+                end
+                if obj.LinescanResults(C).hasRightPeak
+                    peakStatValues{4} = obj.LinescanResults(C).RightPeakWidth;
+                    peakStatValues{5} = obj.LinescanResults(C).RightPeakLocation;
+                end
+            end
+
+            % format peak stats for display in table
+            peakStatValues = cellfun(@(v) obj.formatLength(v),peakStatValues,'UniformOutput',false);
+            % build the table
+            T = cell2table(peakStatValues,"VariableNames",peakStatNames);
+        end
+
+        function T = getRegionAndROIInfoTable(obj)
+            % --- region summary table without peak stats ---
+            % table variable names
             VariableNames = {...
                 'Name';...
                 'Label';...
@@ -198,7 +192,7 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
                 'ROI width';...
                 'ROI height';...
                 'ROI rotation angle'};
-            % table data formatted as text, excluding peak stats
+            % table data formatted as text
             TableData = {...
                 char(obj.Name),...
                 char(obj.LabelID),...
@@ -211,53 +205,24 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
                 obj.formatLength(obj.ROI.Width),...
                 obj.formatLength(obj.ROI.Height),...
                 obj.formatAngle(obj.ROI.RotationAngle)};
-
-
-            % --- peak stats --- 
-            % get max number of channels in the project
-            proj = obj.getParentProject();
-            nChannels = proj.MaxSizeC;
-
-            peakStatNames = cell(nChannels*5,1);
-            peakStatValues = cell(1,nChannels*5);
-            for i = 1:nChannels
-                % helper idx for each set of 3 stats
-                ii = (i-1)*5;
-                % dynamic variable names per channel
-                peakStatNames{ii+1} = sprintf('Peak distance (C%i)',i);
-                peakStatNames{ii+2} = sprintf('Peak L FWHM (C%i)',i);
-                peakStatNames{ii+3} = sprintf('Peak L location (C%i)',i);
-                peakStatNames{ii+4} = sprintf('Peak R FWHM (C%i)',i);
-                peakStatNames{ii+5} = sprintf('Peak R location (C%i)',i);
-
-
-                if i > length(obj.LinescanResults), continue; end
-
-                if obj.LinescanResults(i).hasCentralPeakPair
-                    peakStatValues{ii+1} = obj.LinescanResults(i).CentralPeakPairDistance;
-                end
-
-                if obj.LinescanResults(i).hasLeftPeak
-                    peakStatValues{ii+2} = obj.LinescanResults(i).LeftPeakWidth;
-                    peakStatValues{ii+3} = obj.LinescanResults(i).LeftPeakLocation;
-                end
-
-                if obj.LinescanResults(i).hasRightPeak
-                    peakStatValues{ii+4} = obj.LinescanResults(i).RightPeakWidth;
-                    peakStatValues{ii+5} = obj.LinescanResults(i).RightPeakLocation;
-                end
-
-            end
-
-            % format peak stats for display in table
-            peakStatValues = cellfun(@(v) obj.formatLength(v),peakStatValues,'UniformOutput',false);
-
-            % concatenate base table names/data with peak stat names/measurements
-            VariableNames = [VariableNames; peakStatNames];
-            TableData = [TableData, peakStatValues];
-
-            % construct the actual table, rotate before turning
             T = cell2table(TableData,"VariableNames",VariableNames);
+        end
+
+    end
+
+    %% Derived getters
+
+    methods
+
+        function T = get.SummaryTable(obj)
+        %SUMMARYTABLE Get summary table for use in app uitable
+            % region summary table without peak stats
+            regionTable = obj.getRegionAndROIInfoTable;
+            % peak stats table (for all channels)
+            channelsTable = obj.getChannelPeakStatsTable;
+            % final combined table
+            T = [regionTable,channelsTable];
+            % rotate for display in uitable
             T = matlabx.utils.table.rotate(T,'ColumnNames',{'Values'});
         end
 
@@ -265,14 +230,33 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
             ps = obj.Parent.PixelSize;
         end
 
+        function debug(obj)
+            disp('Debug');
+        end
+
     end
 
 
     methods
 
-        % format summary table into monospaced line-based string
-        function out = TextSummaryTable(obj)
-            T = obj.SummaryTable;
+        function out = TextSummaryTable(obj,C)
+            arguments
+                obj desmostorm.model.STORMRegion
+                C double = []
+            end
+            % get region/ROI info table
+            T1 = obj.getRegionAndROIInfoTable();
+            % get channel(s) peak stats table
+            if isempty(C) % no channel idx specified
+                T2 = obj.getChannelPeakStatsTable(); % get peak stats table for all channels
+            else
+                T2 = obj.getSingleChannelPeakStatsTable(C); % get peak stats for specified channel
+            end
+            % concatenate region info and channel stats tables
+            T = [T1,T2];
+            % rotate table
+            T = matlabx.utils.table.rotate(T,'ColumnNames',{'Values'});
+            % format table into monospaced line-based string
             names = T.Properties.RowNames;
             vals = T.Values;
             out = matlabx.utils.text.formatKeyValueText(names,vals);
@@ -282,117 +266,6 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
             str = obj.Parent.shortName() + "_" + obj.Name;
         end
 
-    end
-
-    %% Export data
-    methods
-
-        function row = exportRow(obj)
-
-            ps = obj.PixelSize;
-            % linescan ROI properties
-            S = obj.ROI;
-            % linescan profile/peak measurements
-            L  = obj.LinescanResults;
-
-            row = struct();
-
-            % ID/meta
-            row.ProjectName   = string(obj.Parent.Parent.Name);  % if Project has Name
-            row.ImageName     = string(obj.Parent.Name);
-            row.RegionName    = string(obj.Name);
-            row.PixelSize     = ps.stringDisplay;
-
-            % Label
-            row.LabelID       = string(obj.LabelID);
-            row.LabelSource   = string(obj.LabelSource);
-
-            % Score
-            row.Score         = sprintf('%.2f',obj.Score);
-
-            % Region position/geometry
-            row.RegionCenter        = string(sprintf('(%.1f, %.1f)',obj.Center(1),obj.Center(2)));
-            row.RegionWidth_px      = obj.BoxSize;
-            row.RegionHeight_px     = obj.BoxSize;
-            row.RegionWidth_phys    = obj.px2phys(obj.BoxSize);
-            row.RegionHeight_phys   = obj.px2phys(obj.BoxSize);
-
-            % Linescan ROI position/geometry
-            row.ROICenter           = string(sprintf('(%.1f, %.1f)',S.CenterX,S.CenterY));
-            row.ROIWidth_px         = S.Width;
-            row.ROIHeight_px        = S.Height;
-            row.ROIWidth_phys       = obj.px2phys(S.Width);
-            row.ROIHeight_phys      = obj.px2phys(S.Height);
-            row.ROIRotationAngle    = round(S.RotationAngle,2);
-
-            % % Peak distance/width measurements
-            % if isempty(L) || L.nPeaks ~= 2
-            %     PeakDistance = NaN;
-            %     PeakWidth1 = NaN;
-            %     PeakWidth2 = NaN;
-            % else
-            %     PeakDistance = L.PeakDistances;
-            %     PeakWidth1 = L.PeakWidths(1);
-            %     PeakWidth2 = L.PeakWidths(2);
-            % end
-            % 
-            % row.PeakDistance_px     = round(PeakDistance,2);
-            % row.PeakWidth1_px       = round(PeakWidth1,2);
-            % row.PeakWidth2_px       = round(PeakWidth2,2);
-            % row.PeakDistance_phys   = obj.px2phys(row.PeakDistance_px);
-            % row.PeakWidth1_phys     = obj.px2phys(row.PeakWidth1_px);
-            % row.PeakWidth2_phys     = obj.px2phys(row.PeakWidth2_px);
-
-
-            proj = obj.getParentProject();
-            nChannels = proj.MaxSizeC;
-
-            nResults = length(L);
-
-            for i = 1:nChannels
-
-                % default values
-                leftPeakFWHM_px         = NaN;
-                leftPeakLocation_px     = NaN;
-                rightPeakFWHM_px        = NaN;
-                rightPeakLocation_px    = NaN;
-                peakDistance_px         = NaN;
-
-                % replace default values with region results if they exist
-                if i <= nResults
-
-                    if L(i).hasLeftPeak
-                        leftPeakFWHM_px     = round(L(i).LeftPeakWidth,2);
-                        leftPeakLocation_px = round(L(i).LeftPeakLocation,2);
-                    end
-
-                    if L(i).hasRightPeak
-                        rightPeakFWHM_px     = round(L(i).RightPeakWidth,2);
-                        rightPeakLocation_px = round(L(i).RightPeakLocation,2);
-                    end
-
-                    if L(i).hasCentralPeakPair
-                        peakDistance_px = round(L(i).CentralPeakPairDistance,2);
-                    end
-
-                end
-
-                row.(sprintf('PeakDistance_px__C%i_',i))      = peakDistance_px;
-                row.(sprintf('LeftPeakFWHM_px__C%i_',i))      = leftPeakFWHM_px;
-                row.(sprintf('RightPeakFWHM_px__C%i_',i))     = rightPeakFWHM_px;
-                row.(sprintf('LeftPeakLocation_px__C%i_',i))  = leftPeakLocation_px;
-                row.(sprintf('RightPeakLocation_px__C%i_',i)) = rightPeakLocation_px;
-
-                row.(sprintf('PeakDistance_C%i_',i))          = obj.px2phys(peakDistance_px);
-                row.(sprintf('LeftPeakFWHM_C%i_',i))          = obj.px2phys(leftPeakFWHM_px);
-                row.(sprintf('RightPeakFWHM_C%i_',i))         = obj.px2phys(rightPeakFWHM_px);
-                row.(sprintf('LeftPeakLocation_C%i_',i))      = obj.px2phys(leftPeakLocation_px);
-                row.(sprintf('RightPeakLocation_C%i_',i))     = obj.px2phys(rightPeakLocation_px);
-
-            end
-
-        end
-        
     end
 
     %% Serialization helpers
@@ -412,10 +285,7 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
 
     end
 
-
-
     %% Static methods
-
     methods (Static)
 
         function reg = fromStruct(R,img)
@@ -473,4 +343,3 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
     end
     
 end
-
