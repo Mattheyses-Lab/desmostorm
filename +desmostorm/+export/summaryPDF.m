@@ -43,6 +43,7 @@ end
     tempFolder = char(tempname);
     mkdir(tempFolder);
     cleanupTempFolder = onCleanup(@() removeTempFolder(tempFolder));
+    cleanupTemp = onCleanup(@() deleteTempFiles(tempFiles));
 
     % Expand the requested channel selection into concrete pages. "all"
     % becomes one page per region per available channel.
@@ -51,11 +52,18 @@ end
         return
     end
 
-    % Keep the temporary export figure visible long enough for App Designer
-    % components to render sharply. It is hidden after the first render pass;
-    % the main GUI is held always-on-top by the caller during export.
+    % Use first page content to initialize graphics components
+    img = pages(1).Image;
+    reg = pages(1).Region;
+    channel = pages(1).Channel;
+    regImageData = matlabx.image.Image5D.fromComponents(img.regionSubimageCell(reg));
+
+
+    % Build the temporary export figure hidden, then briefly show it below
+    % after the components exist. That visible render pass prevents blurry
+    % ROI overlays while limiting the export figure to a quick flash.
     f = uifigure("WindowStyle","normal", ...
-        "Visible","on", ...
+        "Visible","off", ...
         "Position",[0 0 pageWidthPx figHeight]);
     cleanupFig = onCleanup(@() closeFigure(f));
     
@@ -69,6 +77,7 @@ end
         "BackgroundColor",[1 1 1]);
     
     p = desmostorm.widgets.PeaksPlotContainer(g, ...
+        "Data",reg.LinescanResults(channel), ...
         "RawLineWidth",config.PeaksPlot.RawLineWidth, ...
         "RawLineColor",config.PeaksPlot.RawLineColor, ...
         "SmoothLineWidth",config.PeaksPlot.SmoothLineWidth, ...
@@ -82,21 +91,21 @@ end
     p.Layout.Column = 1;
     
     ax = matlabx.ui.axes.ImageAxes(g, ...
+        'ImageData',regImageData, ...
         'Name','RegionViewer', ...
         'ToolBox',{'DrawRectangle'}, ...
         'ToolBelt',{'DrawRectangle'}, ...
         'Colormap',config.Display.Colormap, ...
-        'CLim',[0 1], ...
-        'CData',[], ...
         'FontSize', fontSizePx);
     ax.Layout.Row = 1;
     ax.Layout.Column = 2;
     ax.Tools.DrawRectangle.RotationAngleMode = 'half-circle';
-    ax.Tools.DrawRectangle.enable();
     ax.Tools.DrawRectangle.FontSize = fontSizePx;
 
+    ax.Tools.DrawRectangle.setROIPosition(reg.ROI);
+
     l = uilabel(g, ...
-        "Text",'', ...
+        "Text",reg.TextSummaryTable(channel), ...
         "BackgroundColor",[1 1 1], ...
         "FontColor",[0 0 0], ...
         "HorizontalAlignment","left", ...
@@ -106,14 +115,18 @@ end
     l.Layout.Row = 1;
     l.Layout.Column = 3;
 
-    drawnow
+    % pause BEFORE draw or ROI will not render correctly
     pause(1)
+    f.Visible = 'on';
+    drawnow
+
+    % Bring the main figure back to front immediately after the render pass
+    % so the export figure disappears before the page loop starts.
+    desmostorm.app.focusMainFigure();
 
     % Hiding after the initial draw avoids putting the export figure in the
     % user's way without triggering the blurry first-render export path.
     f.Visible = 'off';
-
-    cleanupTemp = onCleanup(@() deleteTempFiles(tempFiles));
 
     for pageIdx = 1:numel(pages)
         img = pages(pageIdx).Image;
@@ -125,14 +138,15 @@ end
                 pageIdx, numel(pages), img.Name, reg.Name, channel);
         end
     
+        % --- Linescan plot ---
+        % data
         if channel <= numel(reg.LinescanResults)
             p.Data = reg.LinescanResults(channel);
         else
             p.Data = desmostorm.analysis.PeaksData.empty();
         end
-    
-        p.Title = sprintf("%s | %s | C%i", ...
-            matlabx.utils.text.texFriendly(img.Name), reg.Name, channel);
+        % title
+        p.Title = sprintf("%s | %s | C%i", matlabx.utils.text.texFriendly(img.Name), reg.Name, channel);
 
         % ImageAxes handles multi-component images as a cell array and the
         % active component is selected with C. Keep display scaling matched
@@ -143,9 +157,9 @@ end
 
         switch config.Display.AutoScaleDisplayIntensity
             case true
-                ax.setCLim(img.getAutoDisplayRange(channel),channel);
+                ax.ComponentCLims{channel} = img.getAutoDisplayRange(channel);
             case false
-                ax.setCLim(img.getDisplayRange(channel),channel);
+                ax.ComponentCLims{channel} = img.getDisplayRange(channel);
         end
     
         ax.Tools.DrawRectangle.setROIPosition(reg.ROI);

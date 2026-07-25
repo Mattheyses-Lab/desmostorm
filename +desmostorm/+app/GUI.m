@@ -113,6 +113,13 @@ classdef GUI < handle
 
         function obj = GUI()
 
+            % Only one app window should own the current interactive session.
+            existingFig = desmostorm.app.focusMainFigure();
+            if ~isempty(existingFig)
+                error('desmostorm:app:GUI:AlreadyOpen', ...
+                    'DesmoSTORM is already open.');
+            end
+
             % --- Log ---
             obj.Log = desmostorm.Log.get();
 
@@ -1785,7 +1792,8 @@ classdef GUI < handle
             obj.Settings.delete();  % delete settings
             obj.detatchListeners(); % detach listeners
             % load Project and Settings
-            [proj,stgs] = desmostorm.model.STORMProject.load(fname);
+            [proj,stgs] = desmostorm.model.STORMProject.load(fname, ...
+                "MissingImageResolver", @desmostorm.app.promptMissingImageRoot);
             % valid output from load -> assign and process
             if ~isempty(proj) && ~isempty(stgs)
                 obj.Project = proj;
@@ -2284,7 +2292,7 @@ classdef GUI < handle
 
             desmostorm.Log.INFO("Exporting region measurements...");
             try
-                success = desmostorm.export.Exporter.exportRegionMeasurements(obj.Project,obj.Settings,obj.Fig);
+                success = desmostorm.export.Exporter.exportRegionMeasurements(obj.Project,obj.Settings);
                 if success
                     desmostorm.Log.INFO("Success.");
                 else
@@ -2300,7 +2308,7 @@ classdef GUI < handle
 
             desmostorm.Log.INFO("Exporting summary PDF...");
             try
-                success = desmostorm.export.Exporter.exportSummaryPDF(obj.Project,obj.Settings,obj.Fig);
+                success = desmostorm.export.Exporter.exportSummaryPDF(obj.Project,obj.Settings);
                 if success
                     desmostorm.Log.INFO("Success.");
                 else
@@ -2317,7 +2325,7 @@ classdef GUI < handle
 
             desmostorm.Log.INFO("Exporting region images...");
             try
-                success = desmostorm.export.Exporter.exportRegionImages(obj.Project,obj.Settings,obj.Fig);
+                success = desmostorm.export.Exporter.exportRegionImages(obj.Project,obj.Settings);
                 if success
                     desmostorm.Log.INFO("Success.");
                 else
@@ -2333,7 +2341,7 @@ classdef GUI < handle
 
             desmostorm.Log.INFO("Exporting region linescan plot...");
             try
-                success = desmostorm.export.Exporter.exportRegionLinescanPlot(obj.Project,obj.Settings,obj.Fig);
+                success = desmostorm.export.Exporter.exportRegionLinescanPlot(obj.Project,obj.Settings);
                 if success
                     desmostorm.Log.INFO("Success.");
                 else
@@ -2349,7 +2357,7 @@ classdef GUI < handle
 
             desmostorm.Log.INFO("Exporting region subimage with ROI overlay...");
             try
-                success = desmostorm.export.Exporter.exportRegionSubimageWithROI(obj.Project,obj.Settings,obj.Fig);
+                success = desmostorm.export.Exporter.exportRegionSubimageWithROI(obj.Project,obj.Settings);
                 if success
                     desmostorm.Log.INFO("Success.");
                 else
@@ -2368,7 +2376,7 @@ classdef GUI < handle
 
         function h = findGUI()
             % locate and return handle to GUI figure window
-            h = findobj(groot,'Tag',desmostorm.Info.Name);
+            h = findobj(groot,'Type','figure','Tag',desmostorm.Info.Name);
             % more than one found -> return first
             if numel(h) > 1, h = h(1); end
         end

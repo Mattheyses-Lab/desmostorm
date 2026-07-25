@@ -482,10 +482,11 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
 
     methods (Static)
 
-        function [proj, settings] = load(file)
+        function [proj, settings] = load(file, opts)
             %LOAD Loads a project file created by STORMProject.save()
             arguments
                 file (1,1) string % name of the saved file
+                opts.MissingImageResolver = []
             end
 
             % load the mat file
@@ -507,14 +508,20 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
 
             desmostorm.Log.INFO("Rebuilding project...")
             try
-                [proj, settings] = desmostorm.model.STORMProject.fromStruct(S, file);
+                [proj, settings] = desmostorm.model.STORMProject.fromStruct(S, file, ...
+                    "MissingImageResolver", opts.MissingImageResolver);
             catch ME
                 desmostorm.Log.ERROR(ME);
                 rethrow(ME);
             end
         end
 
-        function [proj, settings] = fromStruct(P, file)
+        function [proj, settings] = fromStruct(P, file, opts)
+            arguments
+                P
+                file (1,1) string
+                opts.MissingImageResolver = []
+            end
 
             projectFolder = string(fileparts(file));
 
@@ -542,7 +549,8 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
 
             % Resolve image paths
             desmostorm.Log.INFO("Resolving image paths...")
-            resolved = desmostorm.model.STORMProject.resolveImagePaths(P.Images, projectFolder);
+            resolved = desmostorm.io.resolveImagePaths(P.Images, projectFolder, ...
+                "MissingImageResolver", opts.MissingImageResolver);
 
             % If resolved comes back empty -> return empty, load fails
             if isempty(resolved)
@@ -574,114 +582,6 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
 
             % indicate file exists on disk at SourcePath
             proj.isOnDisk = true;
-
-        end
-
-        function imagesOut = resolveImagePaths(imagesIn, projectFolder)
-            imagesOut = imagesIn;
-
-            % First pass: keep paths that still exist; also try project folder + filename.
-            missing = false(1, numel(imagesOut));
-            for k = 1:numel(imagesOut)
-                p = string(imagesOut(k).SourcePath);
-                if strlength(p) > 0 && isfile(p)
-                    continue
-                end
-
-                % Try project folder + filename
-                if strlength(projectFolder) > 0 && isfield(imagesOut(k),'FileName')
-                    candidate = fullfile(projectFolder, imagesOut(k).FileName + imagesOut(k).Ext);
-                    if isfile(candidate)
-                        imagesOut(k).SourcePath = string(candidate);
-                        continue
-                    end
-                end
-
-                % not found -> mark as missing
-                missing(k) = true;
-            end
-
-            if ~any(missing)
-                return
-            end
-
-            % get cell array of missing filenames
-            missingNames = [imagesOut(missing).SourcePath]';
-
-            % user prompt (Command Window)
-            msg = sprintf('Locate missing image files (%d missing):', nnz(missing));
-            disp(msg);
-            for i = 1:numel(missingNames)
-                fprintf('%s\n',missingNames{i});
-            end
-
-            % find the GUI window
-            fig = desmostorm.app.GUI.findGUI();
-
-            % user prompt (modal dialog)
-            selection = uiconfirm(fig,...
-                [msg;"";missingNames],...
-                'Image files missing',...
-                "Options",["Locate","Cancel"],...
-                "DefaultOption",1,...
-                "CancelOption",2,...
-                "Icon","warning");
-
-            switch selection
-                case "Locate"
-                    fig.Visible = "off";
-                    searchRoot = uigetdir(projectFolder, msg);
-                    fig.Visible = "on";
-                case "Cancel" % -> return empty
-                    imagesOut = [];
-                    return
-            end
-
-            % user cancels -> return empty, load fails
-            if isequal(searchRoot, 0)
-                imagesOut = [];
-                return
-            end
-
-            % root path for search
-            searchRoot = string(searchRoot);
-
-            % Build filename->paths map via recursive dir
-            files = dir(fullfile(searchRoot, "**", "*"));
-            files = files(~[files.isdir]);
-
-            % Resolve each missing entry by filename, prefer matching file size if available
-            for k = find(missing)
-                targetName = imagesOut(k).FileName + imagesOut(k).Ext;
-                hits = files(string({files.name}) == targetName);
-
-                if isempty(hits), continue, end
-
-                % If only one hit, take it
-                if isscalar(hits)
-                    imagesOut(k).SourcePath = string(fullfile(hits.folder, hits.name));
-                    continue
-                end
-
-                % Prefer matching file size if recorded
-                sz = imagesOut(k).FileSizeBytes;
-                if ~isnan(sz)
-                    szHits = hits([hits.bytes] == sz);
-                    if isscalar(szHits)
-                        imagesOut(k).SourcePath = string(fullfile(szHits.folder, szHits.name));
-                        continue
-                    elseif ~isempty(szHits)
-                        hits = szHits; % narrow
-                    end
-                end
-
-                % Fallback: take most recently modified
-                [~,idx] = max([hits.datenum]);
-                imagesOut(k).SourcePath = string(fullfile(hits(idx).folder, hits(idx).name));
-            end
-
-            % recurse until all files found or empty returned (user cancels)
-            imagesOut = desmostorm.model.STORMProject.resolveImagePaths(imagesOut, projectFolder);
 
         end
 

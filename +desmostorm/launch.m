@@ -11,6 +11,12 @@ function launch()
         desmostorm.Preferences.set("SetupVersion",requiredVersion);
     end
 
+    % Reuse the existing app window if DesmoSTORM is already open.
+    if desmostorm.app.hasMainFigure()
+        desmostorm.app.focusMainFigure();
+        return
+    end
+
     % start the GUI
     desmostorm.app.GUI;
 

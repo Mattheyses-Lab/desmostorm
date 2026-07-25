@@ -1,10 +1,9 @@
 classdef Exporter
     methods (Static)
-        function result = exportRegionMeasurements(project,config,parentFig)
+        function result = exportRegionMeasurements(project,config)
             arguments
                 project (1,1) desmostorm.model.STORMProject
                 config  (1,1) desmostorm.config.Settings
-                parentFig = matlab.ui.Figure.empty()
             end
 
             result = false;
@@ -12,19 +11,18 @@ classdef Exporter
             defaultName = fullfile(config.IO.DefaultFolder, [char(project.Name),'_region-measurements.xlsx']);
             [file, path] = uiputfile('*.xlsx', ...
                 'Export region measurements', defaultName);
+            desmostorm.app.focusMainFigure();
 
             if isequal(file,0), return; end
 
-            cleanupExportWindow = holdFigureAlwaysOnTop(parentFig); %#ok<NASGU>
             desmostorm.export.regionMeasurementsXlsx(project, fullfile(path, file));
             result = true;
         end
 
-        function result = exportSummaryPDF(project,config,parentFig)
+        function result = exportSummaryPDF(project,config)
             arguments
                 project (1,1) desmostorm.model.STORMProject
                 config  (1,1) desmostorm.config.Settings
-                parentFig = matlab.ui.Figure.empty()
             end
 
             result = false;
@@ -37,20 +35,16 @@ classdef Exporter
                 {'PageWidthInches','Page width (inches)','double',11,@(x) x>0,'PageWidthInches must be a positive number'}, ...
                 {'FontSizePoints','Font size (points)','double',8,@(x) x>0,'FontSizePoints must be a positive integer'}...
                 );
-
-            focusFigure(parentFig);
+            desmostorm.app.focusMainFigure();
 
             if isempty(params), return; end
 
             defaultName = fullfile(config.IO.DefaultFolder, [char(project.Name),'_summary.pdf']);
             [file, path] = uiputfile('*.pdf', ...
                 'Export peak plots', defaultName);
-
-            focusFigure(parentFig);
+            parentFig = desmostorm.app.focusMainFigure();
 
             if isequal(file,0), return; end
-
-            cleanupExportWindow = holdFigureAlwaysOnTop(parentFig); %#ok<NASGU>
 
             h = matlab.ui.dialog.ProgressDialog.empty();
             if ~isempty(parentFig) && isvalid(parentFig)
@@ -61,35 +55,34 @@ classdef Exporter
             cleanupProgress = onCleanup(@() closeProgressDialog(h));
 
             paramsCell = matlabx.struct.toKeyValueCell(params);
+
             desmostorm.export.summaryPDF(project, fullfile(path,file), config, ...
                 "ProgressDialog", h, paramsCell{:});
 
             result = true;
         end
 
-        function result = exportRegionImages(project,config,parentFig)
+        function result = exportRegionImages(project,config)
             arguments
                 project (1,1) desmostorm.model.STORMProject
                 config  (1,1) desmostorm.config.Settings
-                parentFig = matlab.ui.Figure.empty()
             end
 
             result = false;
 
             folderName = uigetdir(config.IO.DefaultFolder, 'Export region images');
+            desmostorm.app.focusMainFigure();
 
             if ~isfolder(folderName), return; end
 
-            cleanupExportWindow = holdFigureAlwaysOnTop(parentFig); %#ok<NASGU>
             desmostorm.export.regionImages(project, folderName);
             result = true;
         end
 
-        function result = exportRegionLinescanPlot(project,config,parentFig)
+        function result = exportRegionLinescanPlot(project,config)
             arguments
                 project (1,1) desmostorm.model.STORMProject
                 config  (1,1) desmostorm.config.Settings
-                parentFig = matlab.ui.Figure.empty()
             end
 
             % export success indicator, false unless end of function is reached
@@ -132,12 +125,12 @@ classdef Exporter
             name = region.getBaseExportName() + "_linescan-plot";
             defaultName = fullfile(config.IO.DefaultFolder, name);
             [file, path] = uiputfile({'*.svg';'*.eps';'*.pdf'}, 'Export linescan plot', defaultName);
+            desmostorm.app.focusMainFigure();
 
             if isequal(file,0), return; end % return on cancel
             filename = fullfile(path,file);            
 
             % --- export ---
-            cleanupExportWindow = holdFigureAlwaysOnTop(parentFig); %#ok<NASGU>
             optionsCell = matlabx.struct.toKeyValueCell(options);
             desmostorm.export.regionLinescanPlot(region,filename,optionsCell{:});
 
@@ -145,11 +138,10 @@ classdef Exporter
 
         end
 
-        function result = exportRegionSubimageWithROI(project,config,parentFig)
+        function result = exportRegionSubimageWithROI(project,config)
             arguments
                 project (1,1) desmostorm.model.STORMProject
                 config  (1,1) desmostorm.config.Settings
-                parentFig = matlab.ui.Figure.empty()
             end
 
             % export success indicator, false unless end of function is reached
@@ -183,12 +175,12 @@ classdef Exporter
             name = region.getBaseExportName() + "_subimage-ROI-overlay";
             defaultName = fullfile(config.IO.DefaultFolder, name);
             [file, path] = uiputfile({'*.png'}, 'Export subimage with ROI overlay', defaultName);
+            desmostorm.app.focusMainFigure();
 
             if isequal(file,0), return; end % return on cancel
             filename = fullfile(path,file);            
 
             % --- export ---
-            cleanupExportWindow = holdFigureAlwaysOnTop(parentFig); %#ok<NASGU>
             optionsCell = matlabx.struct.toKeyValueCell(options);
             desmostorm.export.regionSubimageWithROI(region,filename,optionsCell{:});
 
@@ -200,36 +192,5 @@ end
 function closeProgressDialog(h)
     if ~isempty(h) && isvalid(h)
         close(h);
-    end
-end
-
-function focusFigure(fig)
-    if ~isempty(fig) && isvalid(fig)
-        figure(fig);
-        drawnow
-    end
-end
-
-function cleanup = holdFigureAlwaysOnTop(fig)
-    cleanup = onCleanup(@() []);
-    if isempty(fig) || ~isvalid(fig)
-        return
-    end
-
-    % Keep the GUI above temporary export figures while exportapp does its
-    % initial render pass, then put the app exactly back how it was.
-    originalWindowStyle = fig.WindowStyle;
-    fig.WindowStyle = 'alwaysontop';
-    figure(fig);
-    drawnow
-
-    cleanup = onCleanup(@() restoreFigureWindowStyle(fig, originalWindowStyle));
-end
-
-function restoreFigureWindowStyle(fig, originalWindowStyle)
-    if ~isempty(fig) && isvalid(fig)
-        fig.WindowStyle = originalWindowStyle;
-        figure(fig);
-        drawnow
     end
 end
