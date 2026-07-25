@@ -13,10 +13,10 @@ if isempty(fig)
     return
 end
 
-msg = sprintf('Locate missing image files (%d missing):', numel(missingNames));
+msg = "Locate missing image files (" + numel(missingNames) + " missing):";
 desmostorm.Log.WARN(msg);
 for i = 1:numel(missingNames)
-    desmostorm.Log.WARN(sprintf("Missing image file: %s", missingNames(i)));
+    desmostorm.Log.WARN("Missing image file: " + missingNames(i));
 end
 
 selection = uiconfirm(fig, ...

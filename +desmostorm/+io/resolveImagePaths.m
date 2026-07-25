@@ -90,10 +90,10 @@ function imagesOut = resolveFromSearchRoot(imagesOut, missing, searchRoot)
 end
 
 function logMissingImages(imagesOut, missing)
-    desmostorm.Log.WARN(sprintf("Project is missing %d image file(s).", nnz(missing)));
+    desmostorm.Log.WARN("Project is missing " + nnz(missing) + " image file(s).");
 
     missingNames = [imagesOut(missing).SourcePath]';
     for i = 1:numel(missingNames)
-        desmostorm.Log.WARN(sprintf("Missing image file: %s", missingNames(i)));
+        desmostorm.Log.WARN("Missing image file: " + missingNames(i));
     end
 end

@@ -52,25 +52,25 @@ classdef Log
         function INFO(msg, varargin)
         %INFO Log an INFO message.
             [src, args] = desmostorm.Log.resolveSource_(varargin{:});
-            desmostorm.Log.get().info(msg, "Source", src, args{:});
+            desmostorm.Log.get().info(desmostorm.Log.normalizeMsg_(msg), "Source", src, args{:});
         end
 
         function DEBUG(msg, varargin)
         %DEBUG Log a DEBUG message.
             [src, args] = desmostorm.Log.resolveSource_(varargin{:});
-            desmostorm.Log.get().debug(msg, "Source", src, args{:});
+            desmostorm.Log.get().debug(desmostorm.Log.normalizeMsg_(msg), "Source", src, args{:});
         end
 
         function WARN(msg, varargin)
         %WARN Log a WARN message.
             [src, args] = desmostorm.Log.resolveSource_(varargin{:});
-            desmostorm.Log.get().warn(msg, "Source", src, args{:});
+            desmostorm.Log.get().warn(desmostorm.Log.normalizeMsg_(msg), "Source", src, args{:});
         end
 
         function ERROR(msg, varargin)
         %ERROR Log an ERROR message.
             [src, args] = desmostorm.Log.resolveSource_(varargin{:});
-            desmostorm.Log.get().error(msg, "Source", src, args{:});
+            desmostorm.Log.get().error(desmostorm.Log.normalizeMsg_(msg), "Source", src, args{:});
         end
 
         function EXCEPTION(ME, varargin)
@@ -82,7 +82,7 @@ classdef Log
         function LOG(level, msg, varargin)
         %LOG Generic logging entry point.
             [src, args] = desmostorm.Log.resolveSource_(varargin{:});
-            desmostorm.Log.get().log(level, msg, "Source", src, args{:});
+            desmostorm.Log.get().log(level, desmostorm.Log.normalizeMsg_(msg), "Source", src, args{:});
         end
 
         function flush()
@@ -141,6 +141,12 @@ classdef Log
             end
 
             src = matlabx.logging.formatCallerName(st(1).name, Detail="short");
+        end
+
+        function msg = normalizeMsg_(msg)
+            if ~isa(msg, 'MException')
+                msg = string(msg);
+            end
         end
 
         function idx = findNameValue_(args, name)
