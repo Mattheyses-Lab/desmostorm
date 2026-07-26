@@ -49,11 +49,6 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
 
     %% Events and listeners
 
-    % % (GUI controller listens)
-    % events
-    % 
-    % end
-
     % (Project and GUI controller listen)
     events
         ImageAdded

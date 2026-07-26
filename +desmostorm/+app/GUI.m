@@ -730,6 +730,9 @@ classdef GUI < handle
             obj.RegionViewer.Tools.DrawRectangle.ROIDeletedFcn         = @(~,~) obj.onROIDeleted();
             % set options for RegionViewer DrawRectangle tool
             obj.RegionViewer.Tools.DrawRectangle.RotationAngleMode = 'half-circle';
+
+            % keep ImageViewer and RegionViewer on the same active channel
+            obj.Ax.addLink(obj.RegionViewer, {'C','ComponentCLims'});
         end
 
         function setupRegionSummaryTable(obj)
@@ -1153,21 +1156,28 @@ classdef GUI < handle
             img = obj.Project.ActiveImage;
             % if empty, clear view and return
             if isempty(img), obj.Ax.CData = []; return, end
-            % get channel index of ImageViewer
+            % get current channel index of ImageViewer
             C = obj.Ax.C;
+
+            % new image does not have at least C channels, reset to 1
+            if C > img.SizeC
+                C = 1;
+            end
+
             % get CLim
             switch obj.Settings.Display.AutoScaleDisplayIntensity
                 case true
-                    clim = img.getAutoDisplayRange(C);
+                    clims = img.getAutoDisplayRanges();
                 case false
-                    clim = img.getDisplayRange(C);
+                    clims = img.getDisplayRanges();
             end
 
-            % update ImageViewer CData and CLim
-            obj.Ax.ImageData = img.ImageData;
-            obj.Ax.setCLim(clim,C);
+            % update ImageViewer ImageData, C, and CLims
+            set(obj.Ax,'ImageData',img.ImageData,'C',C,'ComponentCLims',clims);
             obj.refreshIntensitySliders();
         end
+
+
 
         function clearImageViewer(obj)
         %REFRESHIMAGEVIEWER Reset ImageViewer
@@ -1331,18 +1341,8 @@ classdef GUI < handle
             if isempty(img) || isempty(img.ActiveRegion)
                 obj.clearRegionViewer(); return
             end
-            % get channel index from RegionViewer
-            C = obj.RegionViewer.C;
-            % update ImageViewer CData and CLim
-            switch obj.Settings.Display.AutoScaleDisplayIntensity
-                case true
-                    clim = img.getAutoDisplayRange(C);
-                case false
-                    clim = img.getDisplayRange(C);
-            end
 
             obj.RegionViewer.CData = img.regionSubimageCell(img.ActiveRegion);
-            obj.RegionViewer.setCLim(clim,C);
         end
 
         function clearRegionViewer(obj)
@@ -1884,12 +1884,9 @@ classdef GUI < handle
             obj.Ax.MaxRenderedResolution = obj.Ax.CDataSize(1)/4;
             obj.RegionViewer.MaxRenderedResolution = obj.Settings.Analysis.BoxSize/4;
 
-            % set the new CLim for both axes
+            % set the new CLim for the ImageViewer, linked RegionViewer will update
             clim = obj.IntensitySliders(C).Value;
-            obj.Ax.setCLim(clim,C);
-            if C <= obj.RegionViewer.NumComponents
-                obj.RegionViewer.setCLim(clim,C);
-            end
+            obj.Ax.ComponentCLims{C} = clim;
         end
 
         function onIntensitySliderChanged(obj,~,C)
@@ -1902,10 +1899,7 @@ classdef GUI < handle
             img.setDisplayRange(newVal,C);
 
             % update view
-            obj.Ax.setCLim(newVal,C);
-            if C <= obj.RegionViewer.NumComponents
-                obj.RegionViewer.setCLim(newVal,C);
-            end
+            obj.Ax.ComponentCLims{C} = newVal;
 
             % disable AutoScaleDisplayIntensity if enabled
             if obj.Settings.Display.AutoScaleDisplayIntensity

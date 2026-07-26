@@ -92,6 +92,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
             val = obj.Channels_(c).DisplayRange;
         end
 
+        % --- setDisplayRange ---
         function setDisplayRange(obj, val, c)
             arguments
                 obj
@@ -111,6 +112,15 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
             obj.Channels_(c).DisplayRange = val;
         end
 
+        % --- getDisplayRanges ---
+        function out = getDisplayRanges(obj)
+            out = cell(1,obj.SizeC);
+            for C = 1:obj.SizeC
+                out{C} = obj.getDisplayRange(C);
+            end
+        end
+
+        % --- getAutoDisplayRange ---
         function val = getAutoDisplayRange(obj, c)
             if isempty(obj.Channels_(c).AutoDisplayRange)
                 obj.cacheImageInfoFromBuffer_();
@@ -118,6 +128,15 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
             val = obj.Channels_(c).AutoDisplayRange;
         end
 
+        % --- getAutoDisplayRanges ---
+        function out = getAutoDisplayRanges(obj)
+            out = cell(1,obj.SizeC);
+            for C = 1:obj.SizeC
+                out{C} = obj.getAutoDisplayRange(C);
+            end
+        end
+
+        % --- getDataRange ---
         function val = getDataRange(obj, c)
             if isempty(obj.Channels_(c).DataRange)
                 obj.cacheImageInfoFromBuffer_();
