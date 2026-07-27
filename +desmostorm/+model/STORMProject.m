@@ -49,6 +49,11 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
         MaxSizeC (1,1) double = 0
     end
 
+    properties
+        ChannelColormapNames (1,:) string = string.empty(1,0)
+        ChannelColormapCategories (1,:) string = string.empty(1,0)
+    end
+
     %% Events and listeners
 
     % (Project and GUI controller listen)
@@ -136,7 +141,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             obj.ImageListeners(2) = addlistener(obj,'ImageRemoved',@(~,evt) obj.onImageRemoved(evt));
             obj.ImageListeners(3) = addlistener(obj,'ActiveImageChanged',@(~,evt) obj.onActiveImageChanged(evt));
 
-            obj.MaxSizeCListener = addlistener(obj,'MaxSizeC','PostSet',@(~,~) notify(obj,'MaxSizeCChanged'));
+            obj.MaxSizeCListener = addlistener(obj,'MaxSizeC','PostSet',@(~,~) obj.onMaxSizeCPostSet());
 
             % label registry, default labels to start
             obj.LabelBank = desmostorm.model.LabelRegistry.default();            
@@ -319,6 +324,13 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
     %% Listener callbacks
     methods
 
+        function onMaxSizeCPostSet(obj)
+
+            obj.ensureChannelColormapCount();
+            notify(obj,'MaxSizeCChanged');
+
+        end
+
         function onImageAdded(obj,evt)
 
             obj.updateImageStats();
@@ -424,6 +436,85 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             end
 
 
+        end
+
+        function ensureChannelColormapCount(obj)
+        %ENSURECHANNELCOLORMAPCOUNT Keep project channel colormap storage sized to MaxSizeC
+            n = max(obj.MaxSizeC,0);
+
+            obj.ChannelColormapNames = obj.ChannelColormapNames(:).';
+            obj.ChannelColormapCategories = obj.ChannelColormapCategories(:).';
+
+            if numel(obj.ChannelColormapNames) > n
+                obj.ChannelColormapNames = obj.ChannelColormapNames(1:n);
+            end
+            if numel(obj.ChannelColormapCategories) > n
+                obj.ChannelColormapCategories = obj.ChannelColormapCategories(1:n);
+            end
+
+            if numel(obj.ChannelColormapNames) < n
+                obj.ChannelColormapNames(end+1:n) = "gray";
+            end
+            if numel(obj.ChannelColormapCategories) < n
+                obj.ChannelColormapCategories(end+1:n) = "MATLAB";
+            end
+        end
+
+        function setChannelColormap(obj,c,name,category)
+        %SETCHANNELCOLORMAP Store the selected colormap for one project channel
+            arguments
+                obj
+                c (1,1) double {mustBeInteger, mustBePositive}
+                name (1,1) string
+                category (1,1) string
+            end
+
+            obj.ensureChannelColormapCount();
+            if c > numel(obj.ChannelColormapNames), return; end
+
+            assert(matlabx.colors.maps.Registry.has(name, category), ...
+                'Colormap "%s" not found in category "%s".', name, category);
+
+            obj.ChannelColormapNames(c) = name;
+            obj.ChannelColormapCategories(c) = category;
+        end
+
+        function [name,category] = getChannelColormapInfo(obj,c)
+        %GETCHANNELCOLORMAPINFO Return saved colormap name/category for one channel
+            arguments
+                obj
+                c (1,1) double {mustBeInteger, mustBePositive}
+            end
+
+            obj.ensureChannelColormapCount();
+            if c > numel(obj.ChannelColormapNames)
+                name = "gray";
+                category = "MATLAB";
+                return
+            end
+
+            name = obj.ChannelColormapNames(c);
+            category = obj.ChannelColormapCategories(c);
+        end
+
+        function cmap = getChannelColormap(obj,c)
+        %GETCHANNELCOLORMAP Resolve one channel's saved colormap
+            [name,category] = obj.getChannelColormapInfo(c);
+            cmap = matlabx.colors.maps.Registry.map(name,category);
+        end
+
+        function cmaps = getChannelColormaps(obj,n)
+        %GETCHANNELCOLORMAPS Resolve saved colormaps for channels 1:n
+            arguments
+                obj
+                n (1,1) double {mustBeInteger, mustBeNonnegative} = obj.MaxSizeC
+            end
+
+            obj.ensureChannelColormapCount();
+            cmaps = cell(1,n);
+            for c = 1:n
+                cmaps{c} = obj.getChannelColormap(c);
+            end
         end
 
 
@@ -585,6 +676,19 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             % update project-wide image stats
             proj.updateImageStats();
 
+            if isfield(P.Project,'ChannelColormaps') && ~isempty(P.Project.ChannelColormaps)
+                if isfield(P.Project.ChannelColormaps,'Names')
+                    proj.ChannelColormapNames = string(P.Project.ChannelColormaps.Names);
+                end
+                if isfield(P.Project.ChannelColormaps,'Categories')
+                    proj.ChannelColormapCategories = string(P.Project.ChannelColormaps.Categories);
+                end
+            else
+                proj.ChannelColormapNames = repmat("gray",1,proj.MaxSizeC);
+                proj.ChannelColormapCategories = repmat("MATLAB",1,proj.MaxSizeC);
+            end
+            proj.ensureChannelColormapCount();
+
             % indicate file exists on disk at SourcePath
             proj.isOnDisk = true;
 
@@ -605,6 +709,12 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
 
             % Label bank
             P.Project.LabelBank = obj.LabelBank.toStruct();
+
+            % Project-wide per-channel display choices
+            obj.ensureChannelColormapCount();
+            P.Project.ChannelColormaps = struct( ...
+                'Names',obj.ChannelColormapNames, ...
+                'Categories',obj.ChannelColormapCategories);
 
             % Settings snapshot (portable)
             P.Settings = settings.toStruct();

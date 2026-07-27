@@ -70,6 +70,7 @@ classdef GUI < handle
     properties (Access=private)
         settingsL event.listener
         projectL event.listener
+        axesL event.listener
     end
 
     % Derived UI components and values
@@ -92,6 +93,7 @@ classdef GUI < handle
     properties (Access=private)
         pendingSizeUpdate (1,1) logical = false
         isSyncingSelection (1,1) logical = false
+        isSyncingColormapSelection (1,1) logical = false
     end
 
     % CommnadRouter, Calibration, Log
@@ -659,6 +661,8 @@ classdef GUI < handle
             obj.Ax.Tools.Pick.BoxActivatedFcn        = @(~,d) obj.onBoxActivated(d);
             obj.Ax.Tools.Pick.BoxSelectionChangedFcn = @(~,d) obj.onBoxSelectionChanged(d);
 
+            obj.axesL(1) = addlistener(obj.Ax,'C','PostSet',@(~,~) obj.onImageViewerChannelChanged());
+
             % set the box size for Pick tool
             obj.Ax.Tools.Pick.BoxSize = obj.Settings.Analysis.BoxSize;
 
@@ -762,6 +766,7 @@ classdef GUI < handle
 
             if ~isempty(obj.projectL), delete(obj.projectL(isvalid(obj.projectL))); end
             if ~isempty(obj.settingsL), delete(obj.settingsL(isvalid(obj.settingsL))); end
+            if ~isempty(obj.axesL), delete(obj.axesL(isvalid(obj.axesL))); end
             if ~isempty(obj.Ax) && isvalid(obj.Ax), delete(obj.Ax); end
             if ~isempty(obj.RegionViewer) && isvalid(obj.RegionViewer), delete(obj.RegionViewer); end
             if ~isempty(obj.SettingsAccordion) && isvalid(obj.SettingsAccordion), delete(obj.SettingsAccordion); end
@@ -891,8 +896,13 @@ classdef GUI < handle
             cmapName = obj.Settings.Display.ColormapName;
             obj.ColormapTree.SelectedNodes = obj.ColormapTree.findobj("NodeData",cmapName);
             obj.ExampleColormapAxes.Colormap = cmap;
-            obj.Ax.Colormap = cmap;
-            obj.RegionViewer.Colormap = cmap;
+            if ~isempty(obj.Project)
+                obj.applyProjectChannelColormapsToAxes();
+                obj.syncColormapSelectorToChannel();
+            else
+                obj.Ax.Colormap = cmap;
+                obj.RegionViewer.Colormap = cmap;
+            end
             % set axes limits so that colorbar image fills axes area
             set(obj.ExampleColormapAxes,"YLim",[0.5 50.5],"XLim",[0.5 256.5]);
             % Analysis
@@ -1019,6 +1029,66 @@ classdef GUI < handle
     %% Other helpers
     methods (Access=private)
 
+        function applyProjectChannelColormapsToAxes(obj)
+        %APPLYPROJECTCHANNELCOLORMAPSTOAXES Apply saved project colormaps to ImageViewer
+            if isempty(obj.Project) || isempty(obj.Ax) || ~isvalid(obj.Ax)
+                return
+            end
+
+            n = min(obj.Project.MaxSizeC,obj.Ax.NumComponents);
+            for C = 1:n
+                obj.Ax.setColormap(obj.Project.getChannelColormap(C),C);
+            end
+        end
+
+        function syncColormapSelectorToChannel(obj)
+        %SYNCCOLORMAPSELECTORTOCHANNEL Reflect the active channel colormap in the selector
+            if isempty(obj.Project) || isempty(obj.Ax) || isempty(obj.ColormapTree)
+                return
+            end
+            if ~isvalid(obj.Ax) || ~isvalid(obj.ColormapTree)
+                return
+            end
+
+            C = obj.Ax.C;
+            [name,category] = obj.Project.getChannelColormapInfo(C);
+            node = obj.findColormapTreeNode(name,category);
+            cmap = obj.Project.getChannelColormap(C);
+
+            obj.isSyncingColormapSelection = true;
+            cleanup = onCleanup(@() obj.clearColormapSelectionSyncFlag());
+
+            if ~isempty(node)
+                obj.ColormapTree.SelectedNodes = node;
+            end
+            obj.ExampleColormapAxes.Colormap = cmap;
+        end
+
+        function node = findColormapTreeNode(obj,name,category)
+        %FINDCOLORMAPTREENODE Find a colormap tree leaf by category/name
+            node = matlab.ui.container.TreeNode.empty();
+
+            categoryNodes = obj.ColormapTree.Children;
+            for i = 1:numel(categoryNodes)
+                if string(categoryNodes(i).Text) ~= category
+                    continue
+                end
+
+                mapNodes = categoryNodes(i).Children;
+                for j = 1:numel(mapNodes)
+                    if ~isempty(mapNodes(j).NodeData) && string(mapNodes(j).NodeData) == name
+                        node = mapNodes(j);
+                        return
+                    end
+                end
+            end
+        end
+
+        function clearColormapSelectionSyncFlag(obj)
+        %CLEARCOLORMAPSELECTIONSYNCFLAG Reset programmatic colormap-selection guard
+            obj.isSyncingColormapSelection = false;
+        end
+
         function guialert(obj,opts)
             arguments
                 obj (1,1) desmostorm.app.GUI
@@ -1073,6 +1143,13 @@ classdef GUI < handle
         %ONMAXSIZECCHANGED MaxSizeCChanged event callback
             obj.refreshIntensitySliders();
             obj.refreshRegionLinescanPlot();
+            obj.applyProjectChannelColormapsToAxes();
+            obj.syncColormapSelectorToChannel();
+        end
+
+        function onImageViewerChannelChanged(obj)
+        %ONIMAGEVIEWERCHANNELCHANGED Sync colormap selector to active image channel
+            obj.syncColormapSelectorToChannel();
         end
 
         % --- UI SYNC DRIVER ---
@@ -1142,6 +1219,8 @@ classdef GUI < handle
 
             % update ImageViewer ImageData, C, and CLims
             set(obj.Ax,'ImageData',img.ImageData,'C',C,'ComponentCLims',clims);
+            obj.applyProjectChannelColormapsToAxes();
+            obj.syncColormapSelectorToChannel();
             obj.refreshIntensitySliders();
         end
 
@@ -1726,23 +1805,25 @@ classdef GUI < handle
                     cmap = obj.Settings.Display.Colormap;
                     obj.ExampleColormapAxes.Colormap = cmap;
 
-                    % C = obj.Ax.C;
-                    % obj.Ax.setColormap(cmap,C);
-                    % 
-                    % if C <= obj.RegionViewer.NumComponents
-                    %     obj.RegionViewer.setColormap(cmap,C);
-                    % end
-
                     C = obj.Ax.C;
-                    obj.Ax.ComponentColormaps{C} = cmap;
+                    if ~obj.isSyncingColormapSelection && ~isempty(obj.Project)
+                        obj.Project.setChannelColormap( ...
+                            C, ...
+                            obj.Settings.Display.ColormapName, ...
+                            obj.Settings.Display.ColormapCategory);
+                    end
 
-                    % if C <= obj.RegionViewer.NumComponents
-                    %     obj.RegionViewer.setColormap(cmap,C);
-                    % end
+                    if C <= obj.Ax.NumComponents
+                        obj.Ax.setColormap(cmap,C);
+                    else
+                        obj.Ax.Colormap = cmap;
+                    end
 
-
-                    % obj.Ax.Colormap = obj.Settings.Display.Colormap;
-                    % obj.RegionViewer.Colormap = obj.Settings.Display.Colormap;
+                    % if no image data is present yet, the RegionViewer is
+                    % not reached by ComponentColormaps linking.
+                    if obj.RegionViewer.NumComponents == 0
+                        obj.RegionViewer.Colormap = cmap;
+                    end
                 case "BoxFaceColor"
                     %set(obj.ROI, 'FaceColor', obj.Settings.Display.BoxFaceColor);
                 case "BoxEdgeColor"
@@ -1796,8 +1877,11 @@ classdef GUI < handle
         end
 
         function ColormapSelectionChanged(obj,evt)
+            if obj.isSyncingColormapSelection, return; end
+
             % get the newly selected node
             node = evt.SelectedNodes;
+            if isempty(node), return; end
             % get colormap name from NodeData property
             colormapName = node.NodeData;
             % if empty -> user selected a category node, reset previous selection
