@@ -740,32 +740,14 @@ classdef GUI < handle
             obj.RegionLinescanPanel.Layout.Row = 2;
             obj.RegionLinescanPanel.Layout.Column = [1 2];
 
-            obj.RegionLinescanPanelGrid = uigridlayout(obj.RegionLinescanPanel,[2,1],...
-                "RowHeight",{'1x',0},...
+            obj.RegionLinescanPanelGrid = uigridlayout(obj.RegionLinescanPanel,[1,1],...
+                "RowHeight",{'1x'},...
                 "RowSpacing",0,...
                 "ColumnWidth",{'1x'},...
                 "Padding",[0 0 0 0]);
 
-            obj.RegionLinescanPlot(1) = desmostorm.widgets.PeaksPlotContainer(obj.RegionLinescanPanelGrid,...
-                "RawLineWidth",obj.Settings.PeaksPlot.RawLineWidth, ...
-                "RawLineColor",obj.Settings.PeaksPlot.RawLineColor, ...
-                "SmoothLineWidth",obj.Settings.PeaksPlot.SmoothLineWidth, ...
-                "SmoothLineColor",obj.Settings.PeaksPlot.SmoothLineColor, ...
-                "BackgroundColor",obj.Settings.PeaksPlot.BackgroundColor, ...
-                "ForegroundColor",obj.Settings.PeaksPlot.ForegroundColor, ...
-                "XLabel",sprintf("Distance (%s)",obj.Settings.Analysis.PixelSizeUnit), ...
-                "YLabel","Normalized Intensity");
-
-            obj.RegionLinescanPlot(2) = desmostorm.widgets.PeaksPlotContainer(obj.RegionLinescanPanelGrid,...
-                "RawLineWidth",obj.Settings.PeaksPlot.RawLineWidth, ...
-                "RawLineColor",obj.Settings.PeaksPlot.RawLineColor, ...
-                "SmoothLineWidth",obj.Settings.PeaksPlot.SmoothLineWidth, ...
-                "SmoothLineColor",obj.Settings.PeaksPlot.SmoothLineColor, ...
-                "BackgroundColor",obj.Settings.PeaksPlot.BackgroundColor, ...
-                "ForegroundColor",obj.Settings.PeaksPlot.ForegroundColor, ...
-                "XLabel",sprintf("Distance (%s)",obj.Settings.Analysis.PixelSizeUnit), ...
-                "YLabel","Normalized Intensity", ...
-                "Visible","off");
+            obj.syncRegionLinescanPlotCount();
+            obj.updateRegionLinescanPlotRows(0);
 
         end
 
@@ -1089,8 +1071,8 @@ classdef GUI < handle
 
         function onMaxSizeCChanged(obj)
         %ONMAXSIZECCHANGED MaxSizeCChanged event callback
-            %obj.syncIntensitySliderCount();
             obj.refreshIntensitySliders();
+            obj.refreshRegionLinescanPlot();
         end
 
         % --- UI SYNC DRIVER ---
@@ -1425,6 +1407,7 @@ classdef GUI < handle
 
         function refreshRegionLinescanPlot(obj)
         %REFRESHREGIONLINESCANPLOT Sync RegionLinescanPlot to ActiveRegion
+            obj.syncRegionLinescanPlotCount();
 
             % get active Image
             img = obj.Project.ActiveImage;
@@ -1438,17 +1421,15 @@ classdef GUI < handle
             reg = img.ActiveRegion;
 
             nRegionChannels = numel(reg.LinescanResults);
+            nVisible = min(numel(obj.RegionLinescanPlot),nRegionChannels);
 
             for C = 1:numel(obj.RegionLinescanPlot)
 
-                if C > nRegionChannels
-                    set(obj.RegionLinescanPlot(C:end),"Visible","off");
-                    obj.RegionLinescanPanelGrid.RowHeight(C:end) = {0};
-                    break
-                else
-                    obj.RegionLinescanPlot(C).Visible = 'on';
-                    obj.RegionLinescanPanelGrid.RowHeight(C) = {'1x'};
+                if C > nVisible
+                    obj.RegionLinescanPlot(C).Visible = 'off';
+                    continue
                 end
+                obj.RegionLinescanPlot(C).Visible = 'on';
 
                 if obj.Settings.Analysis.Normalize
                     obj.RegionLinescanPlot(C).YLabel = "Normalized intensity";
@@ -1461,11 +1442,64 @@ classdef GUI < handle
                 obj.RegionLinescanPlot(C).Title = matlabx.utils.text.texFriendly(img.Name) + " | " + reg.Name + "(" + img.ImageData.Components(C).Name + ")";
             end
 
+            obj.updateRegionLinescanPlotRows(nVisible);
+
         end
 
         function clearRegionLinescanPlot(obj)
         %CLEARREGIONLINESCANPLOT Reset RegionLinescanPlot
+            obj.syncRegionLinescanPlotCount();
+
+            if isempty(obj.RegionLinescanPlot), return; end
+
             set(obj.RegionLinescanPlot,'Data',desmostorm.analysis.PeaksData.empty(),'Title','');
+            set(obj.RegionLinescanPlot,'Visible','off');
+            obj.updateRegionLinescanPlotRows(0);
+        end
+
+        function syncRegionLinescanPlotCount(obj)
+        %SYNCREGIONLINESCANPLOTCOUNT Match plot count to project channel capacity
+            nDesired = 1;
+            if ~isempty(obj.Project)
+                nDesired = max(obj.Project.MaxSizeC,1);
+            end
+
+            nCurrent = numel(obj.RegionLinescanPlot);
+            if nCurrent > nDesired
+                delete(obj.RegionLinescanPlot(nDesired+1:end));
+                obj.RegionLinescanPlot = obj.RegionLinescanPlot(1:nDesired);
+                nCurrent = nDesired;
+            end
+
+            for C = nCurrent+1:nDesired
+                obj.RegionLinescanPlot(C) = desmostorm.widgets.PeaksPlotContainer(obj.RegionLinescanPanelGrid,...
+                    "RawLineWidth",obj.Settings.PeaksPlot.RawLineWidth, ...
+                    "RawLineColor",obj.Settings.PeaksPlot.RawLineColor, ...
+                    "SmoothLineWidth",obj.Settings.PeaksPlot.SmoothLineWidth, ...
+                    "SmoothLineColor",obj.Settings.PeaksPlot.SmoothLineColor, ...
+                    "BackgroundColor",obj.Settings.PeaksPlot.BackgroundColor, ...
+                    "ForegroundColor",obj.Settings.PeaksPlot.ForegroundColor, ...
+                    "XLabel",sprintf("Distance (%s)",obj.Settings.Analysis.PixelSizeUnit), ...
+                    "YLabel","Normalized Intensity", ...
+                    "Visible","off");
+            end
+
+            for C = 1:numel(obj.RegionLinescanPlot)
+                obj.RegionLinescanPlot(C).Layout.Row = C;
+                obj.RegionLinescanPlot(C).Layout.Column = 1;
+            end
+        end
+
+        function updateRegionLinescanPlotRows(obj,nVisible)
+        %UPDATEREGIONLINESCANPLOTROWS Collapse unused Region Linescan rows
+            nPlots = numel(obj.RegionLinescanPlot);
+            nVisible = min(max(nVisible,0),nPlots);
+
+            rowHeight = repmat({0},1,nPlots);
+            if nVisible > 0
+                rowHeight(1:nVisible) = repmat({'1x'},1,nVisible);
+            end
+            obj.RegionLinescanPanelGrid.RowHeight = rowHeight;
         end
 
         function refreshRegionROI(obj)
