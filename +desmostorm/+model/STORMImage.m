@@ -338,7 +338,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
                 obj.Channels_(c).Class = obj.ImageData_.Components(c).Class;
                 obj.Channels_(c).NativeDisplayRange = obj.ImageData_.Components(c).NativeDisplayRange;
                 I = obj.getPlane(c);
-                obj.Channels_(c).AutoDisplayRange = stretchlim(I,[0.1 0.9999])*obj.Channels_(c).NativeDisplayRange(2)';
+                obj.Channels_(c).AutoDisplayRange = (stretchlim(I,[0.1 0.9999])).' * obj.Channels_(c).NativeDisplayRange(2);
                 obj.Channels_(c).DataRange = [min(I(:)) max(I(:))];
                 if isempty(obj.Channels_(c).DisplayRange)
                     obj.Channels_(c).DisplayRange = obj.Channels_(c).DataRange;

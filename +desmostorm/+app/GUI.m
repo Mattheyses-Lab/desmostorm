@@ -207,21 +207,8 @@ classdef GUI < handle
         end
 
         function setupFigure(obj)
-            % need to add a more elegant way to set window size once app components are finalized
+            % get screen size for fig OuterPosition
             s = matlabx.UICal.screenSize();
-            % obj.Fig = uifigure(...
-            %     'WindowStyle','alwaysontop',...
-            %     'Tag',desmostorm.Info.Name,...
-            %     'Name','DesmoSTORM',...
-            %     'Color',[0 0 0],...
-            %     'OuterPosition',s(1,:),...
-            %     'Visible','off',...
-            %     'Theme','dark',...
-            %     'HandleVisibility','on',...
-            %     'AutoResizeChildren','off',...
-            %     'SizeChangedFcn',@(~,~) obj.refreshComponentSizes(),...
-            %     'CloseRequestFcn',@(~,~) obj.onCloseRequest());
-
             obj.Fig = uifigure(...
                 'WindowStyle','normal',...
                 'Tag',desmostorm.Info.Name,...
@@ -234,9 +221,6 @@ classdef GUI < handle
                 'AutoResizeChildren','off',...
                 'SizeChangedFcn',@(~,~) obj.refreshComponentSizes(),...
                 'CloseRequestFcn',@(~,~) obj.onCloseRequest());
-
-
-
         end
 
         function setupCommandRouter(obj)
@@ -547,7 +531,7 @@ classdef GUI < handle
             item = obj.SettingsAccordion.getItem("Image Display");
             % set size and spacing of pane grid
             set(item.Pane,...
-                "RowHeight",{'fit','fit','fit','fit'},...
+                "RowHeight",{'fit','fit'},...
                 "ColumnWidth",{'1x'},...
                 "RowSpacing",5,...
                 "ColumnSpacing",5);
@@ -563,19 +547,8 @@ classdef GUI < handle
         end
 
         function setupIntensitySliders(obj)
-            item = obj.SettingsAccordion.getItem("Image Display");
-            for C = 1:3
-                obj.IntensitySliders(C) = matlabx.ui.control.Slider(item.Pane,...
-                    "Title",sprintf("Channel %i",C),...
-                    "FontColor",[1 1 1],...
-                    "BackgroundColor",[.18 .18 .18],...
-                    "Limits",[0 1],...
-                    "Value",[0 1],...
-                    "RoundValues","on",...
-                    "RoundDigits",0,...
-                    "ValueChangingFcn",@(~,evt) obj.onIntensitySliderChanging(evt,C),...
-                    "ValueChangedFcn",@(~,evt) obj.onIntensitySliderChanged(evt,C));
-            end
+            obj.syncIntensitySliderCount();
+            obj.updateIntensitySliderRows(1);
         end
 
         function setupPeaksPlotControls(obj)
@@ -732,7 +705,12 @@ classdef GUI < handle
             obj.RegionViewer.Tools.DrawRectangle.RotationAngleMode = 'half-circle';
 
             % keep ImageViewer and RegionViewer on the same active channel
-            obj.Ax.addLink(obj.RegionViewer, {'C','ComponentCLims'});
+            obj.Ax.addLink(obj.RegionViewer, {'C', ...
+                'ComponentCLims', ...
+                'ComponentColorMode', ...
+                'ComponentColormaps', ...
+                'ComponentColors', ...
+                'ShowComposite'});
         end
 
         function setupRegionSummaryTable(obj)
@@ -954,7 +932,7 @@ classdef GUI < handle
             % Display
             obj.SettingsUI.Display.AutoScaleDisplayIntensityCheckBox.Value = S.Display.AutoScaleDisplayIntensity;
             % Sliders
-            set(obj.IntensitySliders,'Limits',[0 1],'Value',[0 1]);
+            obj.resetIntensitySliders();
         end
 
         function detatchListeners(obj)
@@ -972,13 +950,14 @@ classdef GUI < handle
                 obj.projectL(1) = addlistener(obj.Project,'ImageAdded',             @(~,~) obj.onImageAdded());
                 obj.projectL(2) = addlistener(obj.Project,'ImageRemoved',           @(~,~) obj.onImageRemoved());
                 obj.projectL(3) = addlistener(obj.Project,'ActiveImageChanged',     @(~,~) obj.onActiveImageChanged());
+                obj.projectL(4) = addlistener(obj.Project,'MaxSizeCChanged',        @(~,~) obj.onMaxSizeCChanged());
                 % Regions
-                obj.projectL(4) = addlistener(obj.Project,'RegionAdded',            @(~,~) obj.onRegionAdded());
-                obj.projectL(5) = addlistener(obj.Project,'RegionRemoved',          @(~,~) obj.onRegionRemoved());
-                obj.projectL(6) = addlistener(obj.Project,'ActiveRegionChanged',    @(~,~) obj.onActiveRegionChanged());
-                obj.projectL(7) = addlistener(obj.Project,'RegionSelectionChanged', @(~,~) obj.onRegionSelectionChanged());
+                obj.projectL(5) = addlistener(obj.Project,'RegionAdded',            @(~,~) obj.onRegionAdded());
+                obj.projectL(6) = addlistener(obj.Project,'RegionRemoved',          @(~,~) obj.onRegionRemoved());
+                obj.projectL(7) = addlistener(obj.Project,'ActiveRegionChanged',    @(~,~) obj.onActiveRegionChanged());
+                obj.projectL(8) = addlistener(obj.Project,'RegionSelectionChanged', @(~,~) obj.onRegionSelectionChanged());
                 % Labels
-                obj.projectL(8) = addlistener(obj.Project,'LabelsChanged',          @(~,~) obj.onLabelsChanged());
+                obj.projectL(9) = addlistener(obj.Project,'LabelsChanged',          @(~,~) obj.onLabelsChanged());
             end
             % Settings
             obj.settingsL(1) = addlistener(obj.Settings,'DisplayChanged',   @(~,e) obj.onDisplayChanged(e));
@@ -1049,6 +1028,7 @@ classdef GUI < handle
             obj.clearRegionViewer();
             obj.clearRegionLinescanPlot();
             obj.clearRegionSummaryTable();
+            obj.resetIntensitySliders();
             obj.clearLabelsTree();
         end
 
@@ -1105,6 +1085,12 @@ classdef GUI < handle
         %ONACTIVEIMAGECHANGED ActiveImageChanged event callback
             obj.syncActiveImageToView();
             desmostorm.Log.INFO("Active Image changed.")
+        end
+
+        function onMaxSizeCChanged(obj)
+        %ONMAXSIZECCHANGED MaxSizeCChanged event callback
+            %obj.syncIntensitySliderCount();
+            obj.refreshIntensitySliders();
         end
 
         % --- UI SYNC DRIVER ---
@@ -1212,7 +1198,14 @@ classdef GUI < handle
 
         function refreshIntensitySliders(obj)
         %REFRESHINTENSITYSLIDERS Sync intensity sliders to ActiveImage
+            obj.syncIntensitySliderCount();
+
             % get the active image
+            if isempty(obj.Project)
+                obj.resetIntensitySliders();
+                return
+            end
+
             img = obj.Project.ActiveImage;
             % if empty, reset sliders and return
             if isempty(img)
@@ -1220,11 +1213,18 @@ classdef GUI < handle
                 return
             end
 
+            nVisible = img.SizeC;
+            if ~isempty(obj.Ax) && isvalid(obj.Ax)
+                nVisible = min(nVisible,obj.Ax.NumComponents);
+            end
+            nVisible = min(numel(obj.IntensitySliders), nVisible);
             for C = 1:numel(obj.IntensitySliders)
-                if C > img.SizeC
+                if C > nVisible
                     obj.IntensitySliders(C).Visible = 'off';
                     continue
                 end
+                obj.IntensitySliders(C).Visible = 'on';
+
                 % get DisplayRange and DataRange
                 switch obj.Settings.Display.AutoScaleDisplayIntensity
                     case true
@@ -1237,12 +1237,71 @@ classdef GUI < handle
                 set(obj.IntensitySliders(C),'Limits',lims,'Value',val)
             end
 
+            obj.updateIntensitySliderRows(nVisible);
+
         end
 
         function resetIntensitySliders(obj)
         %RESETINTENSITYSLIDERS Reset IntensitySliders    
+            obj.syncIntensitySliderCount();
+
+            if isempty(obj.IntensitySliders), return; end
+
             set(obj.IntensitySliders,'Limits',[0 1],'Value',[0 1]);
-            set(obj.IntensitySliders(2:3),'Visible','off');
+            obj.IntensitySliders(1).Visible = 'on';
+            if numel(obj.IntensitySliders) > 1
+                set(obj.IntensitySliders(2:end),'Visible','off');
+            end
+
+            obj.updateIntensitySliderRows(1);
+        end
+
+        function syncIntensitySliderCount(obj)
+        %SYNCINTENSITYSLIDERCOUNT Match slider count to project channel capacity
+            nDesired = 1;
+            if ~isempty(obj.Project)
+                nDesired = max(obj.Project.MaxSizeC,1);
+            end
+
+            nCurrent = numel(obj.IntensitySliders);
+            if nCurrent > nDesired
+                delete(obj.IntensitySliders(nDesired+1:end));
+                obj.IntensitySliders = obj.IntensitySliders(1:nDesired);
+                nCurrent = nDesired;
+            end
+
+            item = obj.SettingsAccordion.getItem("Image Display");
+            for C = nCurrent+1:nDesired
+                obj.IntensitySliders(C) = matlabx.ui.control.Slider(item.Pane,...
+                    "Title",sprintf("Channel %i",C),...
+                    "FontColor",[1 1 1],...
+                    "BackgroundColor",[.18 .18 .18],...
+                    "Limits",[0 1],...
+                    "Value",[0 1],...
+                    "RoundValues","on",...
+                    "RoundDigits",0,...
+                    "ValueChangingFcn",@(~,evt) obj.onIntensitySliderChanging(evt,C),...
+                    "ValueChangedFcn",@(~,evt) obj.onIntensitySliderChanged(evt,C));
+            end
+
+            for C = 1:numel(obj.IntensitySliders)
+                obj.IntensitySliders(C).Layout.Row = C + 1;
+                obj.IntensitySliders(C).Layout.Column = 1;
+                obj.IntensitySliders(C).Title = sprintf("Channel %i",C);
+            end
+        end
+
+        function updateIntensitySliderRows(obj,nVisible)
+        %UPDATEINTENSITYSLIDERROWS Collapse unused slider rows in Image Display controls
+            item = obj.SettingsAccordion.getItem("Image Display");
+            nSliders = numel(obj.IntensitySliders);
+            nVisible = min(max(nVisible,0),nSliders);
+
+            rowHeight = [{'fit'}, repmat({0},1,nSliders)];
+            if nVisible > 0
+                rowHeight(2:(nVisible+1)) = repmat({'fit'},1,nVisible);
+            end
+            item.Pane.RowHeight = rowHeight;
         end
 
 
@@ -1633,12 +1692,20 @@ classdef GUI < handle
                     cmap = obj.Settings.Display.Colormap;
                     obj.ExampleColormapAxes.Colormap = cmap;
 
-                    C = obj.Ax.C;
-                    obj.Ax.setColormap(cmap,C);
+                    % C = obj.Ax.C;
+                    % obj.Ax.setColormap(cmap,C);
+                    % 
+                    % if C <= obj.RegionViewer.NumComponents
+                    %     obj.RegionViewer.setColormap(cmap,C);
+                    % end
 
-                    if C <= obj.RegionViewer.NumComponents
-                        obj.RegionViewer.setColormap(cmap,C);
-                    end
+                    C = obj.Ax.C;
+                    obj.Ax.ComponentColormaps{C} = cmap;
+
+                    % if C <= obj.RegionViewer.NumComponents
+                    %     obj.RegionViewer.setColormap(cmap,C);
+                    % end
+
 
                     % obj.Ax.Colormap = obj.Settings.Display.Colormap;
                     % obj.RegionViewer.Colormap = obj.Settings.Display.Colormap;

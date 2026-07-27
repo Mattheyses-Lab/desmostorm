@@ -43,7 +43,9 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
     %% Project-wide info
     properties
         DefaultPixelSize desmostorm.model.units.PixelSize = desmostorm.model.units.PixelSize(1, 'px');
+    end
 
+    properties (SetObservable, AbortSet)
         MaxSizeC (1,1) double = 0
     end
 
@@ -54,6 +56,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
         ImageAdded
         ImageRemoved
         ActiveImageChanged
+        MaxSizeCChanged
 
         RegionAdded
         RegionRemoved
@@ -66,6 +69,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
     properties
         RegionListeners event.listener
         ImageListeners event.listener
+        MaxSizeCListener event.listener
         LabelsChangedListener event.listener
     end
 
@@ -131,6 +135,8 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             obj.ImageListeners(1) = addlistener(obj,'ImageAdded',@(~,evt) obj.onImageAdded(evt));
             obj.ImageListeners(2) = addlistener(obj,'ImageRemoved',@(~,evt) obj.onImageRemoved(evt));
             obj.ImageListeners(3) = addlistener(obj,'ActiveImageChanged',@(~,evt) obj.onActiveImageChanged(evt));
+
+            obj.MaxSizeCListener = addlistener(obj,'MaxSizeC','PostSet',@(~,~) notify(obj,'MaxSizeCChanged'));
 
             % label registry, default labels to start
             obj.LabelBank = desmostorm.model.LabelRegistry.default();            
@@ -410,8 +416,12 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
 
             imgs = obj.ImageArray;
 
-            % argest SizeC across all images
-            obj.MaxSizeC = max([imgs(:).SizeC]);
+            % Assigning MaxSizeC fires MaxSizeCChanged via the property listener.
+            if isempty(imgs)
+                obj.MaxSizeC = 0;
+            else
+                obj.MaxSizeC = max([imgs(:).SizeC]);
+            end
 
 
         end
