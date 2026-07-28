@@ -151,6 +151,7 @@ classdef Settings < handle
                 % Display settings
                 defaultDisplay = desmostorm.config.Display;
                 S.Display.AutoScaleDisplayIntensity = defaultDisplay.AutoScaleDisplayIntensity; % new property
+                S.Display.ChannelColorMode = defaultDisplay.ChannelColorMode;                   % new property
                 % indicate migration has been performed
                 migrated = true;
             end

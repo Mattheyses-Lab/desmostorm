@@ -5,6 +5,7 @@ classdef Display < handle
     properties (Access=private)
         ColormapName_     string = "turbo"    % selection name
         ColormapCategory_ string = "MATLAB"   % selection category
+        ChannelColorMode_ string = "luts"     % "colors" or "luts"
         AutoScaleDisplayIntensity_ logical = false     % whether to automatically set display limits
     end
 
@@ -12,6 +13,7 @@ classdef Display < handle
         Colormap          % Nx3 double (loaded on demand)
         ColormapName
         ColormapCategory
+        ChannelColorMode
         AutoScaleDisplayIntensity
     end
 
@@ -30,6 +32,7 @@ classdef Display < handle
 
         function s = get.ColormapName(this),     s = this.ColormapName_;     end
         function s = get.ColormapCategory(this), s = this.ColormapCategory_; end
+        function s = get.ChannelColorMode(this), s = this.ChannelColorMode_; end
 
         function s = get.AutoScaleDisplayIntensity(this),   s = this.AutoScaleDisplayIntensity_; end
 
@@ -64,11 +67,27 @@ classdef Display < handle
             notify(this,'Changed',ev);
         end
 
+        function set.ChannelColorMode(this, v)
+            v = string(v);
+            mustBeMember(v,["colors","luts"]);
+
+            old = this.ChannelColorMode_;
+            if old == v
+                return
+            end
+
+            this.ChannelColorMode_ = v;
+            ev = desmostorm.config.ChangeEvent("Display","ChannelColorMode",old,v);
+            notify(this,'DisplayChanged',ev);
+            notify(this,'Changed',ev);
+        end
+
         % ---------- Serialization ----------
         function S = toStruct(this)
             S = struct( ...
                 'ColormapName',     this.ColormapName, ...
                 'ColormapCategory', this.ColormapCategory, ...
+                'ChannelColorMode', this.ChannelColorMode, ...
                 'AutoScaleDisplayIntensity', this.AutoScaleDisplayIntensity);
         end
 
@@ -77,7 +96,7 @@ classdef Display < handle
 
             for i = 1:numel(f)
                 prop = [f{i}, '_'];  % append underscore
-                if isprop(this, prop)
+                if isprop(this, prop) && isfield(S,f{i})
                     this.(prop) = S.(f{i});
                 end
             end

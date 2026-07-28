@@ -52,6 +52,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
     properties
         ChannelColormapNames (1,:) string = string.empty(1,0)
         ChannelColormapCategories (1,:) string = string.empty(1,0)
+        ChannelColorNames (1,:) string = string.empty(1,0)
     end
 
     %% Events and listeners
@@ -441,9 +442,11 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
         function ensureChannelColormapCount(obj)
         %ENSURECHANNELCOLORMAPCOUNT Keep project channel colormap storage sized to MaxSizeC
             n = max(obj.MaxSizeC,0);
+            defaultColors = string(matlabx.ui.axes.ImageAxes.getColorNames());
 
             obj.ChannelColormapNames = obj.ChannelColormapNames(:).';
             obj.ChannelColormapCategories = obj.ChannelColormapCategories(:).';
+            obj.ChannelColorNames = obj.ChannelColorNames(:).';
 
             if numel(obj.ChannelColormapNames) > n
                 obj.ChannelColormapNames = obj.ChannelColormapNames(1:n);
@@ -451,12 +454,18 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             if numel(obj.ChannelColormapCategories) > n
                 obj.ChannelColormapCategories = obj.ChannelColormapCategories(1:n);
             end
+            if numel(obj.ChannelColorNames) > n
+                obj.ChannelColorNames = obj.ChannelColorNames(1:n);
+            end
 
             if numel(obj.ChannelColormapNames) < n
                 obj.ChannelColormapNames(end+1:n) = "gray";
             end
             if numel(obj.ChannelColormapCategories) < n
                 obj.ChannelColormapCategories(end+1:n) = "MATLAB";
+            end
+            for c = numel(obj.ChannelColorNames)+1:n
+                obj.ChannelColorNames(c) = defaultColors(1 + mod(c-1,numel(defaultColors)));
             end
         end
 
@@ -515,6 +524,41 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             for c = 1:n
                 cmaps{c} = obj.getChannelColormap(c);
             end
+        end
+
+        function setChannelColor(obj,c,name)
+        %SETCHANNELCOLOR Store the selected color name for one project channel
+            arguments
+                obj
+                c (1,1) double {mustBeInteger, mustBePositive}
+                name (1,1) string
+            end
+
+            obj.ensureChannelColormapCount();
+            if c > numel(obj.ChannelColorNames), return; end
+
+            validNames = string(matlabx.ui.axes.ImageAxes.getColorNames());
+            assert(ismember(name,validNames), ...
+                'Color "%s" is not a valid channel color.', name);
+
+            obj.ChannelColorNames(c) = name;
+        end
+
+        function name = getChannelColorName(obj,c)
+        %GETCHANNELCOLORNAME Return saved color name for one channel
+            arguments
+                obj
+                c (1,1) double {mustBeInteger, mustBePositive}
+            end
+
+            obj.ensureChannelColormapCount();
+            if c > numel(obj.ChannelColorNames)
+                defaultColors = string(matlabx.ui.axes.ImageAxes.getColorNames());
+                name = defaultColors(1 + mod(c-1,numel(defaultColors)));
+                return
+            end
+
+            name = obj.ChannelColorNames(c);
         end
 
 
@@ -676,7 +720,17 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             % update project-wide image stats
             proj.updateImageStats();
 
-            if isfield(P.Project,'ChannelColormaps') && ~isempty(P.Project.ChannelColormaps)
+            if isfield(P.Project,'ChannelDisplay') && ~isempty(P.Project.ChannelDisplay)
+                if isfield(P.Project.ChannelDisplay,'ColormapNames')
+                    proj.ChannelColormapNames = string(P.Project.ChannelDisplay.ColormapNames);
+                end
+                if isfield(P.Project.ChannelDisplay,'ColormapCategories')
+                    proj.ChannelColormapCategories = string(P.Project.ChannelDisplay.ColormapCategories);
+                end
+                if isfield(P.Project.ChannelDisplay,'ColorNames')
+                    proj.ChannelColorNames = string(P.Project.ChannelDisplay.ColorNames);
+                end
+            elseif isfield(P.Project,'ChannelColormaps') && ~isempty(P.Project.ChannelColormaps)
                 if isfield(P.Project.ChannelColormaps,'Names')
                     proj.ChannelColormapNames = string(P.Project.ChannelColormaps.Names);
                 end
@@ -712,9 +766,10 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
 
             % Project-wide per-channel display choices
             obj.ensureChannelColormapCount();
-            P.Project.ChannelColormaps = struct( ...
-                'Names',obj.ChannelColormapNames, ...
-                'Categories',obj.ChannelColormapCategories);
+            P.Project.ChannelDisplay = struct( ...
+                'ColormapNames',obj.ChannelColormapNames, ...
+                'ColormapCategories',obj.ChannelColormapCategories, ...
+                'ColorNames',obj.ChannelColorNames);
 
             % Settings snapshot (portable)
             P.Settings = settings.toStruct();

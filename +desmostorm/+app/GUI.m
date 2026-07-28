@@ -56,6 +56,8 @@ classdef GUI < handle
         ExampleColormapImage matlab.graphics.primitive.Image
         ColormapTree matlab.ui.container.Tree
         IntensitySliders matlabx.ui.control.Slider
+        ChannelColorLabels matlab.ui.control.Label
+        ChannelColorDropDowns matlab.ui.control.DropDown
         LabelsTree matlab.ui.container.Tree
         
         % Extra graphics handles, stored as struct to reduce clutter
@@ -94,6 +96,7 @@ classdef GUI < handle
         pendingSizeUpdate (1,1) logical = false
         isSyncingSelection (1,1) logical = false
         isSyncingColormapSelection (1,1) logical = false
+        % isSyncingChannelDisplay (1,1) logical = false
     end
 
     % CommnadRouter, Calibration, Log
@@ -315,7 +318,7 @@ classdef GUI < handle
                 'BackgroundColor',[.12 .12 .12]);
 
             % initialize items
-            itemTitles = ["Images","Regions","Colormap","Analysis","Image Display","Peaks Plot","Labels"];
+            itemTitles = ["Images","Regions","Colormap","Channel Display","Analysis","Image Display","Peaks Plot","Labels"];
 
             for i = 1:numel(itemTitles)
                 obj.SettingsAccordion.addItem("Title",itemTitles(i),...
@@ -340,6 +343,7 @@ classdef GUI < handle
             % Set up SettingsUI struct
             obj.SettingsUI = struct(...
                 "Display",struct(),...
+                "ChannelDisplay",struct(),...
                 "Analysis",struct(),...
                 "PeaksPlot",struct(),...
                 "Box",struct());
@@ -347,6 +351,10 @@ classdef GUI < handle
             % --- Colormap ---
             desmostorm.Log.INFO("Setting up Colormap controls...");
             try obj.setupColormapControls(); catch ME, desmostorm.Log.ERROR(ME); rethrow(ME); end
+
+            % --- Channel Display ---
+            desmostorm.Log.INFO("Setting up Channel Display controls...");
+            try obj.setupChannelDisplayControls(); catch ME, desmostorm.Log.ERROR(ME); rethrow(ME); end
 
             % --- Analysis ---
             desmostorm.Log.INFO("Setting up Analysis controls...");
@@ -460,6 +468,36 @@ classdef GUI < handle
             obj.ColormapTree.SelectedNodes = obj.ColormapTree.findobj("NodeData",colormapName);
             % and set it as the colormap of the example colormap image
             obj.ExampleColormapAxes.Colormap = obj.Settings.Display.Colormap;
+        end
+
+        function setupChannelDisplayControls(obj)
+            item = obj.SettingsAccordion.getItem("Channel Display");
+            set(item.Pane,...
+                "RowHeight",{'fit'},...
+                "ColumnWidth",{'fit','1x'},...
+                "RowSpacing",5,...
+                "ColumnSpacing",5);
+
+            uilabel(item.Pane,...
+                "Text","Color mode",...
+                "FontColor",[0.85 0.85 0.85]);
+
+            % obj.SettingsUI.ChannelDisplay.ColorModeDropDown = uidropdown(item.Pane,...
+            %     "Items",["colors","luts"],...
+            %     "Value",obj.Settings.Display.ChannelColorMode,...
+            %     "ValueChangedFcn",@(o,~) obj.ChannelColorModeChanged(o));
+
+
+            obj.SettingsUI.ChannelDisplay.ColorModeDropDown = uidropdown(item.Pane,...
+                "Items",["colors","luts"],...
+                "Value",obj.Settings.Display.ChannelColorMode,...
+                "ValueChangedFcn",@(o,~) obj.DisplaySettingsChanged(o,"ChannelColorMode"));
+
+            obj.SettingsUI.ChannelDisplay.ColorModeDropDown.Layout.Row = 1;
+            obj.SettingsUI.ChannelDisplay.ColorModeDropDown.Layout.Column = 2;
+
+            obj.syncChannelColorControlCount();
+            obj.updateChannelColorControlRows(0);
         end
 
         function setupAnalysisControls(obj)
@@ -662,6 +700,8 @@ classdef GUI < handle
             obj.Ax.Tools.Pick.BoxSelectionChangedFcn = @(~,d) obj.onBoxSelectionChanged(d);
 
             obj.axesL(1) = addlistener(obj.Ax,'C','PostSet',@(~,~) obj.onImageViewerChannelChanged());
+            obj.axesL(2) = addlistener(obj.Ax,'ComponentColorMode','PostSet',@(~,~) obj.onImageViewerChannelDisplayChanged());
+            obj.axesL(3) = addlistener(obj.Ax,'ComponentColors','PostSet',@(~,~) obj.onImageViewerChannelDisplayChanged());
 
             % set the box size for Pick tool
             obj.Ax.Tools.Pick.BoxSize = obj.Settings.Analysis.BoxSize;
@@ -897,12 +937,12 @@ classdef GUI < handle
             obj.ColormapTree.SelectedNodes = obj.ColormapTree.findobj("NodeData",cmapName);
             obj.ExampleColormapAxes.Colormap = cmap;
             if ~isempty(obj.Project)
-                obj.applyProjectChannelColormapsToAxes();
+                obj.applyProjectChannelDisplayToAxes();
                 obj.syncColormapSelectorToChannel();
             else
-                obj.Ax.Colormap = cmap;
-                obj.RegionViewer.Colormap = cmap;
+                obj.ExampleColormapAxes.Colormap = cmap;
             end
+            obj.refreshChannelDisplayControls();
             % set axes limits so that colorbar image fills axes area
             set(obj.ExampleColormapAxes,"YLim",[0.5 50.5],"XLim",[0.5 256.5]);
             % Analysis
@@ -1021,6 +1061,7 @@ classdef GUI < handle
             obj.clearRegionLinescanPlot();
             obj.clearRegionSummaryTable();
             obj.resetIntensitySliders();
+            obj.refreshChannelDisplayControls();
             obj.clearLabelsTree();
         end
 
@@ -1037,8 +1078,121 @@ classdef GUI < handle
 
             n = min(obj.Project.MaxSizeC,obj.Ax.NumComponents);
             for C = 1:n
-                obj.Ax.setColormap(obj.Project.getChannelColormap(C),C);
+                obj.Ax.ComponentColormaps{C} = obj.Project.getChannelColormap(C);
             end
+        end
+
+        function applyProjectChannelColorsToAxes(obj)
+        %APPLYPROJECTCHANNELCOLORSTOAXES Apply saved project color names to ImageViewer
+            if isempty(obj.Project) || isempty(obj.Ax) || ~isvalid(obj.Ax)
+                return
+            end
+
+            n = min(obj.Project.MaxSizeC,obj.Ax.NumComponents);
+            for C = 1:n
+                obj.Ax.ComponentColors{C} = obj.Project.getChannelColorName(C);
+            end
+        end
+
+        function applyProjectChannelDisplayToAxes(obj)
+        %APPLYPROJECTCHANNELDISPLAYTOAXES Apply project display choices and settings mode
+            if isempty(obj.Project) || isempty(obj.Ax) || ~isvalid(obj.Ax)
+                return
+            end
+
+            % obj.isSyncingChannelDisplay = true;
+            % cleanup = onCleanup(@() obj.clearChannelDisplaySyncFlag());
+
+            obj.applyProjectChannelColormapsToAxes();
+            obj.applyProjectChannelColorsToAxes();
+        end
+
+        function refreshChannelDisplayControls(obj)
+        %REFRESHCHANNELDISPLAYCONTROLS Sync Channel Display controls to project and active image
+            obj.syncChannelColorControlCount();
+
+            if isempty(obj.SettingsUI) || ~isfield(obj.SettingsUI,'ChannelDisplay')
+                return
+            end
+
+            % obj.isSyncingChannelDisplay = true;
+            % cleanup = onCleanup(@() obj.clearChannelDisplaySyncFlag());
+
+            obj.SettingsUI.ChannelDisplay.ColorModeDropDown.Value = obj.Settings.Display.ChannelColorMode;
+
+            nVisible = 0;
+            if ~isempty(obj.Project)
+                img = obj.Project.ActiveImage;
+                if ~isempty(img)
+                    nVisible = min(numel(obj.ChannelColorDropDowns),img.SizeC);
+                end
+            end
+
+            for C = 1:numel(obj.ChannelColorDropDowns)
+                if C > nVisible
+                    obj.ChannelColorLabels(C).Visible = 'off';
+                    obj.ChannelColorDropDowns(C).Visible = 'off';
+                    continue
+                end
+
+                obj.ChannelColorLabels(C).Visible = 'on';
+                obj.ChannelColorDropDowns(C).Visible = 'on';
+                obj.ChannelColorDropDowns(C).Value = obj.Project.getChannelColorName(C);
+            end
+
+            obj.updateChannelColorControlRows(nVisible);
+        end
+
+        function syncChannelColorControlCount(obj)
+        %SYNCCHANNELCOLORCONTROLCOUNT Match color dropdown count to project channel capacity
+            nDesired = 1;
+            if ~isempty(obj.Project)
+                nDesired = max(obj.Project.MaxSizeC,1);
+            end
+
+            nCurrent = numel(obj.ChannelColorDropDowns);
+            if nCurrent > nDesired
+                delete(obj.ChannelColorLabels(nDesired+1:end));
+                delete(obj.ChannelColorDropDowns(nDesired+1:end));
+                obj.ChannelColorLabels = obj.ChannelColorLabels(1:nDesired);
+                obj.ChannelColorDropDowns = obj.ChannelColorDropDowns(1:nDesired);
+                nCurrent = nDesired;
+            end
+
+            item = obj.SettingsAccordion.getItem("Channel Display");
+            colorNames = string(matlabx.ui.axes.ImageAxes.getColorNames());
+            for C = nCurrent+1:nDesired
+                obj.ChannelColorLabels(C) = uilabel(item.Pane,...
+                    "Text",sprintf("Channel %i",C),...
+                    "FontColor",[0.85 0.85 0.85]);
+
+                obj.ChannelColorDropDowns(C) = uidropdown(item.Pane,...
+                    "Items",colorNames,...
+                    "Value",colorNames(1 + mod(C-1,numel(colorNames))),...
+                    "ValueChangedFcn",@(o,~) obj.ChannelColorChanged(o,C));
+            end
+
+            for C = 1:numel(obj.ChannelColorDropDowns)
+                obj.ChannelColorLabels(C).Layout.Row = C + 1;
+                obj.ChannelColorLabels(C).Layout.Column = 1;
+                obj.ChannelColorLabels(C).Text = sprintf("Channel %i",C);
+
+                obj.ChannelColorDropDowns(C).Layout.Row = C + 1;
+                obj.ChannelColorDropDowns(C).Layout.Column = 2;
+            end
+        end
+
+        function updateChannelColorControlRows(obj,nVisible)
+        %UPDATECHANNELCOLORCONTROLROWS Collapse unused Channel Display rows
+            item = obj.SettingsAccordion.getItem("Channel Display");
+            nRows = numel(obj.ChannelColorDropDowns);
+            nVisible = min(max(nVisible,0),nRows);
+
+            rowHeight = [{'fit'}, repmat({0},1,nRows)];
+            if nVisible > 0
+                rowHeight(2:(nVisible+1)) = repmat({'fit'},1,nVisible);
+            end
+            item.Pane.RowHeight = rowHeight;
         end
 
         function syncColormapSelectorToChannel(obj)
@@ -1088,6 +1242,11 @@ classdef GUI < handle
         %CLEARCOLORMAPSELECTIONSYNCFLAG Reset programmatic colormap-selection guard
             obj.isSyncingColormapSelection = false;
         end
+
+        % function clearChannelDisplaySyncFlag(obj)
+        % %CLEARCHANNELDISPLAYSYNCFLAG Reset programmatic channel-display guard
+        %     obj.isSyncingChannelDisplay = false;
+        % end
 
         function guialert(obj,opts)
             arguments
@@ -1143,13 +1302,30 @@ classdef GUI < handle
         %ONMAXSIZECCHANGED MaxSizeCChanged event callback
             obj.refreshIntensitySliders();
             obj.refreshRegionLinescanPlot();
-            obj.applyProjectChannelColormapsToAxes();
+            obj.applyProjectChannelDisplayToAxes();
             obj.syncColormapSelectorToChannel();
+            obj.refreshChannelDisplayControls();
         end
 
         function onImageViewerChannelChanged(obj)
         %ONIMAGEVIEWERCHANNELCHANGED Sync colormap selector to active image channel
             obj.syncColormapSelectorToChannel();
+        end
+
+        function onImageViewerChannelDisplayChanged(obj)
+        %ONIMAGEVIEWERCHANNELDISPLAYCHANGED Sync context-menu display changes to project/settings
+            if isempty(obj.Project) || isempty(obj.Ax)
+                return
+            end
+
+            colors = obj.Ax.ComponentColors;
+            n = min(numel(colors),obj.Project.MaxSizeC);
+            for C = 1:n
+                obj.Project.setChannelColor(C,string(colors{C}));
+            end
+
+            obj.Settings.Display.ChannelColorMode = string(obj.Ax.ComponentColorMode);
+            obj.refreshChannelDisplayControls();
         end
 
         % --- UI SYNC DRIVER ---
@@ -1219,8 +1395,9 @@ classdef GUI < handle
 
             % update ImageViewer ImageData, C, and CLims
             set(obj.Ax,'ImageData',img.ImageData,'C',C,'ComponentCLims',clims);
-            obj.applyProjectChannelColormapsToAxes();
+            obj.applyProjectChannelDisplayToAxes();
             obj.syncColormapSelectorToChannel();
+            obj.refreshChannelDisplayControls();
             obj.refreshIntensitySliders();
         end
 
@@ -1801,6 +1978,9 @@ classdef GUI < handle
 
         function onDisplayChanged(obj,e)
             switch e.Name
+                case "ChannelColorMode"
+                    obj.Ax.ComponentColorMode = char(obj.Settings.Display.ChannelColorMode);
+                    obj.refreshChannelDisplayControls();
                 case "Colormap"
                     cmap = obj.Settings.Display.Colormap;
                     obj.ExampleColormapAxes.Colormap = cmap;
@@ -1814,15 +1994,7 @@ classdef GUI < handle
                     end
 
                     if C <= obj.Ax.NumComponents
-                        obj.Ax.setColormap(cmap,C);
-                    else
-                        obj.Ax.Colormap = cmap;
-                    end
-
-                    % if no image data is present yet, the RegionViewer is
-                    % not reached by ComponentColormaps linking.
-                    if obj.RegionViewer.NumComponents == 0
-                        obj.RegionViewer.Colormap = cmap;
+                        obj.Ax.ComponentColormaps{C} = cmap;
                     end
                 case "BoxFaceColor"
                     %set(obj.ROI, 'FaceColor', obj.Settings.Display.BoxFaceColor);
@@ -1931,6 +2103,19 @@ classdef GUI < handle
         function DisplaySettingsChanged(obj,src,stgName)
             % apply the specified setting
             obj.Settings.Display.(stgName) = src.Value;
+        end
+
+        function ChannelColorChanged(obj,src,C)
+            if isempty(obj.Project)
+                return
+            end
+
+            colorName = string(src.Value);
+            obj.Project.setChannelColor(C,colorName);
+
+            if C <= obj.Ax.NumComponents
+                obj.Ax.ComponentColors{C} = colorName;
+            end
         end
 
     end
