@@ -75,6 +75,33 @@ classdef Preferences
             end
         end
 
+        function prefs = print()
+        %PRINT  Print all desmostorm preferences.
+        %
+        %   PRINT() lists every stored preference in the desmostorm
+        %   preference group.
+        %
+        %   PREFS = PRINT() also returns the preferences as a struct.
+
+            group = desmostorm.Preferences.Group;
+
+            if ~ispref(group)
+                prefs = struct();
+                fprintf('No desmostorm preferences found.\n');
+                return
+            end
+
+            prefs = getpref(group);
+            names = fieldnames(prefs);
+
+            if isempty(names)
+                fprintf('No desmostorm preferences found.\n');
+                return
+            end
+
+            matlabx.struct.prettyPrint(prefs);
+        end
+
     end
-    
+
 end

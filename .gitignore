@@ -58,3 +58,7 @@ user/**
 data/**
 !data/
 !data/.gitkeep
+
+logs/**
+!logs/
+!logs/.gitkeep

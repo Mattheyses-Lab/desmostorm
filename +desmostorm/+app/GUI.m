@@ -126,9 +126,10 @@ classdef GUI < handle
             end
 
             % --- Log ---
-            obj.Log = desmostorm.Log.get();
+            [obj.Log, logPath] = desmostorm.Log.startGUISession();
 
             desmostorm.Log.INFO("Starting DesmoSTORM...");
+            desmostorm.Log.INFO("Session log: " + logPath);
 
             % --- Settings ---
             desmostorm.Log.INFO("Loading settings...");
@@ -848,9 +849,13 @@ classdef GUI < handle
             % if ~isempty(obj.L), delete(obj.L(isvalid(obj.L))); end
 
             % delete the logger
-            % clear static facade first
-            desmostorm.Log.clear();
-            if ~isempty(obj.Log), delete(obj.Log(isvalid(obj.Log))); end
+            if ~isempty(obj.Log) && isvalid(obj.Log)
+                try obj.Log.flush(); catch, end
+                desmostorm.Log.clear();
+                delete(obj.Log);
+            else
+                desmostorm.Log.clear();
+            end
 
 
             if ~isempty(obj.projectL), delete(obj.projectL(isvalid(obj.projectL))); end

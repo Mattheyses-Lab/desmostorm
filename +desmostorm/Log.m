@@ -12,9 +12,15 @@ classdef Log
 %   log.setFileSink(logPath, true);
 %   log.setUISink(@(lines) appendToTextArea(LogTextArea, lines), true);
 %
+% Start a GUI session logger
+% --------------------------
+%   [log, logPath] = desmostorm.Log.startGUISession();
+%
 % Notes
 % -----
 % - Lazy-creates a single matlabx.logging.Logger for the current MATLAB session.
+% - startGUISession() replaces that logger with a fresh GUI-session logger
+%   and attaches a timestamped file sink under the app logs folder.
 % - Public wrapper methods auto-populate Source based on the caller if not provided.
 % - clear() removes the stored handle from the facade. If other references exist,
 %   the logger object itself will remain alive until those references are released.
@@ -35,6 +41,30 @@ classdef Log
             arguments
                 log (1,1) matlabx.logging.Logger
             end
+            desmostorm.Log.store_(log);
+        end
+
+        function [log, logPath] = startGUISession(opts)
+        %STARTGUISESSION Start a fresh logger for an interactive GUI run.
+        %
+        %   [LOG, LOGPATH] = STARTGUISESSION() clears any logger currently
+        %   owned by the facade, creates a new logger, and attaches a file
+        %   sink at a timestamped path under the app-level logs folder.
+
+            arguments
+                opts.LogFile (1,1) string = string(desmostorm.Paths.logFile("gui"))
+            end
+
+            oldLog = desmostorm.Log.peek_();
+            if ~isempty(oldLog) && isvalid(oldLog)
+                try oldLog.flush(); catch, end
+                delete(oldLog);
+            end
+
+            log = matlabx.logging.Logger();
+            logPath = opts.LogFile;
+            log.setFileSink(char(logPath), true);
+
             desmostorm.Log.store_(log);
         end
 

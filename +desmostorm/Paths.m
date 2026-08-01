@@ -32,6 +32,20 @@ classdef Paths
             p = fullfile(desmostorm.Paths.assets,'ml');
         end
 
+        function p = logs(varargin)
+            p = fullfile(desmostorm.Paths.root(), 'logs', varargin{:});
+        end
+
+        function p = logFile(stem)
+            arguments
+                stem (1,1) string = "session"
+            end
+
+            timestamp = string(datetime('now', 'Format', 'yyyyMMdd_HHmmss_SSS'));
+            fileName = sprintf('desmostorm_%s_%s.log', char(stem), char(timestamp));
+            p = desmostorm.Paths.logs(fileName);
+        end
+
         function p = external(varargin)
             p = fullfile(desmostorm.Paths.root(), 'external', varargin{:});
         end
