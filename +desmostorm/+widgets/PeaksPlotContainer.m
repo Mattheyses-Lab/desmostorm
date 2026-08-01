@@ -1,291 +1,3 @@
-% classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
-% 
-% 
-%     %% data used to build the plot
-%     properties(AbortSet = true)
-%         % PeaksData object, empty by default
-%         Data desmostorm.analysis.PeaksData = desmostorm.analysis.PeaksData.empty()
-%     end
-% 
-%     %% plot appearance properties
-%     properties(AbortSet)
-%         % title of the chart displayed at the top of the axes
-%         Title (1,:) char = 'Untitled'
-%         % color of axes and title text
-%         FontColor (1,3) double = [0 0 0]
-%         % name of the axes font for titles and labels, defaul Arial
-%         FontName (1,:) char = 'Arial'
-%         % color of axes axis lines
-%         ForegroundColor (1,3) double = [0 0 0]
-%         % label of the x-axis
-%         XLabel (1,:) char = 'X'
-%         % label of the y-axis
-%         YLabel (1,:) char = 'Y'
-%         % size of the various text objects
-%         FontSize (1,1) double = 12
-%         % width of raw signal line
-%         RawLineWidth (1,1) double = 1
-%         % color of raw signal line
-%         RawLineColor (1,3) double = [0.5 0.5 0.5]
-%         % width of smoothed signal line
-%         SmoothLineWidth (1,1) double = 1
-%         % color of smoothed signal line
-%         SmoothLineColor (1,3) double = [0 0 0]
-%     end
-% 
-%     %% graphics components
-%     properties(Access = private,Transient,NonCopyable)
-%         Grid (1,1) matlab.ui.container.GridLayout
-%         MainAxes (1,1) matlab.ui.control.UIAxes
-%         ProfileRaw (1,1) matlab.graphics.primitive.Line
-%         Profile (1,1) matlab.graphics.primitive.Line
-%         PeakVerticalLines (1,1) matlab.graphics.primitive.Line
-%         PeakToPeakLines (1,1) matlab.graphics.primitive.Line
-%         PeakWidthLines (1,1) matlab.graphics.primitive.Line
-%         PeakBorderLines (1,1) matlab.graphics.primitive.Line
-%         WidthLabels (:,1) matlab.graphics.primitive.Text
-%         PeakToPeakLabels (:,1) matlab.graphics.primitive.Text
-%         AxesTitle (1,1) matlab.graphics.primitive.Text
-%     end
-% 
-%     %% protected methods - setup(), update(), etc...
-%     methods(Access = protected)
-%         function setup(obj)
-%             % grid layout manager to hold the components
-%             obj.Grid = uigridlayout(obj,...
-%                 [1,1],...
-%                 "ColumnWidth",{'1x'},...
-%                 "RowHeight",{'1x'},...
-%                 "BackgroundColor",[1 1 1],...
-%                 "Padding",[0 0 0 0]);
-%             % uiaxes to hold scatter plots
-%             obj.MainAxes = uiaxes(obj.Grid,...
-%                 "XLim",[0 1],...
-%                 "XLimMode","auto",...
-%                 "YLim",[0 1],...
-%                 "YLimMode","auto",...
-%                 "Clipping","off",...
-%                 "OuterPosition",[0 0 1 1],...
-%                 "Units","normalized");
-%             obj.MainAxes.Layout.Row = 1;
-%             obj.MainAxes.Layout.Column = 1;
-%             obj.MainAxes.XLabel.String = 'Distance';
-%             obj.MainAxes.YLabel.String = 'Intensity';
-%             % set up a title for the axes
-%             obj.AxesTitle = title(obj.MainAxes,'','BackgroundColor','none');
-%             % create empty line/text objects to show signal profile, peak annotations, distance/width values, etc.
-%             % the raw input signal (after normalization)
-%             obj.ProfileRaw = line(obj.MainAxes,...
-%                 NaN,NaN,...
-%                 'LineWidth',obj.RawLineWidth,...
-%                 'Color',obj.RawLineColor,...
-%                 'DisplayName','Raw');
-%             % the final signal used for peak detection (after appying optional smoothing)
-%             obj.Profile = line(obj.MainAxes,...
-%                 NaN,NaN,...
-%                 'LineWidth',obj.SmoothLineWidth,...
-%                 'Color',obj.SmoothLineColor,...
-%                 'DisplayName','Smoothed');
-%             % dashed vertical lines showing peak locations, from baseline to maximum value of normalized/smoothed signal
-%             obj.PeakVerticalLines = line(obj.MainAxes,...
-%                 NaN,NaN,'LineWidth',0.5,'Color',[1 1 1],'LineStyle','--');
-%             obj.PeakVerticalLines.Annotation.LegendInformation.IconDisplayStyle = "off";
-%             % horizontal lines showing distances between peaks
-%             obj.PeakToPeakLines = line(obj.MainAxes,...
-%                 NaN,NaN,'LineWidth',0.5,'Color',[1 1 1],'LineStyle','-');
-%             obj.PeakToPeakLines.Annotation.LegendInformation.IconDisplayStyle = "off";
-%             % horizontal lines showing FWHM
-%             obj.PeakWidthLines = line(obj.MainAxes,...
-%                 NaN,NaN,'LineWidth',0.5,'Color',[1 1 1],'LineStyle','-');
-%             obj.PeakWidthLines.Annotation.LegendInformation.IconDisplayStyle = "off";
-%             % vertical lines showing peak borders, from baseline to signal
-%             obj.PeakBorderLines = line(obj.MainAxes,...
-%                 NaN,NaN,'LineWidth',0.5,'Color',[1 1 1],'LineStyle','-');
-%             obj.PeakBorderLines.Annotation.LegendInformation.IconDisplayStyle = "off";
-%             % empty label arrays for peak widths and distances
-%             obj.WidthLabels = matlab.graphics.primitive.Text.empty();
-%             obj.PeakToPeakLabels = matlab.graphics.primitive.Text.empty();
-%             % replace default toolbar with an empty one
-%             axtoolbar(obj.MainAxes,{});
-%             % use normalized units for the component, stretched to fill the container by default
-%             obj.Units = 'Normalized';
-%             obj.OuterPosition = [0 0 1 1];
-%         end
-% 
-%         function update(obj)
-%             % if we have non-empty data -> create/update graphics objects accordingly
-%             if ~isempty(obj.Data)
-%                 % get the SCALED output data (data multiplied by user-defined scaling-factor)
-%                 S = obj.Data.OutputScaled;
-%                 % signal profile lines
-%                 set(obj.ProfileRaw,'XData',S.X,'YData',S.YNorm);
-%                 set(obj.Profile,'XData',S.X,'YData',S.YSmooth);
-%                 % annotation lines
-%                 set(obj.PeakVerticalLines,'XData',S.VerticalLineXY(1,:),'YData',S.VerticalLineXY(2,:));
-%                 set(obj.PeakToPeakLines,'XData',S.PeakToPeakLineXY(1,:),'YData',S.PeakToPeakLineXY(2,:));
-%                 set(obj.PeakWidthLines,'XData',S.WidthLineXY(1,:),'YData',S.WidthLineXY(2,:));
-%                 set(obj.PeakBorderLines,'XData',S.BorderLineXY(1,:),'YData',S.BorderLineXY(2,:));
-%                 % annotation labels
-%                 % --- width ---
-%                 % only keep existing labels with valid handles
-%                 if ~isempty(obj.WidthLabels), obj.WidthLabels = obj.WidthLabels(isvalid(obj.WidthLabels)); end
-%                 % determine how many peak width labels we need
-%                 nLabels = numel(obj.WidthLabels);
-%                 nNeeded = numel(S.PeakWidths);
-%                 % delete excess peak width labels as needed
-%                 if nLabels > nNeeded
-%                     delete(obj.WidthLabels(nNeeded+1:end,1));
-%                     obj.WidthLabels = obj.WidthLabels(1:nNeeded,1);
-%                 end
-%                 % --- peak distance ---
-%                 % only keep existing labels with valid handles
-%                 if ~isempty(obj.PeakToPeakLabels)
-%                     obj.PeakToPeakLabels = obj.PeakToPeakLabels(isvalid(obj.PeakToPeakLabels)); 
-%                 end
-%                 % determine how many peak distance labels we need
-%                 nLabels = numel(obj.PeakToPeakLabels);
-%                 if numel(S.PeakLocations) > 0, nNeeded = numel(S.PeakLocations)-1; else, nNeeded = 0; end
-%                 % delete excess peak distance labels as needed
-%                 if nLabels > nNeeded
-%                     delete(obj.PeakToPeakLabels(nNeeded+1:end,1));
-%                     obj.PeakToPeakLabels = obj.PeakToPeakLabels(1:nNeeded,1);
-%                 end
-%                 % hold on so we can plot multiple objects with overwriting
-%                 hold(obj.MainAxes,"on");
-%                 % for each peak
-%                 for i = 1:numel(S.PeakLocations)
-%                     % create new peak width labels as needed
-%                     if numel(obj.WidthLabels) < i, obj.WidthLabels(i) = text("Parent",obj.MainAxes); end
-%                     % update peak width labels
-%                     set(obj.WidthLabels(i),...
-%                         'Position',S.WidthLabelXY(i,:),...
-%                         'Color',obj.ForegroundColor,...
-%                         'BackgroundColor',[obj.BackgroundColor],...
-%                         'EdgeColor',obj.ForegroundColor,...
-%                         'String',sprintf('%.2f %s',S.PeakWidths(i),obj.Data.DistanceUnit),...
-%                         'VerticalAlignment','middle',...
-%                         'HorizontalAlignment','center',...
-%                         'FontSize',obj.FontSize)
-%                     % break loop if i == (num peaks - 1)
-%                     if i==numel(S.PeakLocations), continue; end
-%                     % create new peak distance label if needed
-%                     if numel(obj.PeakToPeakLabels) < i, obj.PeakToPeakLabels(i) = text("Parent",obj.MainAxes); end
-%                     % update peak distance label properties
-%                     set(obj.PeakToPeakLabels(i),...
-%                         'Position',S.PeakToPeakLabelXY(i,:),...
-%                         'Color',obj.ForegroundColor,...
-%                         'BackgroundColor',[obj.BackgroundColor],...
-%                         'EdgeColor',obj.ForegroundColor,...
-%                         'String',sprintf('%.2f %s',S.PeakDistances(i),obj.Data.DistanceUnit),...
-%                         'VerticalAlignment','middle',...
-%                         'HorizontalAlignment','center',...
-%                         'FontSize',obj.FontSize);
-%                 end
-%                 % release hold
-%                 hold(obj.MainAxes,"off");
-%             else % otherwise -> set all coordinate data to empty, delete all labels, replace with empty placeholders
-%                 % signal profile lines
-%                 set(obj.ProfileRaw,'XData',[],'YData',[]);
-%                 set(obj.Profile,'XData',[],'YData',[]);
-%                 % annotation lines
-%                 set(obj.PeakVerticalLines,'XData',[],'YData',[]);
-%                 set(obj.PeakToPeakLines,'XData',[],'YData',[]);
-%                 set(obj.PeakWidthLines,'XData',[],'YData',[]);
-%                 set(obj.PeakBorderLines,'XData',[],'YData',[]);
-%                 % width labels
-%                 delete(obj.WidthLabels(:));
-%                 obj.WidthLabels = matlab.graphics.primitive.Text.empty();
-%                 % peak distance labels
-%                 delete(obj.PeakToPeakLabels(:));
-%                 obj.PeakToPeakLabels = matlab.graphics.primitive.Text.empty();
-%             end
-%             % --- update various axes components ---
-%             % text displayed in the title
-%             obj.AxesTitle.String = obj.Title;
-%             % color of the title font
-%             obj.AxesTitle.Color = obj.ForegroundColor;
-%             % visibility of the title text
-%             obj.AxesTitle.Visible = 'on';
-%             % title font size
-%             obj.AxesTitle.FontSize = obj.FontSize;
-%             % axes font name
-%             obj.MainAxes.FontName = obj.FontName;  
-%             % grid background color
-%             obj.Grid.BackgroundColor = obj.BackgroundColor;
-%             % axes background color
-%             obj.MainAxes.Color = obj.BackgroundColor;
-%             % x-axis line color
-%             obj.MainAxes.XColor = obj.ForegroundColor;
-%             % y-axis line color
-%             obj.MainAxes.YColor = obj.ForegroundColor;
-%             % x-axis label font color
-%             obj.MainAxes.XLabel.Color = obj.ForegroundColor;
-%             % y-axis label font color
-%             obj.MainAxes.YLabel.Color = obj.ForegroundColor;
-%             % x-axis label text
-%             obj.MainAxes.XLabel.String = obj.XLabel;
-%             % y-axis label text
-%             obj.MainAxes.YLabel.String = obj.YLabel;
-%             % axes font size
-%             obj.MainAxes.FontSize = obj.FontSize;
-%             % signal profile lines
-%             set(obj.ProfileRaw,'Color',obj.RawLineColor,'LineWidth',obj.RawLineWidth);
-%             set(obj.Profile,'Color',obj.SmoothLineColor,'LineWidth',obj.SmoothLineWidth);
-%             % annotation lines
-%             set([obj.PeakVerticalLines,obj.PeakToPeakLines,obj.PeakWidthLines,obj.PeakBorderLines],...
-%                 'Color',obj.ForegroundColor,...
-%                 'LineWidth',1);
-%             % annotation labels
-%             set([obj.WidthLabels; obj.PeakToPeakLabels], ...
-%                 'Color',obj.ForegroundColor);
-%         end
-%     end
-% 
-%     %% public-facing helpers
-%     methods
-%         function export(obj,filename,opts)
-%             arguments
-%                 obj (1,1) desmostorm.widgets.PeaksPlotContainer
-%                 filename (1,:) char = 'peaks-plot.pdf'
-%                 opts.ContentType = "vector"
-%                 opts.Append = false
-%                 % BackgroundColor - "current" (default) | "none" | RGB triplet | "r" | "g" | "b" | ...
-%                 opts.BackgroundColor = [1 1 1]
-%             end
-% 
-%             exportgraphics(obj.MainAxes,filename,...
-%                 "ContentType",opts.ContentType,...
-%                 "Append",opts.Append,...
-%                 "BackgroundColor",opts.BackgroundColor,...
-%                 "Units","inches",...
-%                 "Width",6.5,...
-%                 "Height",3,...
-%                 "PreserveAspectRatio","off")
-%         end
-%     end
-% 
-%     %% static helpers
-%     methods (Static)
-%         function [peaksData,peaksPlot] = demo()
-%             % generate some random sample data
-%             [X,Y] = desmostorm.analysis.PeaksData.generateRandomGaussPeaks(1001,10,0.2);
-%             % create an instance of PeaksData
-%             peaksData = desmostorm.analysis.PeaksData(Y,X,...
-%                 "MinPeakHeight",0.2,...
-%                 "MinPeakDistance",25,...
-%                 "PeakSmoothing",15,...
-%                 "MinPeakProminence",0.05,...
-%                 "PeakSmoothing",15,...
-%                 "Normalize",true);
-%             % create new figure
-%             fig = uifigure("WindowStyle","alwaysontop");
-%             % create a PeaksPlotContainer in the figure
-%             peaksPlot = desmostorm.widgets.PeaksPlotContainer(fig,'Data',peaksData);
-%         end
-%     end
-% 
-% end
-
 classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
 
     
@@ -307,8 +19,34 @@ classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
         FontName (1,:) char = 'Arial'
         % size of the various text objects
         FontSize (1,1) double = 12
+        % size of peak annotation label text
+        AnnotationsFontSize (1,1) double = 10
+        % margin around peak annotation label text
+        AnnotationsMargin (1,1) double = 1
         % color of axes axis lines
         ForegroundColor (1,3) double = [0 0 0]
+        % color of peak annotation lines
+        AnnotationsColor (1,3) double = [0 0 0]
+        % optional per-plot peak annotation line colors
+        AnnotationsColors (:,3) double = zeros(0,3)
+        % auto matches annotations to each plot color; manual uses AnnotationColor
+        AnnotationColorMode (1,:) char {mustBeMember(AnnotationColorMode,{'auto','manual'})} = 'auto'
+        % single annotation color used when AnnotationColorMode is manual
+        AnnotationColor (1,3) double {mustBeInRange(AnnotationColor,0,1)} = [0 0 0]
+        % base color applied to child PeaksPlot objects in auto color mode
+        Color (1,3) double {mustBeInRange(Color,0,1)} = [0 0 0]
+        % optional per-plot base colors
+        Colors (:,3) double {mustBeInRange(Colors,0,1)} = zeros(0,3)
+        % auto derives object colors from Color; manual uses per-object colors
+        ColorMode (1,:) char {mustBeMember(ColorMode,{'auto','manual'})} = 'auto'
+        % auto uses default object alpha values; manual uses per-object alpha values
+        AlphaMode (1,:) char {mustBeMember(AlphaMode,{'auto','manual'})} = 'auto'
+        % color of shaded peak areas in manual color mode
+        PeakAreaColor (1,3) double {mustBeInRange(PeakAreaColor,0,1)} = [0 0 0]
+        % optional per-plot shaded peak area colors in manual color mode
+        PeakAreaColors (:,3) double {mustBeInRange(PeakAreaColors,0,1)} = zeros(0,3)
+        % alpha of shaded peak areas in manual alpha mode
+        PeakAreaAlpha (1,1) double {mustBeInRange(PeakAreaAlpha,0,1)} = 0
         % label of the x-axis
         XLabel (1,:) char = 'X'
         % label of the y-axis
@@ -322,14 +60,39 @@ classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
         RawLineWidth (1,1) double = 1
         % color of raw signal line
         RawLineColor (1,3) double = [0.5 0.5 0.5]
+        % optional per-plot raw signal line colors
+        RawLineColors (:,3) double = zeros(0,3)
         % width of smoothed signal line
         SmoothLineWidth (1,1) double = 1
         % color of smoothed signal line
         SmoothLineColor (1,3) double = [0 0 0]
+        % optional per-plot smoothed signal line colors
+        SmoothLineColors (:,3) double = zeros(0,3)
+        % color cycle used for overlaid scans when per-plot colors are not supplied
+        ColorOrder (:,3) double = [ ...
+            0.0000 0.4470 0.7410; ...
+            0.8500 0.3250 0.0980; ...
+            0.9290 0.6940 0.1250; ...
+            0.4940 0.1840 0.5560; ...
+            0.4660 0.6740 0.1880; ...
+            0.3010 0.7450 0.9330; ...
+            0.6350 0.0780 0.1840]
         % visibility of the peak FWHM annotations
         WidthAnnotations (1,1) matlab.lang.OnOffSwitchState = "on"
+        % display mode for peak FWHM annotations
+        WidthAnnotationsMode (1,:) char {mustBeMember(WidthAnnotationsMode,{'normal','hover'})} = 'normal'
         % visibility of the peak distance annotations
         DistanceAnnotations (1,1) matlab.lang.OnOffSwitchState = "on"
+        % display mode for peak distance annotations
+        DistanceAnnotationsMode (1,:) char {mustBeMember(DistanceAnnotationsMode,{'data','lanes'})} = 'lanes'
+        % base fraction of the nice data axis range reserved above the top tick for distance annotation lanes
+        DistanceAnnotationBaseBandFraction (1,1) double {mustBeNonnegative} = 0.10
+        % additional annotation-band fraction added for each extra lane
+        DistanceAnnotationLaneBandFraction (1,1) double {mustBeNonnegative} = 0.075
+        % maximum annotation-band fraction reserved above the top tick
+        DistanceAnnotationBandFraction (1,1) double {mustBeNonnegative} = 0.50
+        % target number of y-axis ticks when distance annotation lanes are active
+        DistanceAnnotationTargetTicks (1,1) double {mustBeInteger,mustBePositive} = 5
     end
 
 
@@ -339,6 +102,8 @@ classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
         MainAxes    (1,1) matlab.ui.control.UIAxes
         PeaksPlot   (:,1) desmostorm.widgets.PeaksPlot
         AxesTitle   (1,1) matlab.graphics.primitive.Text
+        Hub          matlabx.ui.interaction.FigureEventHub
+        HubID        double = NaN
     end
 
     %% protected methods - setup(), update(), etc...
@@ -367,8 +132,8 @@ classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
             obj.MainAxes.Layout.Column = 1;
             obj.MainAxes.XLabel.String = 'Distance';
             obj.MainAxes.YLabel.String = 'Intensity';
-            % the dedicated class for our PeaksData plot
-            obj.PeaksPlot = desmostorm.widgets.PeaksPlot(obj.MainAxes,desmostorm.analysis.PeaksData.empty());
+            % PeaksPlot instances are created lazily to match Data length.
+            obj.PeaksPlot = desmostorm.widgets.PeaksPlot.empty(0,1);
             % set up a title for the axes
             obj.AxesTitle = title(obj.MainAxes,'',...
                 "BackgroundColor","none",...
@@ -380,21 +145,46 @@ classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
             % use normalized units for the component, stretched to fill the container by default
             obj.Units = 'Normalized';
             obj.OuterPosition = [0 0 1 1];
+            % Register once with the figure-level event hub for lightweight hover behavior.
+            obj.registerFigureEventHub();
         end
         
         function update(obj)
+            obj.syncPeaksPlotCount();
+
             % --- PeaksPlot properties ---
-            set(obj.PeaksPlot,...
-                "FontSize",             obj.FontSize,...
-                "RawLineColor",         obj.RawLineColor,...
-                "RawLineWidth",         obj.RawLineWidth,...
-                "SmoothLineColor",      obj.SmoothLineColor,...
-                "SmoothLineWidth",      obj.SmoothLineWidth,...
-                "BackgroundColor",      obj.BackgroundColor,...
-                "ForegroundColor",      obj.ForegroundColor,...
-                "DistanceAnnotations",  obj.DistanceAnnotations,...
-                "WidthAnnotations",     obj.WidthAnnotations);
-            obj.PeaksPlot.Data = obj.Data;
+            if ~isempty(obj.PeaksPlot)
+                laneY = obj.getDistanceAnnotationLanes();
+                set(obj.PeaksPlot,...
+                    "FontName",             obj.FontName,...
+                    "FontSize",             obj.FontSize,...
+                    "AnnotationsFontSize",  obj.AnnotationsFontSize,...
+                    "AnnotationsMargin",    obj.AnnotationsMargin,...
+                    "RawLineWidth",         obj.RawLineWidth,...
+                    "SmoothLineWidth",      obj.SmoothLineWidth,...
+                    "BackgroundColor",      obj.BackgroundColor,...
+                    "ForegroundColor",      obj.ForegroundColor,...
+                    "AnnotationsColor",     obj.AnnotationsColor,...
+                    "ColorMode",            obj.ColorMode,...
+                    "AlphaMode",            obj.AlphaMode,...
+                    "PeakAreaAlpha",        obj.PeakAreaAlpha,...
+                    "DistanceAnnotations",  obj.DistanceAnnotations,...
+                    "DistanceAnnotationsMode", obj.DistanceAnnotationsMode,...
+                    "WidthAnnotations",     obj.WidthAnnotations,...
+                    "WidthAnnotationsMode", obj.WidthAnnotationsMode);
+
+                for i = 1:numel(obj.PeaksPlot)
+                    [color,rawColor,smoothColor,annotationsColor,areaColor] = obj.getPlotColors(i);
+                    set(obj.PeaksPlot(i), ...
+                        "Color",color, ...
+                        "RawLineColor",rawColor, ...
+                        "SmoothLineColor",smoothColor, ...
+                        "AnnotationsColor",annotationsColor, ...
+                        "PeakAreaColor",areaColor, ...
+                        "DistanceAnnotationY",laneY(i));
+                    obj.PeaksPlot(i).Data = obj.Data(i);
+                end
+            end
             % --- axes title properties ---
             obj.AxesTitle.String    = obj.Title; % title text
             obj.AxesTitle.Color     = obj.ForegroundColor; % title font color
@@ -412,11 +202,271 @@ classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
             obj.MainAxes.YLabel.String  = obj.YLabel; % y-axis label text
             obj.MainAxes.FontSize       = obj.FontSize;
             obj.MainAxes.FontName       = obj.FontName;
+            obj.updateDistanceAnnotationAxes();
+        end
+    end
+
+    %% private helpers
+    methods(Access=private)
+        function registerFigureEventHub(obj)
+            fig = ancestor(obj,'figure');
+            if isempty(fig) || ~isvalid(fig)
+                return
+            end
+
+            obj.Hub = matlabx.ui.interaction.FigureEventHub.ensure(fig);
+            obj.HubID = obj.Hub.register(obj, ...
+                "Priority",0, ...
+                "CaptureDuringDrag",false);
+        end
+
+        function unregisterFigureEventHub(obj)
+            if isempty(obj.Hub) || ~isvalid(obj.Hub) || ~isfinite(obj.HubID)
+                return
+            end
+
+            obj.Hub.unregister(obj.HubID);
+            obj.HubID = NaN;
+        end
+
+        function syncPeaksPlotCount(obj)
+            % Match the number of scalar PeaksPlot renderers to Data length.
+            nDesired = numel(obj.Data);
+            nCurrent = numel(obj.PeaksPlot);
+
+            if nCurrent > nDesired
+                delete(obj.PeaksPlot(nDesired+1:end));
+                if nDesired == 0
+                    obj.PeaksPlot = desmostorm.widgets.PeaksPlot.empty(0,1);
+                else
+                    obj.PeaksPlot = obj.PeaksPlot(1:nDesired);
+                end
+                nCurrent = nDesired;
+            end
+
+            for i = nCurrent+1:nDesired
+                obj.PeaksPlot(i,1) = desmostorm.widgets.PeaksPlot( ...
+                    obj.MainAxes, ...
+                    desmostorm.analysis.PeaksData.empty());
+            end
+        end
+
+        function clearPeakHighlights(obj)
+            for i = 1:numel(obj.PeaksPlot)
+                obj.PeaksPlot(i).clearPeakHighlight();
+            end
+        end
+
+        function clearPeakLocks(obj)
+            for i = 1:numel(obj.PeaksPlot)
+                obj.PeaksPlot(i).clearPeakLock();
+            end
+        end
+
+        function laneY = getDistanceAnnotationLanes(obj)
+            nPlots = numel(obj.PeaksPlot);
+            laneY = nan(nPlots,1);
+
+            if ~strcmp(obj.DistanceAnnotationsMode,'lanes') || isempty(obj.Data)
+                return
+            end
+
+            lims = obj.getDistanceAnnotationAxisLimits();
+            if isempty(lims)
+                return
+            end
+
+            bandMin = lims.TickLim(2);
+            bandMax = lims.DisplayLim(2);
+            if bandMax <= bandMin
+                return
+            end
+
+            bandHeight = bandMax - bandMin;
+            lanePad = 0.18*bandHeight;
+            laneStep = 0;
+            if nPlots > 1
+                laneStep = (bandHeight - 2*lanePad)/(nPlots - 1);
+            end
+
+            laneY(:) = bandMax - lanePad - laneStep*(0:nPlots-1);
+        end
+
+        function updateDistanceAnnotationAxes(obj)
+            if ~strcmp(obj.DistanceAnnotationsMode,'lanes') || isempty(obj.Data)
+                obj.MainAxes.YLimMode = "auto";
+                obj.MainAxes.YTickMode = "auto";
+                return
+            end
+
+            lims = obj.getDistanceAnnotationAxisLimits();
+            if isempty(lims)
+                return
+            end
+
+            obj.MainAxes.YLim = lims.DisplayLim;
+            obj.MainAxes.YTick = lims.Ticks;
+        end
+
+        function lims = getDistanceAnnotationAxisLimits(obj)
+            lims = [];
+            dataLim = obj.getDataYLim();
+            if isempty(dataLim)
+                return
+            end
+
+            bandFraction = obj.getDistanceAnnotationBandFraction();
+
+            lims = matlabx.ui.axes.niceLimitsAndTicks(dataLim, ...
+                IncludeZero=true, ...
+                TargetTicks=obj.DistanceAnnotationTargetTicks, ...
+                ExtendTopFraction=bandFraction);
+        end
+
+        function bandFraction = getDistanceAnnotationBandFraction(obj)
+            nLanes = max(numel(obj.PeaksPlot),1);
+            bandFraction = obj.DistanceAnnotationBaseBandFraction + ...
+                obj.DistanceAnnotationLaneBandFraction*(nLanes - 1);
+            bandFraction = min(bandFraction,obj.DistanceAnnotationBandFraction);
+        end
+
+        function dataLim = getDataYLim(obj)
+            yMin = Inf;
+            yMax = -Inf;
+
+            for i = 1:numel(obj.Data)
+                if isempty(obj.Data(i))
+                    continue
+                end
+
+                y = [obj.Data(i).SignalNorm; obj.Data(i).SignalSmooth];
+                y = y(isfinite(y));
+                if isempty(y)
+                    continue
+                end
+
+                yMin = min(yMin,min(y));
+                yMax = max(yMax,max(y));
+            end
+
+            if isinf(yMin) || isinf(yMax)
+                dataLim = [];
+            else
+                dataLim = [yMin yMax];
+            end
+        end
+
+        function xy = getAxesPoint(obj,E)
+            % Prefer the hub-provided current axes when available.
+            ax = obj.MainAxes;
+            if isprop(E,'CurrentAxes') && ~isempty(E.CurrentAxes) && isvalid(E.CurrentAxes)
+                if E.CurrentAxes == obj.MainAxes
+                    ax = E.CurrentAxes;
+                end
+            end
+
+            cp = ax.CurrentPoint;
+            xy = cp(1,1:2);
+        end
+
+        function claim = getPeakClaimAtPoint(obj,xy)
+            claim = struct( ...
+                "PlotIndex",NaN, ...
+                "PeakIndex",NaN, ...
+                "DistanceToPeak",Inf);
+
+            candidates = struct( ...
+                "PlotIndex",{}, ...
+                "PeakIndex",{}, ...
+                "DistanceToPeak",{});
+
+            for i = 1:numel(obj.PeaksPlot)
+                plotCandidates = obj.PeaksPlot(i).peakCandidatesAtPoint(xy);
+                for j = 1:numel(plotCandidates)
+                    candidates(end+1,1) = struct( ...
+                        "PlotIndex",i, ...
+                        "PeakIndex",plotCandidates(j).PeakIndex, ...
+                        "DistanceToPeak",plotCandidates(j).DistanceToPeak); %#ok<AGROW>
+                end
+            end
+
+            if isempty(candidates)
+                return
+            end
+
+            [~,idx] = min([candidates.DistanceToPeak]);
+            claim = candidates(idx);
+        end
+
+        function tf = isDescendantOfMainAxes(obj,tgt)
+            tf = false;
+
+            while isprop(tgt,'Parent')
+                tgt = tgt.Parent;
+                if isempty(tgt) || ~isvalid(tgt)
+                    return
+                end
+
+                if tgt == obj.MainAxes
+                    tf = true;
+                    return
+                end
+            end
+        end
+
+        function [color,rawColor,smoothColor,annotationsColor,areaColor] = getPlotColors(obj,idx)
+            % Use explicit per-plot colors when present, otherwise cycle overlays.
+            if idx <= size(obj.Colors,1)
+                color = obj.Colors(idx,:);
+            elseif idx <= size(obj.SmoothLineColors,1)
+                color = obj.SmoothLineColors(idx,:);
+            elseif numel(obj.Data) > 1
+                colorIdx = mod(idx-1,size(obj.ColorOrder,1)) + 1;
+                color = obj.ColorOrder(colorIdx,:);
+            else
+                color = obj.Color;
+            end
+
+            if idx <= size(obj.SmoothLineColors,1)
+                smoothColor = obj.SmoothLineColors(idx,:);
+            elseif strcmp(obj.ColorMode,'auto')
+                smoothColor = color;
+            else
+                smoothColor = obj.SmoothLineColor;
+            end
+
+            if idx <= size(obj.RawLineColors,1)
+                rawColor = obj.RawLineColors(idx,:);
+            elseif strcmp(obj.ColorMode,'auto')
+                rawColor = color;
+            else
+                rawColor = obj.RawLineColor;
+            end
+
+            if idx <= size(obj.AnnotationsColors,1)
+                annotationsColor = obj.AnnotationsColors(idx,:);
+            elseif strcmp(obj.AnnotationColorMode,'auto')
+                annotationsColor = color;
+            else
+                annotationsColor = obj.AnnotationColor;
+            end
+
+            if idx <= size(obj.PeakAreaColors,1)
+                areaColor = obj.PeakAreaColors(idx,:);
+            elseif strcmp(obj.ColorMode,'auto')
+                areaColor = color;
+            else
+                areaColor = obj.PeakAreaColor;
+            end
         end
     end
 
     %% public-facing helpers
     methods
+        function delete(obj)
+            obj.unregisterFigureEventHub();
+        end
+
         function export(obj,filename,opts)
             arguments
                 obj                         (1,1) desmostorm.widgets.PeaksPlotContainer
@@ -439,6 +489,66 @@ classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
                 "Width",opts.Width,...
                 "Height",opts.Height,...
                 "PreserveAspectRatio",opts.PreserveAspectRatio)
+        end
+    end
+
+    %% Hub-facing event handlers
+    methods
+        function tf = matches(obj,E)
+            if E.Kind == "Key" || isempty(obj.MainAxes) || ~isvalid(obj.MainAxes)
+                tf = false;
+                return
+            end
+
+            tgt = E.Target;
+            if isempty(tgt) || ~isvalid(tgt)
+                tf = false;
+                return
+            end
+
+            tf = tgt == obj.MainAxes || obj.isDescendantOfMainAxes(tgt);
+        end
+
+        function onMove(obj,E)
+            if isempty(obj.MainAxes) || ~isvalid(obj.MainAxes)
+                return
+            end
+
+            xy = obj.getAxesPoint(E);
+            claim = obj.getPeakClaimAtPoint(xy);
+
+            for i = 1:numel(obj.PeaksPlot)
+                if i == claim.PlotIndex
+                    obj.PeaksPlot(i).highlightPeak(claim.PeakIndex);
+                else
+                    obj.PeaksPlot(i).clearPeakHighlight();
+                end
+            end
+        end
+
+        function onDown(obj,E)
+            if obj.WidthAnnotations == "off"
+                return
+            end
+
+            xy = obj.getAxesPoint(E);
+            claim = obj.getPeakClaimAtPoint(xy);
+            if isnan(claim.PlotIndex)
+                obj.clearPeakLocks();
+                return
+            end
+
+            obj.PeaksPlot(claim.PlotIndex).togglePeakLock(claim.PeakIndex);
+        end
+
+        % No-ops required by FigureEventHub.
+        function onUp(~,~),     end
+        function onScroll(~,~), end
+        function onKey(~,~),    end
+        function onEnter(~,~),  end
+
+        function onLeave(obj,~)
+            obj.clearPeakHighlights();
         end
     end
 
@@ -492,6 +602,44 @@ classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
                 "Data",peaksData);
 
             matlabx.struct.prettyPrint(data);
+        end
+
+
+        function [peaksData,peaksPlotContainer] = demoOverlay(nScans)
+            arguments
+                nScans (1,1) double {mustBeInteger,mustBePositive} = 3
+            end
+
+            peaksData = desmostorm.analysis.PeaksData.empty(0,1);
+
+            for i = 1:nScans
+                [X,Y] = desmostorm.analysis.PeaksData.generateRandomGaussPeaks(...
+                    "N",1001,...
+                    "nPeaks",8,...
+                    "noiseSigma",0.04 + 0.02*i);
+
+                peaksData(i,1) = desmostorm.analysis.PeaksData(Y,X,...
+                    "MinPeakHeight",0.2,...
+                    "MinPeakDistance",25,...
+                    "PeakSmoothing",15,...
+                    "MinPeakProminence",0.05,...
+                    "Normalize",true);
+            end
+
+            pos = matlabx.UICal.centeredFigOuterPosition(750,350);
+
+            fig = uifigure(...
+                "WindowStyle","alwaysontop",...
+                "OuterPosition",pos);
+
+            g = uigridlayout(fig,[1,1],...
+                "ColumnWidth",{'1x'},...
+                "RowHeight",{'1x'},...
+                "Padding",[0 0 0 0]);
+
+            peaksPlotContainer = desmostorm.widgets.PeaksPlotContainer(g,...
+                "Data",peaksData,...
+                "Title",sprintf("%d overlaid linescans",nScans));
         end
 
 

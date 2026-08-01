@@ -38,6 +38,7 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
     properties(Dependent)
         SummaryTable (:,:) table
         PixelSize (1,1) desmostorm.model.units.PixelSize
+        Project
     end
 
     %% Lifecycle
@@ -123,14 +124,10 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
             out = obj.PixelSize.px2phys(in);
         end
 
-        function out = getParentProject(obj)
-            out = obj.Parent.Parent;
-        end
-
         function T = getChannelPeakStatsTable(obj)
             % --- peak stats table (for all channels) --- 
             % get max number of channels in the project
-            proj = obj.getParentProject();
+            proj = obj.Project;
             nChannels = proj.MaxSizeC;
             % cell array to hold tables for each channel
             channelTableCells = cell(1,nChannels);
@@ -228,6 +225,14 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
 
         function ps = get.PixelSize(obj)
             ps = obj.Parent.PixelSize;
+        end
+
+        function proj = get.Project(obj)
+            if isempty(obj.Parent) || isempty(obj.Parent.Parent)
+                proj = desmostorm.model.STORMProject.empty();
+            else
+                proj = obj.Parent.Parent;
+            end
         end
 
         function debug(obj)

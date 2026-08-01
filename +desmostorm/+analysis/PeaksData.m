@@ -58,14 +58,9 @@ classdef PeaksData
         RightPeakProminence  (:,1) double = []
     end
 
-    % plot annotation coordinates
+    % analysis geometry derived from detected peaks
     properties
-        BorderLineXY        (2,:) double = [NaN; NaN]
-        VerticalLineXY      (2,:) double = [NaN; NaN]
-        WidthLineXY         (2,:) double = [NaN; NaN]
-        PeakToPeakLineXY    (2,:) double = [NaN; NaN]
-        WidthLabelXY        (:,2) = [NaN NaN]
-        PeakToPeakLabelXY   (:,2) = [NaN NaN]
+        PeakGeometry struct = desmostorm.analysis.PeaksData.emptyPeakGeometry()
     end
 
     % output structs
@@ -148,27 +143,19 @@ classdef PeaksData
             obj.PeakWidths = out.PeakWidths;
             obj.PeakProminences = out.PeakProminences;
             obj.PeakDistances = out.PeakDistances;
-            % --- GET PLOT ANNOTATION COORDINATES ---
-            % set height for peak distance annotations based on maximum of smoothed signal
-            annotationsHeight = max(obj.SignalSmooth);
-            % get annotation coordinates
-            out = desmostorm.analysis.PeaksData.getAnnotationCoordinates( ...
+            % --- GET ANALYSIS GEOMETRY FOR PEAK WIDTHS/BORDERS ---
+            geom = desmostorm.analysis.PeaksData.getPeakGeometry( ...
                 obj.SignalSmooth, ...
                 obj.Location, ...
                 obj.PeakValues, ...
                 obj.PeakLocations, ...
                 obj.PeakProminences, ...
-                'WidthReference', obj.WidthReference, ...
-                'VerticalLinesHeight', annotationsHeight, ...
-                'PeakToPeakLinesHeight', annotationsHeight);
-            obj.BorderLineXY = out.BorderLineXY;
-            obj.VerticalLineXY = out.VerticalLineXY;
-            obj.WidthLineXY = out.WidthLineXY;
-            obj.PeakToPeakLineXY = out.PeakToPeakLineXY;
-            obj.WidthLabelXY = out.WidthLabelXY;
-            obj.PeakToPeakLabelXY = out.PeakToPeakLabelXY;
+                "WidthReference",obj.WidthReference);
+            obj.PeakGeometry = geom;
             % if required, replace PeakWidths from findpeaks() with those measured directly from the FWHM lines
-            if obj.RecomputeWidths, obj.PeakWidths = out.PeakWidths; end
+            if obj.RecomputeWidths && ~isempty(geom)
+                obj.PeakWidths = reshape([geom.Width],[],1);
+            end
 
             % --- COLLECT OUTPUT STATS FOR CENTRAL PEAK PAIR ---
             out = obj.getCentralPeakPairStats();
@@ -296,12 +283,7 @@ classdef PeaksData
             out.PeakWidths = obj.PeakWidths;
             out.PeakProminences = obj.PeakProminences;
             out.PeakDistances = obj.PeakDistances;
-            out.BorderLineXY = obj.BorderLineXY;
-            out.VerticalLineXY = obj.VerticalLineXY;
-            out.WidthLineXY = obj.WidthLineXY;
-            out.PeakToPeakLineXY = obj.PeakToPeakLineXY;
-            out.WidthLabelXY = obj.WidthLabelXY;
-            out.PeakToPeakLabelXY = obj.PeakToPeakLabelXY;
+            out.PeakGeometry = obj.PeakGeometry;
         end
 
         % package scaled output (multiplied by obj.DistanceScale)
@@ -311,12 +293,9 @@ classdef PeaksData
             out.PeakLocations = out.PeakLocations*obj.DistanceScale;
             out.PeakWidths = out.PeakWidths*obj.DistanceScale;
             out.PeakDistances = out.PeakDistances*obj.DistanceScale;
-            out.BorderLineXY(1,:) = out.BorderLineXY(1,:)*obj.DistanceScale;
-            out.VerticalLineXY(1,:) = out.VerticalLineXY(1,:)*obj.DistanceScale;
-            out.WidthLineXY(1,:) = out.WidthLineXY(1,:)*obj.DistanceScale;
-            out.PeakToPeakLineXY(1,:) = out.PeakToPeakLineXY(1,:)*obj.DistanceScale;
-            out.WidthLabelXY(:,1) = out.WidthLabelXY(:,1)*obj.DistanceScale;
-            out.PeakToPeakLabelXY(:,1) = out.PeakToPeakLabelXY(:,1)*obj.DistanceScale;
+            out.PeakGeometry = desmostorm.analysis.PeaksData.scalePeakGeometry( ...
+                out.PeakGeometry, ...
+                obj.DistanceScale);
         end
 
         % number of peaks
@@ -342,48 +321,6 @@ classdef PeaksData
 
 
     methods(Static)
-
-        % function out = detect(Signal, Location, MinPeakDistance, MinPeakHeight, MinPeakProminence, WidthReference)
-        %     arguments
-        %         Signal              (:,1) double
-        %         Location            (:,1) double
-        %         MinPeakDistance     (1,1) double
-        %         MinPeakHeight       (1,1) double
-        %         MinPeakProminence   (1,1) double
-        %         WidthReference      (1,:) char = 'halfheight'
-        %     end
-        %     % make sure signal has at least two more elements than the value of MinPeakDistance
-        %     if length(Signal) > (MinPeakDistance+1)
-        %         % 4th output is prominence for each peak, may use in future
-        %         [PeakValues,PeakLocations,PeakWidths,PeakProminences] = findpeaks(...
-        %             Signal,Location,...
-        %             'MinPeakHeight',MinPeakHeight,...
-        %             'MinPeakDistance',MinPeakDistance,...
-        %             'WidthReference',WidthReference,...
-        %             'MinPeakProminence',MinPeakProminence); % set higher to pick up fewer small peaks
-        % 
-        %         if numel(PeakLocations) > 1
-        %             PeakDistances = diff(PeakLocations);
-        %         else
-        %             PeakDistances = NaN;
-        %         end
-        %     else
-        %         PeakValues = [];
-        %         PeakLocations = [];
-        %         PeakWidths = [];
-        %         PeakProminences = [];
-        %         PeakDistances = [];
-        %     end
-        % 
-        %     % collect output
-        %     out = struct(...
-        %         'PeakValues',       PeakValues, ...
-        %         'PeakLocations',    PeakLocations, ...
-        %         'PeakWidths',       PeakWidths, ...
-        %         'PeakProminences',  PeakProminences, ...
-        %         'PeakDistances',    PeakDistances);
-        % 
-        % end
 
       function out = detect(Signal, Location, MinPeakDistance, MinPeakHeight, MinPeakProminence, WidthReference, opts)
             arguments
@@ -450,167 +387,198 @@ classdef PeaksData
             out = smooth(Signal,span);
         end
 
-        % get coordinates for plot annotations
-        function out = getAnnotationCoordinates(y,x,pks,locs,proms,opts)
+        function geom = getPeakGeometry(y,x,pks,locs,proms,opts)
             arguments
-                    y (:,1) double
-                    x (:,1) double
-                    pks (:,1) double
-                    locs (:,1) double
-                    proms (:,1) double
-                    opts.WidthReference (1,:) char = 'halfheight'
-                    opts.VerticalLinesHeight = 1
-                    opts.PeakToPeakLinesHeight = 0.9
+                y (:,1) double
+                x (:,1) double
+                pks (:,1) double
+                locs (:,1) double
+                proms (:,1) double
+                opts.WidthReference (1,:) char = 'halfheight'
+            end
+
+            geom = desmostorm.analysis.PeaksData.emptyPeakGeometry();
+            if isempty(locs)
+                return
+            end
+
+            peakIdx = desmostorm.analysis.PeaksData.getPeakIndices(x,locs);
+            borderIdx = desmostorm.analysis.PeaksData.getPeakBorderIndices(y,peakIdx);
+            widths = desmostorm.analysis.PeaksData.getPeakWidthIntersections( ...
+                y, ...
+                x, ...
+                peakIdx, ...
+                pks, ...
+                proms, ...
+                borderIdx(1:end-1), ...
+                borderIdx(2:end), ...
+                "WidthReference",opts.WidthReference);
+
+            nPeaks = numel(peakIdx);
+            geom = repmat(desmostorm.analysis.PeaksData.blankPeakGeometry(),nPeaks,1);
+
+            for i = 1:nPeaks
+                geom(i).PeakIndex = peakIdx(i);
+                geom(i).PeakLocation = x(peakIdx(i));
+                geom(i).PeakValue = pks(i);
+                geom(i).PeakProminence = proms(i);
+                geom(i).LeftBorderIndex = borderIdx(i);
+                geom(i).RightBorderIndex = borderIdx(i+1);
+                geom(i).LeftBorderLocation = x(borderIdx(i));
+                geom(i).RightBorderLocation = x(borderIdx(i+1));
+                geom(i).LeftBorderValue = y(borderIdx(i));
+                geom(i).RightBorderValue = y(borderIdx(i+1));
+                geom(i).WidthHeight = widths.WidthHeight(i);
+                geom(i).LeftWidthLocation = widths.LeftWidthLocation(i);
+                geom(i).RightWidthLocation = widths.RightWidthLocation(i);
+                geom(i).Width = widths.Width(i);
+            end
+        end
+
+        function peakIdx = getPeakIndices(x,locs)
+            arguments
+                x (:,1) double
+                locs (:,1) double
+            end
+
+            peakIdx = arrayfun(@(loc) find(x==loc,1),locs);
+            peakIdx = reshape(peakIdx,[],1);
+        end
+
+        function borderIdx = getPeakBorderIndices(y,peakIdx)
+            arguments
+                y (:,1) double
+                peakIdx (:,1) double
+            end
+
+            nPeaks = numel(peakIdx);
+            nSamples = numel(y);
+
+            if nPeaks == 0
+                borderIdx = zeros(0,1);
+                return
+            end
+
+            borderIdx = zeros(nPeaks+1,1);
+            borderIdx(1) = 1;
+            borderIdx(end) = nSamples;
+
+            for i = 1:nPeaks-1
+                segmentIdx = peakIdx(i):peakIdx(i+1);
+                [~,minIdx] = min(y(segmentIdx));
+                borderIdx(i+1) = segmentIdx(minIdx);
+            end
+        end
+
+        function out = getPeakWidthIntersections(y,x,peakIdx,pks,proms,leftBorderIdx,rightBorderIdx,opts)
+            arguments
+                y (:,1) double
+                x (:,1) double
+                peakIdx (:,1) double
+                pks (:,1) double
+                proms (:,1) double
+                leftBorderIdx (:,1) double
+                rightBorderIdx (:,1) double
+                opts.WidthReference (1,:) char = 'halfheight'
+            end
+
+            nPeaks = numel(peakIdx);
+
+            leftWidthLocation = nan(nPeaks,1);
+            rightWidthLocation = nan(nPeaks,1);
+            widthHeight = nan(nPeaks,1);
+            width = nan(nPeaks,1);
+
+            for i = 1:nPeaks
+                switch opts.WidthReference
+                    case 'halfheight'
+                        halfHeight = pks(i)/2;
+                    case 'halfprom'
+                        halfHeight = proms(i)/2;
                 end
-                % compute annotation line/label coordinates and store 
-                % in a structured format for plotting with line() and text()
 
-                % initialize output struct
-                out = struct( ...
-                    'WidthLineXY',          [], ...
-                    'VerticalLineXY',       [], ...
-                    'PeakToPeakLineXY',     [], ...
-                    'BorderLineXY',         [], ...
-                    'WidthLabelXY',         [], ...
-                    'PeakToPeakLabelXY',    [], ...
-                    'PeakWidths',           []);
+                leftBorder = leftBorderIdx(i);
+                rightBorder = rightBorderIdx(i);
 
-                if isempty(locs)
-                    return
-                end
+                idxL = find(y(leftBorder:peakIdx(i)) <= halfHeight,1,'last');
+                idxL = idxL + leftBorder - 1;
+                idxL = max(idxL,leftBorder);
 
-                % number of peaks
-                nPeaks = numel(locs);
-
-                % number of sample points
-                nSamples = numel(x);
-
-                % Initialize arrays to store FWHM coordinates
-                xL = zeros(size(locs));
-                xR = zeros(size(locs));
-
-                % Initialize array to store recomputed peak widths
-                peakWidths = nan(size(locs));
-
-                % convert distance vector to idxs
-                locs = arrayfun(@(loc) find(x==loc,1),locs);
-
-                % find peak border idxs (idx to x position of lowest valley between peaks)
-                borderIdx = 1:(nPeaks-1);
-                borders = arrayfun(@(idx) find(y==min(y(locs(idx):locs(idx+1))),1,'first'),borderIdx);
-                borders = [1,borders,nSamples];
-
-
-                borderX = x(borders);
-                borderY = y(borders);
-                nBorders = numel(borders);
-
-                % border line coordinates flanking each peak
-                borderLineXY = zeros(2,nBorders*3);
-
-                for i = 1:nBorders
-                    lineIdx = 3*(i-1)+1;
-                    borderLineXY(1,lineIdx:lineIdx+2) = [borderX(i),borderX(i),NaN];
-                    borderLineXY(2,lineIdx:lineIdx+2) = [0,borderY(i),NaN];
-                end
-
-                % FWHM line coordinates for each peak
-                widthLineXY = zeros(2,nPeaks*3);
-
-                % vertical lines centered on each peak
-                verticalLineXY = zeros(2,nPeaks*3);
-
-                if nPeaks > 1
-                    % coordinates for peak distance lines
-                    peakToPeakLineXY = zeros(2,(nPeaks-1)*3);
-                    % coordinates for peak distance line labels
-                    peakToPeakLabelXY = zeros(nPeaks-1,2);
+                if isempty(idxL) || idxL == leftBorder
+                    xL = x(leftBorder);
                 else
-                    peakToPeakLineXY = [NaN;NaN];
-                    peakToPeakLabelXY = [];
+                    xL = interp1(y(idxL:idxL+1),x(idxL:idxL+1),halfHeight,'linear');
                 end
 
-                % coordinates for width line labels
-                widthLabelXY = zeros(nPeaks,2);
+                idxR = find(y(peakIdx(i):rightBorder) <= halfHeight,1,'first');
+                idxR = idxR + peakIdx(i) - 1;
+                idxR = min(idxR,rightBorder);
 
-
-
-                for i = 1:length(locs)
-                    switch opts.WidthReference
-                        case 'halfheight'
-                            halfHeight = pks(i)/2;
-                        case 'halfprom'
-                            halfHeight = proms(i)/2;
-                    end
-
-
-                    % --- get x coordinates for horizontal FWHM line ---
-
-                    % find left and right border idxs for this peak
-                    leftBorder = borders(i); rightBorder = borders(i+1);
-
-                    % find last sample to left of peak below half height
-                    idxL = find(y(leftBorder:locs(i)) <= halfHeight, 1, 'last');
-                    idxL = idxL + borders(i) - 1; % Adjust index to original array
-                    idxL = max(idxL,leftBorder); % clamp to border
-
-                    % interpolate with next point to find intersection x location
-                    if isempty(idxL) || idxL == leftBorder
-                        % guard for edge/plateau
-                        xL(i) = x(leftBorder);
-                    else
-                        % linear interpolation between (idxL, idxL+1)
-                        xL(i) = interp1(y(idxL:idxL+1), x(idxL:idxL+1), halfHeight, 'linear');
-                    end
-
-                    % find first sample to right of peak below half height
-                    idxR = find(y(locs(i):rightBorder) <= halfHeight, 1, 'first');
-                    idxR = idxR + locs(i) - 1; % Adjust index to original array
-                    idxR = min(idxR,rightBorder); % clamp to border
-
-                    % interpolate with next point to find intersection x location
-                    if isempty(idxR) || idxR == rightBorder
-                        % guard for edge/plateau
-                        xR(i) = x(rightBorder);
-                    else
-                        % linear interpolation between (idxR, idxR-1)
-                        xR(i) = interp1(y(idxR-1:idxR), x(idxR-1:idxR), halfHeight, 'linear');
-                    end
-
-                    % --- add to line coordinate arrays ---
-                    lineIdx = 3*(i-1)+1;
-
-                    % FWHM horizontal lines
-                    widthLineXY(1,lineIdx:lineIdx+2) = [xL(i),xR(i),NaN];
-                    widthLineXY(2,lineIdx:lineIdx+2) = [halfHeight,halfHeight,NaN];
-
-                    % peak center vertical lines
-                    verticalLineXY(1,lineIdx:lineIdx+2) = [x(locs(i)),x(locs(i)),NaN];
-                    verticalLineXY(2,lineIdx:lineIdx+2) = [0,opts.VerticalLinesHeight,NaN];
-
-                    % peak distance lines (number of lines is one less than number of peaks)
-                    if i < nPeaks
-                        peakToPeakLineXY(1,lineIdx:lineIdx+2) = [x(locs(i)),x(locs(i+1)),NaN];
-                        peakToPeakLineXY(2,lineIdx:lineIdx+2) = [opts.PeakToPeakLinesHeight,opts.PeakToPeakLinesHeight,NaN];
-                        % add position coordinates for peak distance label
-                        peakToPeakLabelXY(i,:) = [mean(x(locs(i:i+1))) opts.PeakToPeakLinesHeight];
-                    end
-
-                    % add position coordinates for width label
-                    widthLabelXY(i,:) = [x(locs(i)) halfHeight];
-
-                    % add recomputed width to peakWidths
-                    peakWidths(i) = xR(i) - xL(i);
-
+                if isempty(idxR) || idxR == rightBorder
+                    xR = x(rightBorder);
+                else
+                    xR = interp1(y(idxR-1:idxR),x(idxR-1:idxR),halfHeight,'linear');
                 end
 
-                out.WidthLineXY = widthLineXY;
-                out.VerticalLineXY = verticalLineXY;
-                out.PeakToPeakLineXY = peakToPeakLineXY;
-                out.BorderLineXY = borderLineXY;
-                out.WidthLabelXY = widthLabelXY;
-                out.PeakToPeakLabelXY = peakToPeakLabelXY;
-                out.PeakWidths = peakWidths;
+                leftWidthLocation(i) = xL;
+                rightWidthLocation(i) = xR;
+                widthHeight(i) = halfHeight;
+                width(i) = xR - xL;
+            end
+
+            out = struct( ...
+                "LeftWidthLocation",leftWidthLocation, ...
+                "RightWidthLocation",rightWidthLocation, ...
+                "WidthHeight",widthHeight, ...
+                "Width",width);
+        end
+
+        function geom = emptyPeakGeometry()
+            geom = repmat(desmostorm.analysis.PeaksData.blankPeakGeometry(),0,1);
+        end
+
+        function geom = blankPeakGeometry()
+            geom = struct( ...
+                "PeakIndex",NaN, ...
+                "PeakLocation",NaN, ...
+                "PeakValue",NaN, ...
+                "PeakProminence",NaN, ...
+                "LeftBorderIndex",NaN, ...
+                "RightBorderIndex",NaN, ...
+                "LeftBorderLocation",NaN, ...
+                "RightBorderLocation",NaN, ...
+                "LeftBorderValue",NaN, ...
+                "RightBorderValue",NaN, ...
+                "WidthHeight",NaN, ...
+                "LeftWidthLocation",NaN, ...
+                "RightWidthLocation",NaN, ...
+                "Width",NaN);
+        end
+
+        function geom = scalePeakGeometry(geom,scale)
+            arguments
+                geom struct
+                scale (1,1) double
+            end
+
+            if isempty(geom)
+                return
+            end
+
+            distanceFields = { ...
+                "PeakLocation", ...
+                "LeftBorderLocation", ...
+                "RightBorderLocation", ...
+                "LeftWidthLocation", ...
+                "RightWidthLocation", ...
+                "Width"};
+
+            for f = 1:numel(distanceFields)
+                name = distanceFields{f};
+                for i = 1:numel(geom)
+                    geom(i).(name) = geom(i).(name)*scale;
+                end
+            end
         end
 
         % generate random noisy peaks for testing

@@ -51,8 +51,13 @@ function regionSubimageWithROI(region,filename,opts)
     ax.Tools.DrawRectangle.ROIFaceAlpha = opts.ROIFaceAlpha;
     ax.Tools.DrawRectangle.setROIPosition(region.ROI);
 
-    % show figure, draw, and pause briefly for graphics to render
+    % show figure
     fig.Visible = "on";
+
+    % Bring the main figure back to front so the export figure disappears
+    desmostorm.app.focusMainFigure();
+
+    % draw, and pause briefly for graphics to render
     drawnow
     pause(1)
 

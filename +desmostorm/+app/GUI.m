@@ -318,7 +318,7 @@ classdef GUI < handle
                 'BackgroundColor',[.12 .12 .12]);
 
             % initialize items
-            itemTitles = ["Images","Regions","Colormap","Channel Display","Analysis","Image Display","Peaks Plot","Labels"];
+            itemTitles = ["Images","Regions","Analysis","Channel Display","Colormap","Image Display","Peaks Plot","Labels"];
 
             for i = 1:numel(itemTitles)
                 obj.SettingsAccordion.addItem("Title",itemTitles(i),...
@@ -595,36 +595,43 @@ classdef GUI < handle
             item = obj.SettingsAccordion.getItem("Peaks Plot");
             % set size and spacing of pane grid
             set(item.Pane,...
-                "RowHeight",repmat({'fit'},1,6),...
+                "RowHeight",repmat({'fit'},1,13),...
                 "ColumnWidth",{'fit','1x'},...
                 "RowSpacing",5,...
                 "ColumnSpacing",5);
 
-            uilabel(item.Pane,"Text","Raw Line Color","FontColor",[0.85 0.85 0.85]);
-            obj.SettingsUI.PeaksPlot.RawLineColorPicker = uicolorpicker(...
-                'Parent',item.Pane,...
-                'Value',obj.Settings.PeaksPlot.RawLineColor,...
-                'ValueChangedFcn',@(o,~) obj.PeaksPlotSettingsChanged(o,"RawLineColor"));
-
-            uilabel(item.Pane,"Text","Raw Line Width","FontColor",[0.85 0.85 0.85]);
-            obj.SettingsUI.PeaksPlot.RawLineWidthEditField = uieditfield(...
+            uilabel(item.Pane,"Text","Shown Plots","FontColor",[0.85 0.85 0.85]);
+            obj.SettingsUI.PeaksPlot.ShownPlotsDropDown = uidropdown(...
                 item.Pane,...
-                "numeric",...
-                "ValueChangedFcn",@(o,~) obj.PeaksPlotSettingsChanged(o,"RawLineWidth"),...
-                "Value",obj.Settings.PeaksPlot.RawLineWidth);
+                "Items",{'all','current'},...
+                "Value",char(obj.Settings.PeaksPlot.ShownPlots),...
+                "ValueChangedFcn",@(o,~) obj.PeaksPlotSettingsChanged(o,"ShownPlots"));
 
-            uilabel(item.Pane,"Text","Smooth Line Color","FontColor",[0.85 0.85 0.85]);
-            obj.SettingsUI.PeaksPlot.SmoothLineColorPicker = uicolorpicker(...
-                'Parent',item.Pane,...
-                'Value',obj.Settings.PeaksPlot.SmoothLineColor,...
-                'ValueChangedFcn',@(o,~) obj.PeaksPlotSettingsChanged(o,"SmoothLineColor"));
-
-            uilabel(item.Pane,"Text","Smooth Line Width","FontColor",[0.85 0.85 0.85]);
-            obj.SettingsUI.PeaksPlot.SmoothLineWidthEditField = uieditfield(...
+            uilabel(item.Pane,"Text","Color Source","FontColor",[0.85 0.85 0.85]);
+            obj.SettingsUI.PeaksPlot.ColorSourceDropDown = uidropdown(...
                 item.Pane,...
-                "numeric",...
-                "ValueChangedFcn",@(o,~) obj.PeaksPlotSettingsChanged(o,"SmoothLineWidth"),...
-                "Value",obj.Settings.PeaksPlot.SmoothLineWidth);
+                "Items",{'channel','manual'},...
+                "Value",char(obj.Settings.PeaksPlot.ColorSource),...
+                "ValueChangedFcn",@(o,~) obj.PeaksPlotSettingsChanged(o,"ColorSource"));
+
+            uilabel(item.Pane,"Text","Plot Color","FontColor",[0.85 0.85 0.85]);
+            obj.SettingsUI.PeaksPlot.ColorPicker = uicolorpicker(...
+                'Parent',item.Pane,...
+                'Value',obj.Settings.PeaksPlot.Color,...
+                'ValueChangedFcn',@(o,~) obj.PeaksPlotSettingsChanged(o,"Color"));
+
+            uilabel(item.Pane,"Text","Annotation Color Mode","FontColor",[0.85 0.85 0.85]);
+            obj.SettingsUI.PeaksPlot.AnnotationColorModeDropDown = uidropdown(...
+                item.Pane,...
+                "Items",{'auto','manual'},...
+                "Value",char(obj.Settings.PeaksPlot.AnnotationColorMode),...
+                "ValueChangedFcn",@(o,~) obj.PeaksPlotSettingsChanged(o,"AnnotationColorMode"));
+
+            uilabel(item.Pane,"Text","Annotation Color","FontColor",[0.85 0.85 0.85]);
+            obj.SettingsUI.PeaksPlot.AnnotationColorPicker = uicolorpicker(...
+                'Parent',item.Pane,...
+                'Value',obj.Settings.PeaksPlot.AnnotationColor,...
+                'ValueChangedFcn',@(o,~) obj.PeaksPlotSettingsChanged(o,"AnnotationColor"));
 
             uilabel(item.Pane,"Text","Background Color","FontColor",[0.85 0.85 0.85]);
             obj.SettingsUI.PeaksPlot.BackgroundColorPicker = uicolorpicker(...
@@ -637,6 +644,48 @@ classdef GUI < handle
                 'Parent',item.Pane,...
                 'Value',obj.Settings.PeaksPlot.ForegroundColor,...
                 'ValueChangedFcn',@(o,~) obj.PeaksPlotSettingsChanged(o,"ForegroundColor"));
+
+            uilabel(item.Pane,"Text","Raw Line Width","FontColor",[0.85 0.85 0.85]);
+            obj.SettingsUI.PeaksPlot.RawLineWidthEditField = uieditfield(...
+                item.Pane,...
+                "numeric",...
+                "ValueChangedFcn",@(o,~) obj.PeaksPlotSettingsChanged(o,"RawLineWidth"),...
+                "Value",obj.Settings.PeaksPlot.RawLineWidth);
+
+            uilabel(item.Pane,"Text","Smooth Line Width","FontColor",[0.85 0.85 0.85]);
+            obj.SettingsUI.PeaksPlot.SmoothLineWidthEditField = uieditfield(...
+                item.Pane,...
+                "numeric",...
+                "ValueChangedFcn",@(o,~) obj.PeaksPlotSettingsChanged(o,"SmoothLineWidth"),...
+                "Value",obj.Settings.PeaksPlot.SmoothLineWidth);
+
+            uilabel(item.Pane,"Text","Distance Labels","FontColor",[0.85 0.85 0.85]);
+            obj.SettingsUI.PeaksPlot.DistanceAnnotationsDropDown = uidropdown(...
+                item.Pane,...
+                "Items",{'on','off'},...
+                "Value",char(obj.Settings.PeaksPlot.DistanceAnnotations),...
+                "ValueChangedFcn",@(o,~) obj.PeaksPlotSettingsChanged(o,"DistanceAnnotations"));
+
+            uilabel(item.Pane,"Text","Distance Mode","FontColor",[0.85 0.85 0.85]);
+            obj.SettingsUI.PeaksPlot.DistanceAnnotationsModeDropDown = uidropdown(...
+                item.Pane,...
+                "Items",{'lanes','data'},...
+                "Value",char(obj.Settings.PeaksPlot.DistanceAnnotationsMode),...
+                "ValueChangedFcn",@(o,~) obj.PeaksPlotSettingsChanged(o,"DistanceAnnotationsMode"));
+
+            uilabel(item.Pane,"Text","Width Labels","FontColor",[0.85 0.85 0.85]);
+            obj.SettingsUI.PeaksPlot.WidthAnnotationsDropDown = uidropdown(...
+                item.Pane,...
+                "Items",{'on','off'},...
+                "Value",char(obj.Settings.PeaksPlot.WidthAnnotations),...
+                "ValueChangedFcn",@(o,~) obj.PeaksPlotSettingsChanged(o,"WidthAnnotations"));
+
+            uilabel(item.Pane,"Text","Width Mode","FontColor",[0.85 0.85 0.85]);
+            obj.SettingsUI.PeaksPlot.WidthAnnotationsModeDropDown = uidropdown(...
+                item.Pane,...
+                "Items",{'hover','normal'},...
+                "Value",char(obj.Settings.PeaksPlot.WidthAnnotationsMode),...
+                "ValueChangedFcn",@(o,~) obj.PeaksPlotSettingsChanged(o,"WidthAnnotationsMode"));
         end
 
         function setupLabelsControls(obj)
@@ -955,12 +1004,19 @@ classdef GUI < handle
             obj.SettingsUI.Analysis.PixelSizeValueEditField.Value = S.Analysis.PixelSizeValue;
             obj.SettingsUI.Analysis.PixelSizeUnitDropDown.Value = S.Analysis.PixelSizeUnit;
             % PeaksPlot
-            obj.SettingsUI.PeaksPlot.RawLineColorPicker.Value = S.PeaksPlot.RawLineColor;
+            obj.SettingsUI.PeaksPlot.ShownPlotsDropDown.Value = char(S.PeaksPlot.ShownPlots);
+            obj.SettingsUI.PeaksPlot.ColorSourceDropDown.Value = char(S.PeaksPlot.ColorSource);
             obj.SettingsUI.PeaksPlot.RawLineWidthEditField.Value = S.PeaksPlot.RawLineWidth;
-            obj.SettingsUI.PeaksPlot.SmoothLineColorPicker.Value = S.PeaksPlot.SmoothLineColor;
+            obj.SettingsUI.PeaksPlot.ColorPicker.Value = S.PeaksPlot.Color;
             obj.SettingsUI.PeaksPlot.SmoothLineWidthEditField.Value = S.PeaksPlot.SmoothLineWidth;
             obj.SettingsUI.PeaksPlot.BackgroundColorPicker.Value = S.PeaksPlot.BackgroundColor;
             obj.SettingsUI.PeaksPlot.ForegroundColorPicker.Value = S.PeaksPlot.ForegroundColor;
+            obj.SettingsUI.PeaksPlot.AnnotationColorModeDropDown.Value = char(S.PeaksPlot.AnnotationColorMode);
+            obj.SettingsUI.PeaksPlot.AnnotationColorPicker.Value = S.PeaksPlot.AnnotationColor;
+            obj.SettingsUI.PeaksPlot.DistanceAnnotationsDropDown.Value = char(S.PeaksPlot.DistanceAnnotations);
+            obj.SettingsUI.PeaksPlot.DistanceAnnotationsModeDropDown.Value = char(S.PeaksPlot.DistanceAnnotationsMode);
+            obj.SettingsUI.PeaksPlot.WidthAnnotationsDropDown.Value = char(S.PeaksPlot.WidthAnnotations);
+            obj.SettingsUI.PeaksPlot.WidthAnnotationsModeDropDown.Value = char(S.PeaksPlot.WidthAnnotationsMode);
             % Display
             obj.SettingsUI.Display.AutoScaleDisplayIntensityCheckBox.Value = S.Display.AutoScaleDisplayIntensity;
             % Sliders
@@ -1310,6 +1366,9 @@ classdef GUI < handle
         function onImageViewerChannelChanged(obj)
         %ONIMAGEVIEWERCHANNELCHANGED Sync colormap selector to active image channel
             obj.syncColormapSelectorToChannel();
+            if obj.Settings.PeaksPlot.ShownPlots == "current"
+                obj.refreshRegionLinescanPlot();
+            end
         end
 
         function onImageViewerChannelDisplayChanged(obj)
@@ -1676,29 +1735,29 @@ classdef GUI < handle
             % get active Region
             reg = img.ActiveRegion;
 
-            nRegionChannels = numel(reg.LinescanResults);
-            nVisible = min(numel(obj.RegionLinescanPlot),nRegionChannels);
-
-            for C = 1:numel(obj.RegionLinescanPlot)
-
-                if C > nVisible
-                    obj.RegionLinescanPlot(C).Visible = 'off';
-                    continue
-                end
-                obj.RegionLinescanPlot(C).Visible = 'on';
-
-                if obj.Settings.Analysis.Normalize
-                    obj.RegionLinescanPlot(C).YLabel = "Normalized intensity";
-                else
-                    obj.RegionLinescanPlot(C).YLabel = "Intensity";
-                end
-
-                obj.RegionLinescanPlot(C).XLabel = sprintf("Distance (%s)",img.PixelSize.Unit);
-                obj.RegionLinescanPlot(C).Data = reg.LinescanResults(C);
-                obj.RegionLinescanPlot(C).Title = matlabx.utils.text.texFriendly(img.Name) + " | " + reg.Name + "(" + img.ImageData.Components(C).Name + ")";
+            [plotData,colorChannels] = obj.getRegionLinescanPlotData(reg);
+            if isempty(plotData)
+                obj.clearRegionLinescanPlot();
+                return
             end
 
-            obj.updateRegionLinescanPlotRows(nVisible);
+            if obj.Settings.Analysis.Normalize
+                obj.RegionLinescanPlot.YLabel = 'Normalized intensity';
+            else
+                obj.RegionLinescanPlot.YLabel = 'Intensity';
+            end
+
+            obj.RegionLinescanPlot.XLabel = sprintf("Distance (%s)",img.PixelSize.Unit);
+            obj.RegionLinescanPlot.Title = char(matlabx.utils.text.texFriendly(img.Name) + " | " + reg.Name);
+            obj.applyRegionLinescanPlotColors(colorChannels);
+            obj.RegionLinescanPlot.DistanceAnnotations = obj.Settings.PeaksPlot.DistanceAnnotations;
+            obj.RegionLinescanPlot.DistanceAnnotationsMode = char(obj.Settings.PeaksPlot.DistanceAnnotationsMode);
+            obj.RegionLinescanPlot.WidthAnnotations = obj.Settings.PeaksPlot.WidthAnnotations;
+            obj.RegionLinescanPlot.WidthAnnotationsMode = char(obj.Settings.PeaksPlot.WidthAnnotationsMode);
+            obj.RegionLinescanPlot.Data = plotData;
+            obj.RegionLinescanPlot.Visible = 'on';
+
+            obj.updateRegionLinescanPlotRows(1);
 
         end
 
@@ -1714,11 +1773,8 @@ classdef GUI < handle
         end
 
         function syncRegionLinescanPlotCount(obj)
-        %SYNCREGIONLINESCANPLOTCOUNT Match plot count to project channel capacity
+        %SYNCREGIONLINESCANPLOTCOUNT Ensure the single overlay plot exists
             nDesired = 1;
-            if ~isempty(obj.Project)
-                nDesired = max(obj.Project.MaxSizeC,1);
-            end
 
             nCurrent = numel(obj.RegionLinescanPlot);
             if nCurrent > nDesired
@@ -1730,9 +1786,16 @@ classdef GUI < handle
             for C = nCurrent+1:nDesired
                 obj.RegionLinescanPlot(C) = desmostorm.widgets.PeaksPlotContainer(obj.RegionLinescanPanelGrid,...
                     "RawLineWidth",obj.Settings.PeaksPlot.RawLineWidth, ...
-                    "RawLineColor",obj.Settings.PeaksPlot.RawLineColor, ...
                     "SmoothLineWidth",obj.Settings.PeaksPlot.SmoothLineWidth, ...
-                    "SmoothLineColor",obj.Settings.PeaksPlot.SmoothLineColor, ...
+                    "Color",obj.Settings.PeaksPlot.Color, ...
+                    "ColorMode",'auto', ...
+                    "AlphaMode",'auto', ...
+                    "AnnotationColorMode",char(obj.Settings.PeaksPlot.AnnotationColorMode), ...
+                    "AnnotationColor",obj.Settings.PeaksPlot.AnnotationColor, ...
+                    "DistanceAnnotations",obj.Settings.PeaksPlot.DistanceAnnotations, ...
+                    "DistanceAnnotationsMode",char(obj.Settings.PeaksPlot.DistanceAnnotationsMode), ...
+                    "WidthAnnotations",obj.Settings.PeaksPlot.WidthAnnotations, ...
+                    "WidthAnnotationsMode",char(obj.Settings.PeaksPlot.WidthAnnotationsMode), ...
                     "BackgroundColor",obj.Settings.PeaksPlot.BackgroundColor, ...
                     "ForegroundColor",obj.Settings.PeaksPlot.ForegroundColor, ...
                     "XLabel",sprintf("Distance (%s)",obj.Settings.Analysis.PixelSizeUnit), ...
@@ -1741,21 +1804,75 @@ classdef GUI < handle
             end
 
             for C = 1:numel(obj.RegionLinescanPlot)
-                obj.RegionLinescanPlot(C).Layout.Row = C;
+                obj.RegionLinescanPlot(C).Layout.Row = 1;
                 obj.RegionLinescanPlot(C).Layout.Column = 1;
             end
         end
 
         function updateRegionLinescanPlotRows(obj,nVisible)
         %UPDATEREGIONLINESCANPLOTROWS Collapse unused Region Linescan rows
-            nPlots = numel(obj.RegionLinescanPlot);
-            nVisible = min(max(nVisible,0),nPlots);
-
-            rowHeight = repmat({0},1,nPlots);
             if nVisible > 0
-                rowHeight(1:nVisible) = repmat({'1x'},1,nVisible);
+                obj.RegionLinescanPanelGrid.RowHeight = {'1x'};
+            else
+                obj.RegionLinescanPanelGrid.RowHeight = {0};
             end
-            obj.RegionLinescanPanelGrid.RowHeight = rowHeight;
+        end
+
+        function [plotData,colorChannels] = getRegionLinescanPlotData(obj,reg)
+        %GETREGIONLINESCANPLOTDATA Select all channels or only the viewer channel
+            allData = reg.LinescanResults(:);
+            if isempty(allData)
+                plotData = desmostorm.analysis.PeaksData.empty();
+                colorChannels = [];
+                return
+            end
+
+            switch obj.Settings.PeaksPlot.ShownPlots
+                case "current"
+                    C = obj.Ax.C;
+                    if C > numel(allData)
+                        plotData = desmostorm.analysis.PeaksData.empty();
+                        colorChannels = [];
+                    else
+                        plotData = allData(C);
+                        colorChannels = C;
+                    end
+                otherwise
+                    plotData = allData;
+                    colorChannels = 1:numel(allData);
+            end
+        end
+
+        function applyRegionLinescanPlotColors(obj,colorChannels)
+        %APPLYREGIONLINESCANPLOTCOLORS Apply channel or manual plot colors
+            nPlots = numel(colorChannels);
+            obj.RegionLinescanPlot.ColorMode = 'auto';
+            obj.RegionLinescanPlot.AlphaMode = 'auto';
+
+            switch obj.Settings.PeaksPlot.ColorSource
+                case "channel"
+                    colors = obj.getRegionLinescanPlotColors(colorChannels);
+                otherwise
+                    colors = repmat(obj.Settings.PeaksPlot.Color,nPlots,1);
+            end
+
+            obj.RegionLinescanPlot.Colors = colors;
+            obj.RegionLinescanPlot.SmoothLineColors = zeros(0,3);
+            obj.RegionLinescanPlot.RawLineColors = zeros(0,3);
+            obj.RegionLinescanPlot.AnnotationColorMode = char(obj.Settings.PeaksPlot.AnnotationColorMode);
+            obj.RegionLinescanPlot.AnnotationColor = obj.Settings.PeaksPlot.AnnotationColor;
+            obj.RegionLinescanPlot.AnnotationsColors = zeros(0,3);
+            obj.RegionLinescanPlot.PeakAreaColors = zeros(0,3);
+        end
+
+        function colors = getRegionLinescanPlotColors(obj,channels)
+        %GETREGIONLINESCANPLOTCOLORS Convert project channel color names to RGB rows
+            channels = channels(:).';
+            colors = zeros(numel(channels),3);
+            for i = 1:numel(channels)
+                colorName = obj.Project.getChannelColorName(channels(i));
+                colors(i,:) = matlabx.colors.names.toRGB(char(colorName),"Palette","MATLAB");
+            end
         end
 
         function refreshRegionROI(obj)
@@ -2012,7 +2129,14 @@ classdef GUI < handle
 
         function onPeaksPlotChanged(obj,e)
             %obj.RegionLinescanPlot.(e.Name) = obj.Settings.PeaksPlot.(e.Name);
-            set(obj.RegionLinescanPlot,e.Name,obj.Settings.PeaksPlot.(e.Name));
+            switch e.Name
+                case {"ShownPlots","ColorSource","Color"}
+                    obj.refreshRegionLinescanPlot();
+                case {"DistanceAnnotationsMode","WidthAnnotationsMode","AnnotationColorMode"}
+                    set(obj.RegionLinescanPlot,e.Name,char(obj.Settings.PeaksPlot.(e.Name)));
+                otherwise
+                    set(obj.RegionLinescanPlot,e.Name,obj.Settings.PeaksPlot.(e.Name));
+            end
         end
 
         function onBoxChanged(obj,e)
@@ -2705,7 +2829,8 @@ classdef GUI < handle
 
             desmostorm.Log.INFO("Exporting region linescan plot...");
             try
-                success = desmostorm.export.Exporter.exportRegionLinescanPlot(obj.Project,obj.Settings);
+                success = desmostorm.export.Exporter.exportRegionLinescanPlot(obj.Project,obj.Settings, ...
+                    "CurrentChannel",obj.Ax.C);
                 if success
                     desmostorm.Log.INFO("Success.");
                 else

@@ -152,6 +152,17 @@ classdef Settings < handle
                 defaultDisplay = desmostorm.config.Display;
                 S.Display.AutoScaleDisplayIntensity = defaultDisplay.AutoScaleDisplayIntensity; % new property
                 S.Display.ChannelColorMode = defaultDisplay.ChannelColorMode;                   % new property
+                % PeaksPlot settings
+                defaultPeaksPlot = desmostorm.config.PeaksPlot;
+                S.PeaksPlot.ShownPlots = defaultPeaksPlot.ShownPlots; % new property
+                S.PeaksPlot.ColorSource = defaultPeaksPlot.ColorSource; % new property
+                S.PeaksPlot.Color = defaultPeaksPlot.Color;             % new property
+                S.PeaksPlot.AnnotationColorMode = defaultPeaksPlot.AnnotationColorMode; % new property
+                S.PeaksPlot.AnnotationColor = defaultPeaksPlot.AnnotationColor;         % new property
+                S.PeaksPlot.DistanceAnnotations = defaultPeaksPlot.DistanceAnnotations;         % new property
+                S.PeaksPlot.DistanceAnnotationsMode = defaultPeaksPlot.DistanceAnnotationsMode; % new property
+                S.PeaksPlot.WidthAnnotations = defaultPeaksPlot.WidthAnnotations;               % new property
+                S.PeaksPlot.WidthAnnotationsMode = defaultPeaksPlot.WidthAnnotationsMode;       % new property
                 % indicate migration has been performed
                 migrated = true;
             end

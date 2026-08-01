@@ -8,10 +8,11 @@ end
 ps = region.PixelSize;
 ROI = region.ROI;
 L = region.LinescanResults;
+proj = region.Project;
 
 row = struct();
 
-row.ProjectName = string(region.Parent.Parent.Name);
+row.ProjectName = string(proj.Name);
 row.ImageName = string(region.Parent.Name);
 row.RegionName = string(region.Name);
 row.PixelSize = ps.stringDisplay;
@@ -23,17 +24,16 @@ row.Score = sprintf('%.2f',region.Score);
 row.RegionCenter = string(sprintf('(%.1f, %.1f)',region.Center(1),region.Center(2)));
 row.RegionWidth_px = region.BoxSize;
 row.RegionHeight_px = region.BoxSize;
-row.RegionWidth_phys = region.px2phys(region.BoxSize);
-row.RegionHeight_phys = region.px2phys(region.BoxSize);
+row.RegionWidth_phys = ps.px2phys(region.BoxSize);
+row.RegionHeight_phys = ps.px2phys(region.BoxSize);
 
 row.ROICenter = string(sprintf('(%.1f, %.1f)',ROI.CenterX,ROI.CenterY));
 row.ROIWidth_px = ROI.Width;
 row.ROIHeight_px = ROI.Height;
-row.ROIWidth_phys = region.px2phys(ROI.Width);
-row.ROIHeight_phys = region.px2phys(ROI.Height);
+row.ROIWidth_phys = ps.px2phys(ROI.Width);
+row.ROIHeight_phys = ps.px2phys(ROI.Height);
 row.ROIRotationAngle = round(ROI.RotationAngle,2);
 
-proj = region.getParentProject();
 nChannels = proj.MaxSizeC;
 nResults = length(L);
 
@@ -66,11 +66,11 @@ for i = 1:nChannels
     row.(sprintf('LeftPeakLocation_px__C%i_',i)) = leftPeakLocation_px;
     row.(sprintf('RightPeakLocation_px__C%i_',i)) = rightPeakLocation_px;
 
-    row.(sprintf('PeakDistance_C%i_',i)) = region.px2phys(peakDistance_px);
-    row.(sprintf('LeftPeakFWHM_C%i_',i)) = region.px2phys(leftPeakFWHM_px);
-    row.(sprintf('RightPeakFWHM_C%i_',i)) = region.px2phys(rightPeakFWHM_px);
-    row.(sprintf('LeftPeakLocation_C%i_',i)) = region.px2phys(leftPeakLocation_px);
-    row.(sprintf('RightPeakLocation_C%i_',i)) = region.px2phys(rightPeakLocation_px);
+    row.(sprintf('PeakDistance_C%i_',i)) = ps.px2phys(peakDistance_px);
+    row.(sprintf('LeftPeakFWHM_C%i_',i)) = ps.px2phys(leftPeakFWHM_px);
+    row.(sprintf('RightPeakFWHM_C%i_',i)) = ps.px2phys(rightPeakFWHM_px);
+    row.(sprintf('LeftPeakLocation_C%i_',i)) = ps.px2phys(leftPeakLocation_px);
+    row.(sprintf('RightPeakLocation_C%i_',i)) = ps.px2phys(rightPeakLocation_px);
 end
 
 end
