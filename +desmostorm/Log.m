@@ -21,7 +21,8 @@ classdef Log
 % - Lazy-creates a single matlabx.logging.Logger for the current MATLAB session.
 % - startGUISession() replaces that logger with a fresh GUI-session logger
 %   and attaches a timestamped file sink under the app logs folder.
-% - Public wrapper methods auto-populate Source based on the caller if not provided.
+% - Public wrapper methods preserve explicit Source values; otherwise they
+%   infer the first non-desmostorm.Log caller and leave formatting to Logger.
 % - clear() removes the stored handle from the facade. If other references exist,
 %   the logger object itself will remain alive until those references are released.
 
@@ -53,6 +54,7 @@ classdef Log
 
             arguments
                 opts.LogFile (1,1) string = string(desmostorm.Paths.logFile("gui"))
+                opts.LoggingConfig (1,1) matlabx.config.Logging = desmostorm.Log.defaultGUIConfig_()
             end
 
             oldLog = desmostorm.Log.peek_();
@@ -62,6 +64,7 @@ classdef Log
             end
 
             log = matlabx.logging.Logger();
+            log.configure(opts.LoggingConfig);
             logPath = opts.LogFile;
             log.setFileSink(char(logPath), true);
 
@@ -81,38 +84,38 @@ classdef Log
 
         function INFO(msg, varargin)
         %INFO Log an INFO message.
-            [src, args] = desmostorm.Log.resolveSource_(varargin{:});
-            desmostorm.Log.get().info(desmostorm.Log.normalizeMsg_(msg), "Source", src, args{:});
+            [log, args] = desmostorm.Log.prepareArgs_(varargin{:});
+            log.info(desmostorm.Log.normalizeMsg_(msg), args{:});
         end
 
         function DEBUG(msg, varargin)
         %DEBUG Log a DEBUG message.
-            [src, args] = desmostorm.Log.resolveSource_(varargin{:});
-            desmostorm.Log.get().debug(desmostorm.Log.normalizeMsg_(msg), "Source", src, args{:});
+            [log, args] = desmostorm.Log.prepareArgs_(varargin{:});
+            log.debug(desmostorm.Log.normalizeMsg_(msg), args{:});
         end
 
         function WARN(msg, varargin)
         %WARN Log a WARN message.
-            [src, args] = desmostorm.Log.resolveSource_(varargin{:});
-            desmostorm.Log.get().warn(desmostorm.Log.normalizeMsg_(msg), "Source", src, args{:});
+            [log, args] = desmostorm.Log.prepareArgs_(varargin{:});
+            log.warn(desmostorm.Log.normalizeMsg_(msg), args{:});
         end
 
         function ERROR(msg, varargin)
         %ERROR Log an ERROR message.
-            [src, args] = desmostorm.Log.resolveSource_(varargin{:});
-            desmostorm.Log.get().error(desmostorm.Log.normalizeMsg_(msg), "Source", src, args{:});
+            [log, args] = desmostorm.Log.prepareArgs_(varargin{:});
+            log.error(desmostorm.Log.normalizeMsg_(msg), args{:});
         end
 
         function EXCEPTION(ME, varargin)
         %EXCEPTION Log an MException as an error.
-            [src, args] = desmostorm.Log.resolveSource_(varargin{:});
-            desmostorm.Log.get().error(ME, "Source", src, args{:});
+            [log, args] = desmostorm.Log.prepareArgs_(varargin{:});
+            log.error(ME, args{:});
         end
 
         function LOG(level, msg, varargin)
         %LOG Generic logging entry point.
-            [src, args] = desmostorm.Log.resolveSource_(varargin{:});
-            desmostorm.Log.get().log(level, desmostorm.Log.normalizeMsg_(msg), "Source", src, args{:});
+            [log, args] = desmostorm.Log.prepareArgs_(varargin{:});
+            log.log(level, desmostorm.Log.normalizeMsg_(msg), args{:});
         end
 
         function flush()
@@ -148,29 +151,49 @@ classdef Log
             log = L;
         end
 
-        function [src, args] = resolveSource_(varargin)
-            %RESOLVESOURCE_ Use explicit Source if provided, else infer from caller.
+        function config = defaultGUIConfig_()
+        %DEFAULTGUICONFIG_ Default logging policy for interactive sessions.
+            config = matlabx.config.Logging( ...
+                "Level","DEBUG", ...
+                "Detail","normal", ...
+                "SourceDetail","short", ...
+                "CommandWindowLevel","INFO", ...
+                "CommandWindowDetail","normal", ...
+                "UILevel","INFO", ...
+                "UIDetail","normal", ...
+                "FileLevel","DEBUG", ...
+                "FileDetail","debug");
+        end
+
+        function [log, args] = prepareArgs_(varargin)
+        %PREPAREARGS_ Preserve explicit Source or infer the app caller.
+            log = desmostorm.Log.get();
             args = varargin;
 
             idx = desmostorm.Log.findNameValue_(args, "Source");
             if ~isempty(idx)
-                src = string(args{idx+1});
-                args(idx:idx+1) = [];
                 return
             end
 
-            % Stack here is typically:
-            % 1 resolveSource_
-            % 2 desmostorm.Log.INFO / DEBUG / ...
-            % 3 actual caller
-            st = dbstack(2, '-completenames');
+            args = [{'Source', desmostorm.Log.detectSource_(log.SourceDetail)}, args];
+        end
 
-            if isempty(st)
-                src = "unknown";
+        function source = detectSource_(sourceDetail)
+        %DETECTSOURCE_ Infer the first caller outside the desmostorm facade.
+            st = dbstack(1, '-completenames');
+
+            for k = 1:numel(st)
+                name = string(st(k).name);
+                if startsWith(name, "desmostorm.Log.") || name == "desmostorm.Log"
+                    continue
+                end
+
+                source = matlabx.logging.formatCallerName( ...
+                    name, "Detail", sourceDetail);
                 return
             end
 
-            src = matlabx.logging.formatCallerName(st(1).name, Detail="short");
+            source = "unknown";
         end
 
         function msg = normalizeMsg_(msg)
