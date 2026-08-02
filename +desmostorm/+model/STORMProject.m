@@ -539,9 +539,6 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             if c > numel(obj.ChannelColorNames), return; end
 
             name = desmostorm.model.STORMProject.normalizeChannelColorName_(name);
-            validNames = string(matlabx.ui.axes.ImageAxes.getColorNames());
-            assert(ismember(name,validNames), ...
-                'Color "%s" is not a valid channel color.', name);
 
             obj.ChannelColorNames(c) = name;
         end
@@ -801,13 +798,8 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
         end
 
         function name = normalizeChannelColorName_(name)
-        %NORMALIZECHANNELCOLORNAME_ Map case variants to ImageAxes color names.
-            name = string(name);
-            validNames = string(matlabx.ui.axes.ImageAxes.getColorNames());
-            idx = find(strcmpi(name,validNames),1,'first');
-            if ~isempty(idx)
-                name = validNames(idx);
-            end
+        %NORMALIZECHANNELCOLORNAME_ Delegate channel color policy to ImageAxes.
+            name = matlabx.ui.axes.ImageAxes.canonicalComponentColorName(name);
         end
 
     end
