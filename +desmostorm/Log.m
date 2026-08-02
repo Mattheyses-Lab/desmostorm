@@ -127,7 +127,11 @@ classdef Log
         function ERROR(msg, varargin)
         %ERROR Log an ERROR message.
             [log, args] = desmostorm.Log.prepareArgs_(varargin{:});
-            log.error(desmostorm.Log.normalizeMsg_(msg), args{:});
+            if isa(msg,'MException')
+                log.error(msg, args{:});
+            else
+                log.error(desmostorm.Log.normalizeMsg_(msg), args{:});
+            end
         end
 
         function EXCEPTION(ME, varargin)

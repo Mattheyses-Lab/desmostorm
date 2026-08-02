@@ -608,7 +608,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
                 % save it
                 save(file, 'Project', '-mat');
             catch ME
-                desmostorm.Log.ERROR(ME);
+                desmostorm.Log.EXCEPTION(ME);
                 rethrow(ME);
             end
 
@@ -645,12 +645,12 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
                 desmostorm.Log.WARN(sprintf("Project version (%s) does not match current app version (%s)",S.Project.Version,desmostorm.Info.Version));
             end
 
-            desmostorm.Log.INFO("Rebuilding project...")
+            desmostorm.Log.DEBUG("Rebuilding project...")
             try
                 [proj, settings] = desmostorm.model.STORMProject.fromStruct(S, file, ...
                     "MissingImageResolver", opts.MissingImageResolver);
             catch ME
-                desmostorm.Log.ERROR(ME);
+                desmostorm.Log.EXCEPTION(ME);
                 rethrow(ME);
             end
         end
@@ -687,7 +687,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             end
 
             % Resolve image paths
-            desmostorm.Log.INFO("Resolving image paths...")
+            desmostorm.Log.DEBUG("Resolving image paths...")
             resolved = desmostorm.io.resolveImagePaths(P.Images, projectFolder, ...
                 "MissingImageResolver", opts.MissingImageResolver);
 
@@ -702,10 +702,10 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             proj.ImagesDict = dictionary(string.empty(1,0), desmostorm.model.STORMImage.empty(1,0));
             proj.ImageOrder = string.empty(1,0);
 
-            desmostorm.Log.INFO("Rebuilding images...")
+            desmostorm.Log.DEBUG("Rebuilding images...")
             nResolved = numel(resolved);
             for k = 1:nResolved
-                desmostorm.Log.INFO(sprintf("Image (%i/%i): %s",k,nResolved,resolved(k).Name))
+                desmostorm.Log.DEBUG(sprintf("Image (%i/%i): %s",k,nResolved,resolved(k).Name))
                 img = desmostorm.model.STORMImage.fromStruct(resolved(k),proj);
                 proj.ImagesDict(img.ID) = img;
                 proj.ImageOrder(end+1) = img.ID;

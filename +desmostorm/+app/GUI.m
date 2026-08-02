@@ -129,30 +129,30 @@ classdef GUI < handle
             [obj.Log, logPath] = desmostorm.Log.startGUISession();
 
             desmostorm.Log.INFO("Starting DesmoSTORM...");
-            desmostorm.Log.INFO("Session log: " + logPath);
+            desmostorm.Log.DEBUG("Session log: " + logPath);
 
             % --- Settings ---
-            desmostorm.Log.INFO("Loading settings...");
+            desmostorm.Log.DEBUG("Loading settings...");
             try
                 obj.Settings = desmostorm.config.Settings.load();
             catch ME
-                desmostorm.Log.ERROR(ME); rethrow(ME);
+                desmostorm.Log.EXCEPTION(ME); rethrow(ME);
             end
 
             % --- UICalibration ---
-            desmostorm.Log.INFO("Calibrating UI...");
-            try obj.setupUICalibration(); catch ME, desmostorm.Log.ERROR(ME); rethrow(ME); end
+            desmostorm.Log.DEBUG("Calibrating UI...");
+            try obj.setupUICalibration(); catch ME, desmostorm.Log.EXCEPTION(ME); rethrow(ME); end
 
             % --- Build GUI ---
-            desmostorm.Log.INFO("Building GUI...");
-            try obj.buildGUI(); catch ME, desmostorm.Log.ERROR(ME); rethrow(ME); end
+            desmostorm.Log.DEBUG("Building GUI...");
+            try obj.buildGUI(); catch ME, desmostorm.Log.EXCEPTION(ME); rethrow(ME); end
 
             % --- Initial UI sync ---
-            desmostorm.Log.INFO("Refreshing UI...");
-            try obj.refreshUI(); catch ME, desmostorm.Log.ERROR(ME); rethrow(ME); end
+            desmostorm.Log.DEBUG("Refreshing UI...");
+            try obj.refreshUI(); catch ME, desmostorm.Log.EXCEPTION(ME); rethrow(ME); end
 
             % --- Show figure ---
-            desmostorm.Log.INFO("Opening...");
+            desmostorm.Log.DEBUG("Opening GUI figure...");
             obj.Fig.Visible = 'on';
 
             % --- Set UI sink for logger ---
@@ -169,44 +169,44 @@ classdef GUI < handle
 
         function buildGUI(obj)
             % --- Figure ---
-            desmostorm.Log.INFO("Setting up main figure window...");
-            try obj.setupFigure(); catch ME, desmostorm.Log.ERROR(ME); rethrow(ME); end
+            desmostorm.Log.DEBUG("Setting up main figure window...");
+            try obj.setupFigure(); catch ME, desmostorm.Log.EXCEPTION(ME); rethrow(ME); end
 
             % --- CommandRouter ---
-            desmostorm.Log.INFO("Setting up CommandRouter...");
-            try obj.setupCommandRouter(); catch ME, desmostorm.Log.ERROR(ME); rethrow(ME); end
+            desmostorm.Log.DEBUG("Setting up CommandRouter...");
+            try obj.setupCommandRouter(); catch ME, desmostorm.Log.EXCEPTION(ME); rethrow(ME); end
 
             % --- Menubar ---
-            desmostorm.Log.INFO("Setting up Menubar...");
-            try obj.setupMenubar(); catch ME, desmostorm.Log.ERROR(ME); rethrow(ME); end
+            desmostorm.Log.DEBUG("Setting up Menubar...");
+            try obj.setupMenubar(); catch ME, desmostorm.Log.EXCEPTION(ME); rethrow(ME); end
 
             % --- Grids ---
-            desmostorm.Log.INFO("Setting up main grid layout managers...");
-            try obj.setupGrids(); catch ME, desmostorm.Log.ERROR(ME); rethrow(ME); end
+            desmostorm.Log.DEBUG("Setting up main grid layout managers...");
+            try obj.setupGrids(); catch ME, desmostorm.Log.EXCEPTION(ME); rethrow(ME); end
 
             % --- Settings controllers ---
-            desmostorm.Log.INFO("Setting up settings controllers...");
-            try obj.setupSettingsControllers(); catch ME, desmostorm.Log.ERROR(ME); rethrow(ME); end
+            desmostorm.Log.DEBUG("Setting up settings controllers...");
+            try obj.setupSettingsControllers(); catch ME, desmostorm.Log.EXCEPTION(ME); rethrow(ME); end
 
             % --- Log window ---
-            desmostorm.Log.INFO("Setting up log window...");
-            try obj.setupLogWindow(); catch ME, desmostorm.Log.ERROR(ME); rethrow(ME); end
+            desmostorm.Log.DEBUG("Setting up log window...");
+            try obj.setupLogWindow(); catch ME, desmostorm.Log.EXCEPTION(ME); rethrow(ME); end
 
             % --- ImageViewer ---
-            desmostorm.Log.INFO("Setting up ImageViewer...");
-            try obj.setupImageViewer(); catch ME, desmostorm.Log.ERROR(ME); rethrow(ME); end
+            desmostorm.Log.DEBUG("Setting up ImageViewer...");
+            try obj.setupImageViewer(); catch ME, desmostorm.Log.EXCEPTION(ME); rethrow(ME); end
 
             % --- RegionViewer ---
-            desmostorm.Log.INFO("Setting up RegionViewer...");
-            try obj.setupRegionViewer(); catch ME, desmostorm.Log.ERROR(ME); rethrow(ME); end
+            desmostorm.Log.DEBUG("Setting up RegionViewer...");
+            try obj.setupRegionViewer(); catch ME, desmostorm.Log.EXCEPTION(ME); rethrow(ME); end
 
             % --- RegionSummaryTable ---
-            desmostorm.Log.INFO("Setting up RegionSummaryTable...");
-            try obj.setupRegionSummaryTable(); catch ME, desmostorm.Log.ERROR(ME); rethrow(ME); end
+            desmostorm.Log.DEBUG("Setting up RegionSummaryTable...");
+            try obj.setupRegionSummaryTable(); catch ME, desmostorm.Log.EXCEPTION(ME); rethrow(ME); end
 
             % --- RegionLinescanPlot ---
-            desmostorm.Log.INFO("Setting up RegionSummaryTable...");
-            try obj.setupRegionLinescanPlot(); catch ME, desmostorm.Log.ERROR(ME); rethrow(ME); end
+            desmostorm.Log.DEBUG("Setting up RegionLinescanPlot...");
+            try obj.setupRegionLinescanPlot(); catch ME, desmostorm.Log.EXCEPTION(ME); rethrow(ME); end
 
             % center the GUI after defining all graphics components
             movegui(obj.Fig,"center");
@@ -334,12 +334,12 @@ classdef GUI < handle
             end
 
             % --- Images ---
-            desmostorm.Log.INFO("Setting up Images listbox...");
-            try obj.setupImagesListBox(); catch ME, desmostorm.Log.ERROR(ME); rethrow(ME); end
+            desmostorm.Log.DEBUG("Setting up Images listbox...");
+            try obj.setupImagesListBox(); catch ME, desmostorm.Log.EXCEPTION(ME); rethrow(ME); end
 
             % --- Regions ---
-            desmostorm.Log.INFO("Setting up Regions listbox...");
-            try obj.setupRegionsListBox(); catch ME, desmostorm.Log.ERROR(ME); rethrow(ME); end
+            desmostorm.Log.DEBUG("Setting up Regions listbox...");
+            try obj.setupRegionsListBox(); catch ME, desmostorm.Log.EXCEPTION(ME); rethrow(ME); end
 
             % Set up SettingsUI struct
             obj.SettingsUI = struct(...
@@ -350,28 +350,28 @@ classdef GUI < handle
                 "Box",struct());
 
             % --- Colormap ---
-            desmostorm.Log.INFO("Setting up Colormap controls...");
-            try obj.setupColormapControls(); catch ME, desmostorm.Log.ERROR(ME); rethrow(ME); end
+            desmostorm.Log.DEBUG("Setting up Colormap controls...");
+            try obj.setupColormapControls(); catch ME, desmostorm.Log.EXCEPTION(ME); rethrow(ME); end
 
             % --- Channel Display ---
-            desmostorm.Log.INFO("Setting up Channel Display controls...");
-            try obj.setupChannelDisplayControls(); catch ME, desmostorm.Log.ERROR(ME); rethrow(ME); end
+            desmostorm.Log.DEBUG("Setting up Channel Display controls...");
+            try obj.setupChannelDisplayControls(); catch ME, desmostorm.Log.EXCEPTION(ME); rethrow(ME); end
 
             % --- Analysis ---
-            desmostorm.Log.INFO("Setting up Analysis controls...");
-            try obj.setupAnalysisControls(); catch ME, desmostorm.Log.ERROR(ME); rethrow(ME); end
+            desmostorm.Log.DEBUG("Setting up Analysis controls...");
+            try obj.setupAnalysisControls(); catch ME, desmostorm.Log.EXCEPTION(ME); rethrow(ME); end
 
             % --- Image Display ---
-            desmostorm.Log.INFO("Setting up Image Display controls...");
-            try obj.setupImageDisplayControls(); catch ME, desmostorm.Log.ERROR(ME); rethrow(ME); end
+            desmostorm.Log.DEBUG("Setting up Image Display controls...");
+            try obj.setupImageDisplayControls(); catch ME, desmostorm.Log.EXCEPTION(ME); rethrow(ME); end
 
             % --- Peaks Plot ---
-            desmostorm.Log.INFO("Setting up Peaks Plot controls...");
-            try obj.setupPeaksPlotControls(); catch ME, desmostorm.Log.ERROR(ME); rethrow(ME); end
+            desmostorm.Log.DEBUG("Setting up Peaks Plot controls...");
+            try obj.setupPeaksPlotControls(); catch ME, desmostorm.Log.EXCEPTION(ME); rethrow(ME); end
 
             % --- Labels ---
-            desmostorm.Log.INFO("Setting up Labels controls...");
-            try obj.setupLabelsControls(); catch ME, desmostorm.Log.ERROR(ME); rethrow(ME); end
+            desmostorm.Log.DEBUG("Setting up Labels controls...");
+            try obj.setupLabelsControls(); catch ME, desmostorm.Log.EXCEPTION(ME); rethrow(ME); end
 
             % Expand Images and Regions listbox accordion items
             obj.SettingsAccordion.getItem("Images").expand();
@@ -583,8 +583,8 @@ classdef GUI < handle
                 "Text","Auto-scale display intensity");
 
             % --- IntensitySliders ---
-            desmostorm.Log.INFO("Setting up IntensitySliders...");
-            try obj.setupIntensitySliders(); catch ME, desmostorm.Log.ERROR(ME); rethrow(ME); end
+            desmostorm.Log.DEBUG("Setting up IntensitySliders...");
+            try obj.setupIntensitySliders(); catch ME, desmostorm.Log.EXCEPTION(ME); rethrow(ME); end
         end
 
         function setupIntensitySliders(obj)
@@ -1344,19 +1344,19 @@ classdef GUI < handle
         function onImageAdded(obj)
         %ONIMAGEADDED ImageAdded event callback
             obj.refreshImageListBox();
-            desmostorm.Log.INFO("Image added.")
+            desmostorm.Log.DEBUG("Image added.")
         end
 
         function onImageRemoved(obj)
         %ONIMAGEREMOVED ImageRemoved event callback    
             obj.refreshImageListBox();
-            desmostorm.Log.INFO("Image removed.")
+            desmostorm.Log.DEBUG("Image removed.")
         end
 
         function onActiveImageChanged(obj)
         %ONACTIVEIMAGECHANGED ActiveImageChanged event callback
             obj.syncActiveImageToView();
-            desmostorm.Log.INFO("Active Image changed.")
+            desmostorm.Log.DEBUG("Active Image changed.")
         end
 
         function onMaxSizeCChanged(obj)
@@ -1616,25 +1616,25 @@ classdef GUI < handle
         function onRegionAdded(obj)
         %ONREGIONADDED RegionAdded event callback
             obj.refreshRegionListBox();
-            desmostorm.Log.INFO("Region added.")
+            desmostorm.Log.DEBUG("Region added.")
         end
 
         function onRegionRemoved(obj)
         %ONREGIONREMOVED RegionRemoved event callback    
             obj.refreshRegionListBox();
-            desmostorm.Log.INFO("Region removed.")
+            desmostorm.Log.DEBUG("Region removed.")
         end
 
         function onActiveRegionChanged(obj)
         %ONACTIVEREGIONCHANGED ActiveRegionChanged event callback
             obj.syncActiveRegionToView();
-            desmostorm.Log.INFO("Active Region changed.")
+            desmostorm.Log.DEBUG("Active Region changed.")
         end
 
         function onRegionSelectionChanged(obj)
         %ONREGIONSELECTIONCHANGED RegionSelectionChanged event callback
             obj.refreshRegionListBox();
-            desmostorm.Log.INFO("Region selection changed.")
+            desmostorm.Log.DEBUG("Region selection changed.")
         end
 
         % --- UI SYNC DRIVER ---
@@ -2792,7 +2792,7 @@ classdef GUI < handle
                     desmostorm.Log.INFO("Export cancelled.");
                 end
             catch ME
-                desmostorm.Log.ERROR(ME);
+                desmostorm.Log.EXCEPTION(ME);
                 obj.guialert("Title",'Error',"Message",ME.message,"Icon",'error');
             end
         end
@@ -2808,7 +2808,7 @@ classdef GUI < handle
                     desmostorm.Log.INFO("Export cancelled.");
                 end
             catch ME
-                desmostorm.Log.ERROR(ME);
+                desmostorm.Log.EXCEPTION(ME);
                 obj.guialert("Title",'Error',"Message",ME.message,"Icon",'error');
             end
 
@@ -2825,7 +2825,7 @@ classdef GUI < handle
                     desmostorm.Log.INFO("Export cancelled.");
                 end
             catch ME
-                desmostorm.Log.ERROR(ME);
+                desmostorm.Log.EXCEPTION(ME);
                 obj.guialert("Title",'Error',"Message",ME.message,"Icon",'error');
             end
         end
@@ -2842,7 +2842,7 @@ classdef GUI < handle
                     desmostorm.Log.INFO("Export cancelled.");
                 end
             catch ME
-                desmostorm.Log.ERROR(ME);
+                desmostorm.Log.EXCEPTION(ME);
                 obj.guialert("Title",'Error',"Message",ME.message,"Icon",'error');
             end
         end
@@ -2858,7 +2858,7 @@ classdef GUI < handle
                     desmostorm.Log.INFO("Export cancelled.");
                 end
             catch ME
-                desmostorm.Log.ERROR(ME);
+                desmostorm.Log.EXCEPTION(ME);
                 obj.guialert("Title",'Error',"Message",ME.message,"Icon",'error');
             end
         end
