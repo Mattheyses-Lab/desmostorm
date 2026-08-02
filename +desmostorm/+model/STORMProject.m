@@ -446,7 +446,8 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
 
             obj.ChannelColormapNames = obj.ChannelColormapNames(:).';
             obj.ChannelColormapCategories = obj.ChannelColormapCategories(:).';
-            obj.ChannelColorNames = obj.ChannelColorNames(:).';
+            obj.ChannelColorNames = desmostorm.model.STORMProject.normalizeChannelColorNames_( ...
+                obj.ChannelColorNames(:).');
 
             if numel(obj.ChannelColormapNames) > n
                 obj.ChannelColormapNames = obj.ChannelColormapNames(1:n);
@@ -537,6 +538,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             obj.ensureChannelColormapCount();
             if c > numel(obj.ChannelColorNames), return; end
 
+            name = desmostorm.model.STORMProject.normalizeChannelColorName_(name);
             validNames = string(matlabx.ui.axes.ImageAxes.getColorNames());
             assert(ismember(name,validNames), ...
                 'Color "%s" is not a valid channel color.', name);
@@ -728,7 +730,8 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
                     proj.ChannelColormapCategories = string(P.Project.ChannelDisplay.ColormapCategories);
                 end
                 if isfield(P.Project.ChannelDisplay,'ColorNames')
-                    proj.ChannelColorNames = string(P.Project.ChannelDisplay.ColorNames);
+                    proj.ChannelColorNames = desmostorm.model.STORMProject.normalizeChannelColorNames_( ...
+                        string(P.Project.ChannelDisplay.ColorNames));
                 end
             elseif isfield(P.Project,'ChannelColormaps') && ~isempty(P.Project.ChannelColormaps)
                 if isfield(P.Project.ChannelColormaps,'Names')
@@ -782,6 +785,28 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             for k = 1:numel(imgs)
                 im = imgs(k);
                 P.Images(k) = im.toStruct();
+            end
+        end
+
+    end
+
+    methods (Static, Access=private)
+
+        function names = normalizeChannelColorNames_(names)
+        %NORMALIZECHANNELCOLORNAMES_ Canonicalize saved channel color names.
+            names = string(names);
+            for i = 1:numel(names)
+                names(i) = desmostorm.model.STORMProject.normalizeChannelColorName_(names(i));
+            end
+        end
+
+        function name = normalizeChannelColorName_(name)
+        %NORMALIZECHANNELCOLORNAME_ Map case variants to ImageAxes color names.
+            name = string(name);
+            validNames = string(matlabx.ui.axes.ImageAxes.getColorNames());
+            idx = find(strcmpi(name,validNames),1,'first');
+            if ~isempty(idx)
+                name = validNames(idx);
             end
         end
 
