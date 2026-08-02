@@ -216,7 +216,7 @@ classdef Log
 
             for k = 1:numel(st)
                 name = string(st(k).name);
-                if startsWith(name, "desmostorm.Log.") || name == "desmostorm.Log"
+                if desmostorm.Log.isFacadeFrame_(name)
                     continue
                 end
 
@@ -226,6 +226,15 @@ classdef Log
             end
 
             source = "unknown";
+        end
+
+        function tf = isFacadeFrame_(name)
+        %ISFACADEFRAME_ True for fully qualified or short desmostorm facade frames.
+            name = string(name);
+            tf = startsWith(name, "desmostorm.Log.") || ...
+                name == "desmostorm.Log" || ...
+                startsWith(name, "Log.") || ...
+                name == "Log";
         end
 
         function msg = normalizeMsg_(msg)
