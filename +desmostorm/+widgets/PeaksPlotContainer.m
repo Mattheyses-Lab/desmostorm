@@ -359,8 +359,8 @@ classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
         function xy = getAxesPoint(obj,E)
             % Prefer the hub-provided current axes when available.
             ax = obj.MainAxes;
-            if isprop(E,'CurrentAxes') && ~isempty(E.CurrentAxes) && isvalid(E.CurrentAxes)
-                if E.CurrentAxes == obj.MainAxes
+            if isprop(E,'CurrentAxes') && obj.isLiveGraphicsHandle(E.CurrentAxes)
+                if obj.isSameHandle(E.CurrentAxes,obj.MainAxes)
                     ax = E.CurrentAxes;
                 end
             end
@@ -403,14 +403,50 @@ classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
 
             while isprop(tgt,'Parent')
                 tgt = tgt.Parent;
-                if isempty(tgt) || ~isvalid(tgt)
+                if ~obj.isLiveGraphicsHandle(tgt)
                     return
                 end
 
-                if tgt == obj.MainAxes
+                if obj.isSameHandle(tgt,obj.MainAxes)
                     tf = true;
                     return
                 end
+            end
+        end
+
+        function tf = isLiveGraphicsHandle(~,h)
+            % Hub event targets can occasionally be opaque graphics wrappers.
+            % Use isgraphics first, then fall back to isvalid only for handles
+            % that support it.
+            tf = false;
+            if isempty(h)
+                return
+            end
+
+            try
+                tf = isgraphics(h);
+            catch
+                tf = false;
+            end
+
+            if tf
+                return
+            end
+
+            if isa(h,'handle')
+                try
+                    tf = isvalid(h);
+                catch
+                    tf = false;
+                end
+            end
+        end
+
+        function tf = isSameHandle(~,a,b)
+            try
+                tf = isequal(a,b);
+            catch
+                tf = false;
             end
         end
 
@@ -501,12 +537,12 @@ classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
             end
 
             tgt = E.Target;
-            if isempty(tgt) || ~isvalid(tgt)
+            if ~obj.isLiveGraphicsHandle(tgt)
                 tf = false;
                 return
             end
 
-            tf = tgt == obj.MainAxes || obj.isDescendantOfMainAxes(tgt);
+            tf = obj.isSameHandle(tgt,obj.MainAxes) || obj.isDescendantOfMainAxes(tgt);
         end
 
         function onMove(obj,E)
