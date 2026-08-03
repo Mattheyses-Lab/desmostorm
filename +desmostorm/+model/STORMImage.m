@@ -347,6 +347,15 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
             % assume same size per channel
             obj.ImageSize_ = obj.ImageData_.Components(1).Size;
         end
+
+        function regionID = nextActiveRegionID_(obj)
+        %NEXTACTIVEREGIONID_ Return the first remaining region or empty.
+            if isempty(obj.RegionOrder)
+                regionID = strings(1,0);
+            else
+                regionID = obj.RegionOrder(1);
+            end
+        end
     end
 
     %% Region management (find, add, remove, set active, etc.)
@@ -365,6 +374,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
             end
 
             if ~isKey(obj.RegionsDict, ID)
+                oldActiveID = obj.ActiveRegionID;
                 % create new STORMRegion
                 reg = desmostorm.model.STORMRegion(obj,ID,Center,BoxSize,LabelID,LabelSource,opts.Score);
                 % add it to the Regions dictionary
@@ -375,8 +385,17 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
                 obj.RegionsDict(ID).Name = sprintf('REGION-%03d',obj.NextRegionOrdinal);
                 % increment the counter
                 obj.NextRegionOrdinal = obj.NextRegionOrdinal + 1;
+                % keep the first region active at the model layer
+                if isempty(obj.ActiveRegionID)
+                    obj.ActiveRegionID = ID;
+                end
                 % notify self -> RegionAdded
-                if opts.Notify, notify(obj,'RegionAdded'); end
+                if opts.Notify
+                    notify(obj,'RegionAdded',desmostorm.model.events.RegionAdded(obj.ID,ID,obj.RegionsDict(ID).Name));
+                    if ~isequal(obj.ActiveRegionID, oldActiveID)
+                        notify(obj,'ActiveRegionChanged',desmostorm.model.events.ActiveRegionChanged(obj.ID,obj.ActiveRegionID,oldActiveID));
+                    end
+                end
             end
         end
 
@@ -392,25 +411,38 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
                 obj.RegionsDict(ID).Name = sprintf('REGION-%03d',obj.NextRegionOrdinal);
                 % increment the counter
                 obj.NextRegionOrdinal = obj.NextRegionOrdinal + 1;
+                % keep classifier-created batches from leaving the model with no active region
+                if isempty(obj.ActiveRegionID)
+                    obj.ActiveRegionID = ID;
+                end
             end
         end
 
         function removeRegion(obj, regionID)
             regionID = string(regionID);
             if isKey(obj.RegionsDict, regionID)
-                % Clear active if removing it
-                if obj.ActiveRegionID == regionID
-                    obj.ActiveRegionID = strings(1,0);
-                    notify(obj,'ActiveRegionChanged');
-                end
+                oldActiveID = obj.ActiveRegionID;
+                oldSelectedIDs = obj.SelectedRegionIDs;
+                regionName = obj.RegionsDict(regionID).Name;
 
-                % remove(obj.RegionsDict, regionID);
                 obj.RegionsDict = obj.RegionsDict.remove(regionID);
-                
                 obj.RegionOrder = obj.RegionOrder(obj.RegionOrder ~= regionID);
                 obj.SelectedRegionIDs = obj.SelectedRegionIDs(obj.SelectedRegionIDs ~= regionID);
-                % notify app that region was removed *after* mutating RegionOrder
-                notify(obj,'RegionRemoved');
+
+                if isequal(oldActiveID, regionID)
+                    obj.ActiveRegionID = obj.nextActiveRegionID_();
+                end
+
+                % notify app after mutation, with enough detail to avoid state inference
+                notify(obj,'RegionRemoved',desmostorm.model.events.RegionRemoved(obj.ID,regionID,regionName));
+                if ~isequal(obj.SelectedRegionIDs, oldSelectedIDs)
+                    notify(obj,'RegionSelectionChanged', ...
+                        desmostorm.model.events.RegionSelectionChanged(obj.ID,obj.SelectedRegionIDs,oldSelectedIDs));
+                end
+                if ~isequal(obj.ActiveRegionID, oldActiveID)
+                    notify(obj,'ActiveRegionChanged', ...
+                        desmostorm.model.events.ActiveRegionChanged(obj.ID,obj.ActiveRegionID,oldActiveID));
+                end
             end
         end
 
@@ -424,16 +456,19 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
         end
 
         function setActiveRegion(obj, regionID)
+            oldID = obj.ActiveRegionID;
             regionID = string(regionID);
             % return if region is already active
-            if regionID == obj.ActiveRegionID, return; end
+            if isequal(regionID, oldID), return; end
             % invalid ID -> set empty
             if ~isKey(obj.RegionsDict, regionID)
                 regionID = strings(1,0);
             end
+            if isequal(regionID, oldID), return; end
             % set active and notify
             obj.ActiveRegionID = regionID;
-            notify(obj,'ActiveRegionChanged');
+            notify(obj,'ActiveRegionChanged', ...
+                desmostorm.model.events.ActiveRegionChanged(obj.ID,obj.ActiveRegionID,oldID));
         end
 
 
@@ -457,14 +492,25 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
         % --- select ---
         function setRegionSelection(obj,IDs)
             if isempty(IDs), obj.clearRegionSelection(); return; end
+            oldIDs = obj.SelectedRegionIDs;
             validIDs = IDs(obj.hasRegion(IDs));
+            validIDs = string(validIDs(:));
+            if isequal(validIDs, oldIDs)
+                return
+            end
             obj.SelectedRegionIDs = validIDs;
-            notify(obj,'RegionSelectionChanged');
+            notify(obj,'RegionSelectionChanged', ...
+                desmostorm.model.events.RegionSelectionChanged(obj.ID,obj.SelectedRegionIDs,oldIDs));
         end
 
         function clearRegionSelection(obj)
+            oldIDs = obj.SelectedRegionIDs;
+            if isempty(oldIDs)
+                return
+            end
             obj.SelectedRegionIDs = string.empty(1,0);
-            notify(obj,'RegionSelectionChanged');
+            notify(obj,'RegionSelectionChanged', ...
+                desmostorm.model.events.RegionSelectionChanged(obj.ID,obj.SelectedRegionIDs,oldIDs));
         end
 
 

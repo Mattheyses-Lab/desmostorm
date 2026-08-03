@@ -399,10 +399,10 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             if isempty(img), return; end
 
             % add new set of region listeners for the current ActiveImage
-            obj.RegionListeners(1) = addlistener(img,'RegionAdded',             @(~,~) notify(obj,'RegionAdded'));
-            obj.RegionListeners(2) = addlistener(img,'RegionRemoved',           @(~,~) notify(obj,'RegionRemoved'));
-            obj.RegionListeners(3) = addlistener(img,'ActiveRegionChanged',     @(~,~) notify(obj,'ActiveRegionChanged'));
-            obj.RegionListeners(4) = addlistener(img,'RegionSelectionChanged',  @(~,~) notify(obj,'RegionSelectionChanged'));
+            obj.RegionListeners(1) = addlistener(img,'RegionAdded',             @(~,evt) notify(obj,'RegionAdded',evt));
+            obj.RegionListeners(2) = addlistener(img,'RegionRemoved',           @(~,evt) notify(obj,'RegionRemoved',evt));
+            obj.RegionListeners(3) = addlistener(img,'ActiveRegionChanged',     @(~,evt) notify(obj,'ActiveRegionChanged',evt));
+            obj.RegionListeners(4) = addlistener(img,'RegionSelectionChanged',  @(~,evt) notify(obj,'RegionSelectionChanged',evt));
 
         end
 

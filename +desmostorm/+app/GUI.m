@@ -1045,10 +1045,10 @@ classdef GUI < handle
                 obj.projectL(3) = addlistener(obj.Project,'ActiveImageChanged',     @(~,~) obj.onActiveImageChanged());
                 obj.projectL(4) = addlistener(obj.Project,'MaxSizeCChanged',        @(~,~) obj.onMaxSizeCChanged());
                 % Regions
-                obj.projectL(5) = addlistener(obj.Project,'RegionAdded',            @(~,~) obj.onRegionAdded());
-                obj.projectL(6) = addlistener(obj.Project,'RegionRemoved',          @(~,~) obj.onRegionRemoved());
-                obj.projectL(7) = addlistener(obj.Project,'ActiveRegionChanged',    @(~,~) obj.onActiveRegionChanged());
-                obj.projectL(8) = addlistener(obj.Project,'RegionSelectionChanged', @(~,~) obj.onRegionSelectionChanged());
+                obj.projectL(5) = addlistener(obj.Project,'RegionAdded',            @(~,e) obj.onRegionAdded(e));
+                obj.projectL(6) = addlistener(obj.Project,'RegionRemoved',          @(~,e) obj.onRegionRemoved(e));
+                obj.projectL(7) = addlistener(obj.Project,'ActiveRegionChanged',    @(~,e) obj.onActiveRegionChanged(e));
+                obj.projectL(8) = addlistener(obj.Project,'RegionSelectionChanged', @(~,e) obj.onRegionSelectionChanged(e));
                 % Labels
                 obj.projectL(9) = addlistener(obj.Project,'LabelsChanged',          @(~,~) obj.onLabelsChanged());
             end
@@ -1613,28 +1613,28 @@ classdef GUI < handle
     methods (Access=private)
 
         % --- LISTENER CALLBACKS ---
-        function onRegionAdded(obj)
+        function onRegionAdded(obj,evt)
         %ONREGIONADDED RegionAdded event callback
+            desmostorm.Log.INFO("Region added (" + obj.formatRegionEventLabel(evt) + ").")
             obj.refreshRegionListBox();
-            desmostorm.Log.DEBUG("Region added.")
         end
 
-        function onRegionRemoved(obj)
+        function onRegionRemoved(obj,evt)
         %ONREGIONREMOVED RegionRemoved event callback    
+            desmostorm.Log.INFO("Region removed (" + obj.formatRegionEventLabel(evt) + ").")
             obj.refreshRegionListBox();
-            desmostorm.Log.DEBUG("Region removed.")
         end
 
-        function onActiveRegionChanged(obj)
+        function onActiveRegionChanged(obj,evt)
         %ONACTIVEREGIONCHANGED ActiveRegionChanged event callback
+            desmostorm.Log.DEBUG("Active region changed (" + obj.formatRegionTransition(evt.OldID,evt.NewID) + ").")
             obj.syncActiveRegionToView();
-            desmostorm.Log.DEBUG("Active Region changed.")
         end
 
-        function onRegionSelectionChanged(obj)
+        function onRegionSelectionChanged(obj,evt)
         %ONREGIONSELECTIONCHANGED RegionSelectionChanged event callback
+            desmostorm.Log.DEBUG("Region selection changed (" + obj.formatRegionSelection(evt.NewIDs) + ").")
             obj.refreshRegionListBox();
-            desmostorm.Log.DEBUG("Region selection changed.")
         end
 
         % --- UI SYNC DRIVER ---
@@ -1684,15 +1684,49 @@ classdef GUI < handle
             if ~isempty(reg)
                 obj.RegionListBox.Value = reg.ID;
             else
-                % set new active region in model, event will drive UI sync
-                % obj.RegionListBox.Value = img.RegionOrder(1);
-                img.setActiveRegion(img.RegionOrder(1));
+                obj.RegionListBox.Value = string.empty();
             end
         end
 
         function clearRegionListBox(obj)
         %CLEARREGIONLISTBOX Reset RegionListBox
             set(obj.RegionListBox,"Items",{},"ItemsData",{},"Value",{});
+        end
+
+        function label = formatRegionEventLabel(~,evt)
+        %FORMATREGIONEVENTLABEL Build a readable region label from event data.
+            if isprop(evt,"RegionName") && strlength(evt.RegionName) > 0
+                label = evt.RegionName;
+            elseif isprop(evt,"RegionID")
+                label = evt.RegionID;
+            else
+                label = "unknown";
+            end
+        end
+
+        function label = formatRegionTransition(obj,oldID,newID)
+        %FORMATREGIONTRANSITION Format an old -> new region ID transition.
+            label = obj.formatRegionID(oldID) + " -> " + obj.formatRegionID(newID);
+        end
+
+        function label = formatRegionSelection(~,ids)
+        %FORMATREGIONSELECTION Format selected region IDs for DEBUG logs.
+            ids = string(ids(:));
+            if isempty(ids)
+                label = "none";
+            else
+                label = strjoin(ids, ", ");
+            end
+        end
+
+        function label = formatRegionID(~,id)
+        %FORMATREGIONID Format empty region IDs as "none".
+            id = string(id);
+            if isempty(id) || all(strlength(id) == 0)
+                label = "none";
+            else
+                label = strjoin(id(:), ", ");
+            end
         end
 
         function refreshRegionViewer(obj)
@@ -2156,6 +2190,7 @@ classdef GUI < handle
                 case "BoxSize"
                     % delete all existing Regions
                     obj.Project.removeAllRegions();
+                    desmostorm.Log.INFO("Removed all regions after box size changed.");
                     % refresh the display for the current image
                     obj.syncActiveImageToView();
                     obj.refreshRegionROI();
@@ -2316,11 +2351,13 @@ classdef GUI < handle
         %ONOPEN MenuSelectedCallback for [File]->[Close]
             % no project -> return
             if isempty(obj.Project), return; end
+            projectName = obj.Project.Name;
             % --- delete project, detach listeners, refresh UI ---
             obj.Project.delete(); 
             obj.Project = desmostorm.model.STORMProject.empty(); % set empty so we do not store old handle
             obj.detatchListeners();
             obj.refreshUI();
+            desmostorm.Log.INFO(sprintf("Closed project: %s",projectName));
         end
 
         function onSave(obj)
@@ -2354,6 +2391,7 @@ classdef GUI < handle
         function onSaveSettings(obj)
         %ONSAVESETTINGS MenuSelectedCallback for [File]->[Save Settings]        
             obj.Settings.save(); % save current settings to default file
+            desmostorm.Log.INFO("Settings saved.");
         end
 
         function onLoadImages(obj)
@@ -2367,6 +2405,7 @@ classdef GUI < handle
             fullpaths = fullfile(path, files);
             % add new STORMImage for each file
             obj.Project.addImagesFromPaths(fullpaths);
+            desmostorm.Log.INFO(sprintf("Loaded %d image(s).",numel(fullpaths)));
         end
 
     end
@@ -2428,6 +2467,7 @@ classdef GUI < handle
 
         function processAllRegions(obj)
             % create progress dialog
+            desmostorm.Log.INFO("Analyzing region measurements...");
             h = uiprogressdlg(obj.Fig,"Message",'Analyzing ROIs. Please wait...','Indeterminate','on');
             % re-process everything
             obj.Project.processAll(obj.getRunConfig())
@@ -2435,10 +2475,12 @@ classdef GUI < handle
             close(h);
             % sync UI
             obj.syncActiveImageToView();
+            desmostorm.Log.INFO("Region analysis complete.");
         end
 
         function onAutoFitAllROIs(obj)
             % create progress dialog
+            desmostorm.Log.INFO("Fitting ROIs for all regions...");
             h = uiprogressdlg(obj.Fig,"Message",'Fitting ROIs. Please wait...','Indeterminate','on');
             % re-process everything
             obj.Project.autofitAllRegionROIs(obj.getRunConfig())
@@ -2447,6 +2489,7 @@ classdef GUI < handle
 
             % reprocess region measurements
             obj.processAllRegions();
+            desmostorm.Log.INFO("ROI fitting complete.");
         end
 
         function onAutoFitActiveROI(obj)
@@ -2459,6 +2502,7 @@ classdef GUI < handle
             reg = img.ActiveRegion;
 
             % create progress dialog
+            desmostorm.Log.INFO(sprintf("Fitting ROI for region: %s",reg.Name));
             h = uiprogressdlg(obj.Fig,"Message",'Fitting ROI. Please wait...','Indeterminate','on');
             % re-process everything
             img.autofitRegionROI(reg,obj.getRunConfig());
@@ -2466,6 +2510,7 @@ classdef GUI < handle
             close(h);
             % reprocess region measurements
             obj.processActiveRegion();
+            desmostorm.Log.INFO(sprintf("ROI fitting complete for region: %s",reg.Name));
         end
 
         function onRunClassifier(obj)

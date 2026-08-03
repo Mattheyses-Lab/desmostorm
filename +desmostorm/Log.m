@@ -70,6 +70,9 @@ classdef Log
 
             log = matlabx.logging.Logger();
             log.configure(opts.LoggingConfig);
+            % GUI sessions should surface interactive feedback immediately.
+            % High-volume command-line workflows can still use Logger directly.
+            log.FlushMinIntervalSec = 0;
             logPath = opts.LogFile;
             log.setFileSink(char(logPath), true);
 
