@@ -5,8 +5,8 @@ classdef Display < handle
     properties (Access=private)
         ColormapName_     string = "turbo"    % selection name
         ColormapCategory_ string = "MATLAB"   % selection category
-        ChannelColorMode_ string = "luts"     % "colors" or "luts"
-        AutoScaleDisplayIntensity_ logical = false     % whether to automatically set display limits
+        ChannelColorMode_ string = "colors"     % "colors" or "luts"
+        AutoScaleDisplayIntensity_ logical = true     % whether to automatically set display limits
     end
 
     properties (Dependent)

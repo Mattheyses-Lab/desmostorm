@@ -2,9 +2,9 @@ classdef PeaksPlot < handle
 % PeaksPlot options for region linescan display and export
 
     properties (Access=private)
-        RawLineWidth_       (1,1) double = 1
+        RawLineWidth_       (1,1) double = 0.5
         Color_              (1,3) double {mustBeInRange(Color_,0,1)} = [0 0 0]
-        SmoothLineWidth_    (1,1) double = 2
+        SmoothLineWidth_    (1,1) double = 1
         BackgroundColor_    (1,3) double {mustBeInRange(BackgroundColor_,0,1)} = [1 1 1]
         ForegroundColor_    (1,3) double {mustBeInRange(ForegroundColor_,0,1)} = [0 0 0]
         ShownPlots_         (1,1) string {mustBeMember(ShownPlots_,["current","all"])} = "all"
@@ -12,7 +12,7 @@ classdef PeaksPlot < handle
         AnnotationColorMode_ (1,1) string {mustBeMember(AnnotationColorMode_,["auto","manual"])} = "auto"
         AnnotationColor_     (1,3) double {mustBeInRange(AnnotationColor_,0,1)} = [0 0 0]
         DistanceAnnotations_    (1,1) matlab.lang.OnOffSwitchState = "on"
-        DistanceAnnotationsMode_ (1,1) string {mustBeMember(DistanceAnnotationsMode_,["data","lanes"])} = "lanes"
+        DistanceAnnotationsMode_ (1,1) string {mustBeMember(DistanceAnnotationsMode_,["data","lanes"])} = "data"
         WidthAnnotations_       (1,1) matlab.lang.OnOffSwitchState = "on"
         WidthAnnotationsMode_    (1,1) string {mustBeMember(WidthAnnotationsMode_,["normal","hover"])} = "hover"
     end
