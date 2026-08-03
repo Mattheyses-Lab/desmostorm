@@ -8,8 +8,8 @@ desmostorm.setup.setupSearchPath();
 desmostorm.Log.INFO("Setting up matlabx for desmostorm...");
 desmostorm.setup.matlabx();
 
-% restore default settings
-desmostorm.Log.INFO("Restoring default desmostorm settings...");
-desmostorm.config.Settings.restore();
+% create or migrate user settings without overwriting existing preferences
+desmostorm.Log.INFO("Loading desmostorm settings...");
+desmostorm.config.Settings.load();
 
 end
