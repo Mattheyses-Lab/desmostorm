@@ -1,9 +1,10 @@
 classdef Exporter
     methods (Static)
-        function result = exportRegionMeasurements(project,config)
+        function result = exportRegionMeasurements(project,config,opts)
             arguments
                 project (1,1) desmostorm.model.STORMProject
                 config  (1,1) desmostorm.config.Settings
+                opts.ProgressDialog = matlab.ui.dialog.ProgressDialog.empty()
             end
 
             result = false;
@@ -15,14 +16,17 @@ classdef Exporter
 
             if isequal(file,0), return; end
 
-            desmostorm.export.regionMeasurementsXlsx(project, fullfile(path, file));
+            setProgressMessage(opts.ProgressDialog,'Writing region measurements...');
+            desmostorm.export.regionMeasurementsXlsx(project, fullfile(path, file), ...
+                "ProgressDialog",opts.ProgressDialog);
             result = true;
         end
 
-        function result = exportSummaryPDF(project,config)
+        function result = exportSummaryPDF(project,config,opts)
             arguments
                 project (1,1) desmostorm.model.STORMProject
                 config  (1,1) desmostorm.config.Settings
+                opts.ProgressDialog = matlab.ui.dialog.ProgressDialog.empty()
             end
 
             result = false;
@@ -54,30 +58,25 @@ classdef Exporter
             defaultName = fullfile(config.IO.DefaultFolder, [char(project.Name),'_summary.pdf']);
             [file, path] = uiputfile('*.pdf', ...
                 'Export peak plots', defaultName);
-            parentFig = desmostorm.app.focusMainFigure();
+            desmostorm.app.focusMainFigure();
 
             if isequal(file,0), return; end
 
-            h = matlab.ui.dialog.ProgressDialog.empty();
-            if ~isempty(parentFig) && isvalid(parentFig)
-                h = uiprogressdlg(parentFig, ...
-                    "Message",'Exporting summary PDF. Please wait...', ...
-                    'Indeterminate','on');
-            end
-            cleanupProgress = onCleanup(@() closeProgressDialog(h));
+            setProgressMessage(opts.ProgressDialog,'Exporting summary PDF...');
 
             paramsCell = matlabx.struct.toKeyValueCell(params);
 
             desmostorm.export.summaryPDF(project, fullfile(path,file), config, ...
-                "ProgressDialog", h, paramsCell{:});
+                "ProgressDialog", opts.ProgressDialog, paramsCell{:});
 
             result = true;
         end
 
-        function result = exportRegionImages(project,config)
+        function result = exportRegionImages(project,config,opts)
             arguments
                 project (1,1) desmostorm.model.STORMProject
                 config  (1,1) desmostorm.config.Settings
+                opts.ProgressDialog = matlab.ui.dialog.ProgressDialog.empty()
             end
 
             result = false;
@@ -87,7 +86,9 @@ classdef Exporter
 
             if ~isfolder(folderName), return; end
 
-            desmostorm.export.regionImages(project, folderName);
+            setProgressMessage(opts.ProgressDialog,'Writing region images...');
+            desmostorm.export.regionImages(project, folderName, ...
+                "ProgressDialog",opts.ProgressDialog);
             result = true;
         end
 
@@ -96,6 +97,7 @@ classdef Exporter
                 project (1,1) desmostorm.model.STORMProject
                 config  (1,1) desmostorm.config.Settings
                 opts.CurrentChannel (1,1) double {mustBeInteger,mustBePositive} = 1
+                opts.ProgressDialog = matlab.ui.dialog.ProgressDialog.empty()
             end
 
             % export success indicator, false unless end of function is reached
@@ -159,17 +161,21 @@ classdef Exporter
             filename = fullfile(path,file);            
 
             % --- export ---
+            setProgressMessage(opts.ProgressDialog,'Writing linescan plot...');
             optionsCell = matlabx.struct.toKeyValueCell(options);
-            desmostorm.export.regionLinescanPlot(region,filename,optionsCell{:});
+            desmostorm.export.regionLinescanPlot(region,filename, ...
+                "ProgressDialog",opts.ProgressDialog, ...
+                optionsCell{:});
 
             result = true;
 
         end
 
-        function result = exportRegionSubimageWithROI(project,config)
+        function result = exportRegionSubimageWithROI(project,config,opts)
             arguments
                 project (1,1) desmostorm.model.STORMProject
                 config  (1,1) desmostorm.config.Settings
+                opts.ProgressDialog = matlab.ui.dialog.ProgressDialog.empty()
             end
 
             % export success indicator, false unless end of function is reached
@@ -209,16 +215,20 @@ classdef Exporter
             filename = fullfile(path,file);            
 
             % --- export ---
+            setProgressMessage(opts.ProgressDialog,'Writing region image...');
             optionsCell = matlabx.struct.toKeyValueCell(options);
-            desmostorm.export.regionSubimageWithROI(region,filename,optionsCell{:});
+            desmostorm.export.regionSubimageWithROI(region,filename, ...
+                "ProgressDialog",opts.ProgressDialog, ...
+                optionsCell{:});
 
             result = true;
         end
     end
 end
 
-function closeProgressDialog(h)
+function setProgressMessage(h,msg)
     if ~isempty(h) && isvalid(h)
-        close(h);
+        h.Message = msg;
+        drawnow limitrate
     end
 end

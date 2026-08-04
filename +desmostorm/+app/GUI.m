@@ -319,7 +319,7 @@ classdef GUI < handle
                 'BackgroundColor',[.12 .12 .12]);
 
             % initialize items
-            itemTitles = ["Images","Regions","Analysis","Channel Display","Colormap","Image Display","Peaks Plot","Labels"];
+            itemTitles = ["Images","Regions","Analysis","Channel Display","Colormap","Image Display","Peaks Plot","Linescan ROI","Labels"];
 
             for i = 1:numel(itemTitles)
                 obj.SettingsAccordion.addItem("Title",itemTitles(i),...
@@ -347,6 +347,7 @@ classdef GUI < handle
                 "ChannelDisplay",struct(),...
                 "Analysis",struct(),...
                 "PeaksPlot",struct(),...
+                "ROI",struct(),...
                 "Box",struct());
 
             % --- Colormap ---
@@ -368,6 +369,10 @@ classdef GUI < handle
             % --- Peaks Plot ---
             desmostorm.Log.DEBUG("Setting up Peaks Plot controls...");
             try obj.setupPeaksPlotControls(); catch ME, desmostorm.Log.EXCEPTION(ME); rethrow(ME); end
+
+            % --- Linescan ROI ---
+            desmostorm.Log.DEBUG("Setting up Linescan ROI controls...");
+            try obj.setupROIControls(); catch ME, desmostorm.Log.EXCEPTION(ME); rethrow(ME); end
 
             % --- Labels ---
             desmostorm.Log.DEBUG("Setting up Labels controls...");
@@ -689,6 +694,83 @@ classdef GUI < handle
                 "ValueChangedFcn",@(o,~) obj.PeaksPlotSettingsChanged(o,"WidthAnnotationsMode"));
         end
 
+        function setupROIControls(obj)
+            item = obj.SettingsAccordion.getItem("Linescan ROI");
+            set(item.Pane,...
+                "RowHeight",repmat({'fit'},1,10),...
+                "ColumnWidth",{'fit','1x'},...
+                "RowSpacing",5,...
+                "ColumnSpacing",5);
+
+            uilabel(item.Pane,"Text","ROI Color","FontColor",[0.85 0.85 0.85]);
+            obj.SettingsUI.ROI.ROIColorPicker = uicolorpicker(...
+                'Parent',item.Pane,...
+                'Value',obj.Settings.ROI.ROIColor,...
+                'ValueChangedFcn',@(o,~) obj.ROISettingsChanged(o,"ROIColor"));
+
+            uilabel(item.Pane,"Text","ROI Line Width","FontColor",[0.85 0.85 0.85]);
+            obj.SettingsUI.ROI.ROILineWidthEditField = uieditfield(...
+                item.Pane,...
+                "numeric",...
+                "Value",obj.Settings.ROI.ROILineWidth,...
+                "ValueChangedFcn",@(o,~) obj.ROISettingsChanged(o,"ROILineWidth"));
+
+            uilabel(item.Pane,"Text","ROI Opacity","FontColor",[0.85 0.85 0.85]);
+            obj.SettingsUI.ROI.ROIFaceAlphaEditField = uieditfield(...
+                item.Pane,...
+                "numeric",...
+                "Limits",[0 1],...
+                "Value",obj.Settings.ROI.ROIFaceAlpha,...
+                "ValueChangedFcn",@(o,~) obj.ROISettingsChanged(o,"ROIFaceAlpha"));
+
+            uilabel(item.Pane,"Text","ROI Marker Size","FontColor",[0.85 0.85 0.85]);
+            obj.SettingsUI.ROI.ROIMarkerSizeEditField = uieditfield(...
+                item.Pane,...
+                "numeric",...
+                "Value",obj.Settings.ROI.ROIMarkerSize,...
+                "ValueChangedFcn",@(o,~) obj.ROISettingsChanged(o,"ROIMarkerSize"));
+
+            uilabel(item.Pane,"Text","Annotation Color","FontColor",[0.85 0.85 0.85]);
+            obj.SettingsUI.ROI.AnnotationLineColorPicker = uicolorpicker(...
+                'Parent',item.Pane,...
+                'Value',obj.Settings.ROI.AnnotationLineColor,...
+                'ValueChangedFcn',@(o,~) obj.ROISettingsChanged(o,"AnnotationLineColor"));
+
+            uilabel(item.Pane,"Text","Annotation Line Width","FontColor",[0.85 0.85 0.85]);
+            obj.SettingsUI.ROI.AnnotationLineWidthEditField = uieditfield(...
+                item.Pane,...
+                "numeric",...
+                "Value",obj.Settings.ROI.AnnotationLineWidth,...
+                "ValueChangedFcn",@(o,~) obj.ROISettingsChanged(o,"AnnotationLineWidth"));
+
+            uilabel(item.Pane,"Text","Angle Label","FontColor",[0.85 0.85 0.85]);
+            obj.SettingsUI.ROI.RotationAngleVisibleDropDown = uidropdown(...
+                item.Pane,...
+                "Items",{'on','off'},...
+                "Value",char(obj.Settings.ROI.RotationAngleVisible),...
+                "ValueChangedFcn",@(o,~) obj.ROISettingsChanged(o,"RotationAngleVisible"));
+
+            uilabel(item.Pane,"Text","Angle Mode","FontColor",[0.85 0.85 0.85]);
+            obj.SettingsUI.ROI.RotationAngleModeDropDown = uidropdown(...
+                item.Pane,...
+                "Items",{'half-circle','full-circle'},...
+                "Value",obj.Settings.ROI.RotationAngleMode,...
+                "ValueChangedFcn",@(o,~) obj.ROISettingsChanged(o,"RotationAngleMode"));
+
+            uilabel(item.Pane,"Text","Font Color","FontColor",[0.85 0.85 0.85]);
+            obj.SettingsUI.ROI.FontColorPicker = uicolorpicker(...
+                'Parent',item.Pane,...
+                'Value',obj.Settings.ROI.FontColor,...
+                'ValueChangedFcn',@(o,~) obj.ROISettingsChanged(o,"FontColor"));
+
+            uilabel(item.Pane,"Text","Font Size","FontColor",[0.85 0.85 0.85]);
+            obj.SettingsUI.ROI.FontSizeEditField = uieditfield(...
+                item.Pane,...
+                "numeric",...
+                "Value",obj.Settings.ROI.FontSize,...
+                "ValueChangedFcn",@(o,~) obj.ROISettingsChanged(o,"FontSize"));
+        end
+
         function setupLabelsControls(obj)
             item = obj.SettingsAccordion.getItem("Labels");
             % set size and spacing of pane grid
@@ -795,8 +877,8 @@ classdef GUI < handle
             obj.RegionViewer.Tools.DrawRectangle.ROIPreviewMovedFcn    = @(~,d) obj.onROIPreviewMoved(d);
             obj.RegionViewer.Tools.DrawRectangle.ROIMoveCommittedFcn   = @(~,d) obj.onROIMoveCommitted(d);
             obj.RegionViewer.Tools.DrawRectangle.ROIDeletedFcn         = @(~,~) obj.onROIDeleted();
-            % set options for RegionViewer DrawRectangle tool
-            obj.RegionViewer.Tools.DrawRectangle.RotationAngleMode = 'half-circle';
+            % apply saved appearance settings to the RegionViewer DrawRectangle tool
+            obj.refreshROISettings();
 
             % keep ImageViewer and RegionViewer on the same active channel
             obj.Ax.addLink(obj.RegionViewer, {'C', ...
@@ -1022,6 +1104,18 @@ classdef GUI < handle
             obj.SettingsUI.PeaksPlot.DistanceAnnotationsModeDropDown.Value = char(S.PeaksPlot.DistanceAnnotationsMode);
             obj.SettingsUI.PeaksPlot.WidthAnnotationsDropDown.Value = char(S.PeaksPlot.WidthAnnotations);
             obj.SettingsUI.PeaksPlot.WidthAnnotationsModeDropDown.Value = char(S.PeaksPlot.WidthAnnotationsMode);
+            % Linescan ROI
+            obj.SettingsUI.ROI.ROIColorPicker.Value = S.ROI.ROIColor;
+            obj.SettingsUI.ROI.ROILineWidthEditField.Value = S.ROI.ROILineWidth;
+            obj.SettingsUI.ROI.ROIFaceAlphaEditField.Value = S.ROI.ROIFaceAlpha;
+            obj.SettingsUI.ROI.ROIMarkerSizeEditField.Value = S.ROI.ROIMarkerSize;
+            obj.SettingsUI.ROI.AnnotationLineColorPicker.Value = S.ROI.AnnotationLineColor;
+            obj.SettingsUI.ROI.AnnotationLineWidthEditField.Value = S.ROI.AnnotationLineWidth;
+            obj.SettingsUI.ROI.RotationAngleVisibleDropDown.Value = char(S.ROI.RotationAngleVisible);
+            obj.SettingsUI.ROI.RotationAngleModeDropDown.Value = S.ROI.RotationAngleMode;
+            obj.SettingsUI.ROI.FontColorPicker.Value = S.ROI.FontColor;
+            obj.SettingsUI.ROI.FontSizeEditField.Value = S.ROI.FontSize;
+            obj.refreshROISettings();
             % Display
             obj.SettingsUI.Display.AutoScaleDisplayIntensityCheckBox.Value = S.Display.AutoScaleDisplayIntensity;
             % Sliders
@@ -1058,6 +1152,7 @@ classdef GUI < handle
             obj.settingsL(3) = addlistener(obj.Settings,'IOChanged',        @(~,e) obj.onIOChanged(e));
             obj.settingsL(4) = addlistener(obj.Settings,'PeaksPlotChanged', @(~,e) obj.onPeaksPlotChanged(e));
             obj.settingsL(5) = addlistener(obj.Settings,'BoxChanged',       @(~,e) obj.onBoxChanged(e));
+            obj.settingsL(6) = addlistener(obj.Settings,'ROIChanged',       @(~,e) obj.onROIChanged(e));
         end
 
         function refreshHotkeys(obj)
@@ -1925,6 +2020,18 @@ classdef GUI < handle
             obj.RegionViewer.Tools.DrawRectangle.setROIPosition(img.ActiveRegion.ROI);
         end
 
+        function refreshROISettings(obj)
+            if isempty(obj.RegionViewer) || ~isvalid(obj.RegionViewer), return; end
+
+            tool = obj.RegionViewer.Tools.DrawRectangle;
+            S = obj.Settings.ROI.toStruct();
+            names = fieldnames(S);
+
+            for i = 1:numel(names)
+                tool.(names{i}) = S.(names{i});
+            end
+        end
+
         function clearRegionLinescanROI(obj)
         %CLEARREGIONLINESCANROI Reset RegionLinescanROI
             obj.RegionViewer.Tools.DrawRectangle.setROIPosition(desmostorm.model.STORMRegion.ROITemplate);
@@ -2178,6 +2285,11 @@ classdef GUI < handle
             end
         end
 
+        function onROIChanged(obj,e)
+            if isempty(obj.RegionViewer) || ~isvalid(obj.RegionViewer), return; end
+            obj.RegionViewer.Tools.DrawRectangle.(e.Name) = e.NewValue;
+        end
+
         function onBoxChanged(obj,e)
             % do something
         end
@@ -2262,6 +2374,11 @@ classdef GUI < handle
         function PeaksPlotSettingsChanged(obj,src,stgName)
             % apply the specified setting
             obj.Settings.PeaksPlot.(stgName) = src.Value;
+        end
+
+        function ROISettingsChanged(obj,src,stgName)
+            % apply the specified setting
+            obj.Settings.ROI.(stgName) = src.Value;
         end
 
         function DisplaySettingsChanged(obj,src,stgName)
@@ -2828,7 +2945,9 @@ classdef GUI < handle
 
             desmostorm.Log.INFO("Exporting region measurements...");
             try
-                success = desmostorm.export.Exporter.exportRegionMeasurements(obj.Project,obj.Settings);
+                [h,cleanupProgress] = obj.createExportProgressDialog("Preparing region measurements export..."); %#ok<ASGLU>
+                success = desmostorm.export.Exporter.exportRegionMeasurements(obj.Project,obj.Settings, ...
+                    "ProgressDialog",h);
                 if success
                     desmostorm.Log.INFO("Success.");
                 else
@@ -2844,7 +2963,9 @@ classdef GUI < handle
 
             desmostorm.Log.INFO("Exporting summary PDF...");
             try
-                success = desmostorm.export.Exporter.exportSummaryPDF(obj.Project,obj.Settings);
+                [h,cleanupProgress] = obj.createExportProgressDialog("Preparing summary PDF export..."); %#ok<ASGLU>
+                success = desmostorm.export.Exporter.exportSummaryPDF(obj.Project,obj.Settings, ...
+                    "ProgressDialog",h);
                 if success
                     desmostorm.Log.INFO("Success.");
                 else
@@ -2861,7 +2982,9 @@ classdef GUI < handle
 
             desmostorm.Log.INFO("Exporting region images...");
             try
-                success = desmostorm.export.Exporter.exportRegionImages(obj.Project,obj.Settings);
+                [h,cleanupProgress] = obj.createExportProgressDialog("Preparing region image export..."); %#ok<ASGLU>
+                success = desmostorm.export.Exporter.exportRegionImages(obj.Project,obj.Settings, ...
+                    "ProgressDialog",h);
                 if success
                     desmostorm.Log.INFO("Success.");
                 else
@@ -2877,8 +3000,10 @@ classdef GUI < handle
 
             desmostorm.Log.INFO("Exporting region linescan plot...");
             try
+                [h,cleanupProgress] = obj.createExportProgressDialog("Preparing linescan plot export..."); %#ok<ASGLU>
                 success = desmostorm.export.Exporter.exportRegionLinescanPlot(obj.Project,obj.Settings, ...
-                    "CurrentChannel",obj.Ax.C);
+                    "CurrentChannel",obj.Ax.C, ...
+                    "ProgressDialog",h);
                 if success
                     desmostorm.Log.INFO("Success.");
                 else
@@ -2894,7 +3019,9 @@ classdef GUI < handle
 
             desmostorm.Log.INFO("Exporting region subimage with ROI overlay...");
             try
-                success = desmostorm.export.Exporter.exportRegionSubimageWithROI(obj.Project,obj.Settings);
+                [h,cleanupProgress] = obj.createExportProgressDialog("Preparing region image export..."); %#ok<ASGLU>
+                success = desmostorm.export.Exporter.exportRegionSubimageWithROI(obj.Project,obj.Settings, ...
+                    "ProgressDialog",h);
                 if success
                     desmostorm.Log.INFO("Success.");
                 else
@@ -2904,6 +3031,22 @@ classdef GUI < handle
                 desmostorm.Log.EXCEPTION(ME);
                 obj.guialert("Title",'Error',"Message",ME.message,"Icon",'error');
             end
+        end
+
+    end
+
+    %% Export helpers
+    methods (Access=private)
+
+        function [h,cleanupProgress] = createExportProgressDialog(obj,msg)
+            h = matlab.ui.dialog.ProgressDialog.empty();
+            if ~isempty(obj.Fig) && isvalid(obj.Fig)
+                h = uiprogressdlg(obj.Fig, ...
+                    "Message",msg, ...
+                    "Indeterminate","on");
+            end
+
+            cleanupProgress = onCleanup(@() closeProgressDialog(h));
         end
 
     end
@@ -2920,4 +3063,10 @@ classdef GUI < handle
 
     end
 
+end
+
+function closeProgressDialog(h)
+    if ~isempty(h) && isvalid(h)
+        close(h);
+    end
 end

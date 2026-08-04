@@ -202,6 +202,7 @@ Common panels:
 - **Colormap**: colormap for the active image channel.
 - **Image Display**: intensity auto-scaling and per-channel display limits.
 - **Peaks Plot**: linescan plot visibility, colors, annotations, and line widths.
+- **Linescan ROI**: ROI overlay, rotation annotation, and label appearance.
 - **Labels**: region label definitions and active label selection.
 
 To reset saved app settings:

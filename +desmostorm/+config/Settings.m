@@ -5,6 +5,7 @@ classdef Settings < handle
         Display   desmostorm.config.Display    % general display settings
         IO        desmostorm.config.IO         % import/export settings
         PeaksPlot desmostorm.config.PeaksPlot  % PeaksPlot appearance settings
+        ROI       desmostorm.config.ROI        % RegionViewer ROI appearance settings
         Box       desmostorm.config.Box        % region selection box settings
     end
 
@@ -15,6 +16,7 @@ classdef Settings < handle
         DisplayChanged
         IOChanged
         PeaksPlotChanged
+        ROIChanged
         BoxChanged
     end
 
@@ -24,6 +26,7 @@ classdef Settings < handle
             this.Display    = desmostorm.config.Display();
             this.IO         = desmostorm.config.IO();
             this.PeaksPlot  = desmostorm.config.PeaksPlot();
+            this.ROI        = desmostorm.config.ROI();
             this.Box        = desmostorm.config.Box();
 
             % Bubble domain-specific change events up to Settings.Changed
@@ -31,6 +34,7 @@ classdef Settings < handle
             addlistener(this.Display,   'DisplayChanged',   @(s,e) notify(this,'DisplayChanged',e));
             addlistener(this.IO,        'IOChanged',        @(s,e) notify(this,'IOChanged',e));
             addlistener(this.PeaksPlot, 'PeaksPlotChanged', @(s,e) notify(this,'PeaksPlotChanged',e));
+            addlistener(this.ROI,       'ROIChanged',       @(s,e) notify(this,'ROIChanged',e));
             addlistener(this.Box,       'BoxChanged',       @(s,e) notify(this,'BoxChanged',e));
 
             % Also bubble generic change events up to Settings.Changed
@@ -38,6 +42,7 @@ classdef Settings < handle
             addlistener(this.Display,       'Changed', @(s,e) notify(this,'Changed',e));
             addlistener(this.IO,            'Changed', @(s,e) notify(this,'Changed',e));
             addlistener(this.PeaksPlot,     'Changed', @(s,e) notify(this,'Changed',e));
+            addlistener(this.ROI,           'Changed', @(s,e) notify(this,'Changed',e));
             addlistener(this.Box,           'Changed', @(s,e) notify(this,'Changed',e));
         end
 
@@ -52,6 +57,7 @@ classdef Settings < handle
             S.IO       = this.IO.toStruct();
 
             S.PeaksPlot = this.PeaksPlot.toStruct();
+            S.ROI       = this.ROI.toStruct();
             S.Box       = this.Box.toStruct();
 
             json = jsonencode(S, 'PrettyPrint', true);
@@ -74,6 +80,7 @@ classdef Settings < handle
             S.Display   = obj.Display.toStruct();
             S.IO        = obj.IO.toStruct();
             S.PeaksPlot = obj.PeaksPlot.toStruct();
+            S.ROI       = obj.ROI.toStruct();
             S.Box       = obj.Box.toStruct();
         end
 
@@ -83,6 +90,7 @@ classdef Settings < handle
             obj.Display.fromStruct(S.Display);
             obj.IO.fromStruct(S.IO);
             obj.PeaksPlot.fromStruct(S.PeaksPlot);
+            obj.ROI.fromStruct(S.ROI);
             obj.Box.fromStruct(S.Box);
         end
 
@@ -113,6 +121,7 @@ classdef Settings < handle
                 obj.IO.fromStruct(S.IO);
                 
                 obj.PeaksPlot.fromStruct(S.PeaksPlot);
+                obj.ROI.fromStruct(S.ROI);
                 obj.Box.fromStruct(S.Box);
 
                 % if the settings file was migrated to current version
@@ -163,7 +172,16 @@ classdef Settings < handle
                 S.PeaksPlot.DistanceAnnotationsMode = defaultPeaksPlot.DistanceAnnotationsMode; % new property
                 S.PeaksPlot.WidthAnnotations = defaultPeaksPlot.WidthAnnotations;               % new property
                 S.PeaksPlot.WidthAnnotationsMode = defaultPeaksPlot.WidthAnnotationsMode;       % new property
+                % ROI settings
+                defaultROI = desmostorm.config.ROI;
+                S.ROI = defaultROI.toStruct(); % new settings category
                 % indicate migration has been performed
+                migrated = true;
+            end
+
+            if ~isfield(S,'ROI') || isempty(S.ROI)
+                defaultROI = desmostorm.config.ROI;
+                S.ROI = defaultROI.toStruct();
                 migrated = true;
             end
 

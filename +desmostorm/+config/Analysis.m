@@ -39,63 +39,15 @@ classdef Analysis < handle
         function v = get.PixelSizeValue(this),      v = this.PixelSizeValue_;       end
         function v = get.PixelSizeUnit(this),       v = this.PixelSizeUnit_;        end
 
-        % Setters (with any extra cross-field validation)
-        function set.MinPeakDistance(this,v)
-            old = this.MinPeakDistance_;
-            this.MinPeakDistance_ = v;
-            ev = desmostorm.config.ChangeEvent("Analysis","MinPeakDistance",old,v);
-            notify(this,'AnalysisChanged',ev);
-            notify(this,'Changed');
-        end
-        function set.MinPeakHeight(this,v)
-            old = this.MinPeakHeight_;
-            this.MinPeakHeight_ = v;
-            ev = desmostorm.config.ChangeEvent("Analysis","MinPeakHeight",old,v);
-            notify(this,'AnalysisChanged',ev);
-            notify(this,'Changed');
-        end
-        function set.MinPeakProminence(this,v)
-            old = this.MinPeakProminence_;
-            this.MinPeakProminence_ = v;
-            ev = desmostorm.config.ChangeEvent("Analysis","MinPeakProminence",old,v);
-            notify(this,'AnalysisChanged',ev);
-            notify(this,'Changed');
-        end
-        function set.BoxSize(this,v)
-            old = this.BoxSize_;
-            this.BoxSize_ = v;
-            ev = desmostorm.config.ChangeEvent("Analysis","BoxSize",old,v);
-            notify(this,'AnalysisChanged',ev);
-            notify(this,'Changed');
-        end
-        function set.Normalize(this,v)
-            old = this.Normalize_;
-            this.Normalize_ = v;
-            ev = desmostorm.config.ChangeEvent("Analysis","Normalize",old,v);
-            notify(this,'AnalysisChanged',ev);
-            notify(this,'Changed');
-        end
-        function set.PeakSmoothing(this,v)
-            old = this.PeakSmoothing_;
-            this.PeakSmoothing_ = v;
-            ev = desmostorm.config.ChangeEvent("Analysis","PeakSmoothing",old,v);
-            notify(this,'AnalysisChanged',ev);
-            notify(this,'Changed');
-        end
-        function set.PixelSizeValue(this,v)
-            old = this.PixelSizeValue_;
-            this.PixelSizeValue_ = v;
-            ev = desmostorm.config.ChangeEvent("Analysis","PixelSizeValue",old,v);
-            notify(this,'AnalysisChanged',ev);
-            notify(this,'Changed');
-        end
-        function set.PixelSizeUnit(this,v)
-            old = this.PixelSizeUnit_;
-            this.PixelSizeUnit_ = v;
-            ev = desmostorm.config.ChangeEvent("Analysis","PixelSizeUnit",old,v);
-            notify(this,'AnalysisChanged',ev);
-            notify(this,'Changed');
-        end
+        % Setters
+        function set.MinPeakDistance(this,v),     this.setValue("MinPeakDistance",v);     end
+        function set.MinPeakHeight(this,v),       this.setValue("MinPeakHeight",v);       end
+        function set.MinPeakProminence(this,v),   this.setValue("MinPeakProminence",v);   end
+        function set.BoxSize(this,v),             this.setValue("BoxSize",v);             end
+        function set.Normalize(this,v),           this.setValue("Normalize",v);           end
+        function set.PeakSmoothing(this,v),       this.setValue("PeakSmoothing",v);       end
+        function set.PixelSizeValue(this,v),      this.setValue("PixelSizeValue",v);      end
+        function set.PixelSizeUnit(this,v),       this.setValue("PixelSizeUnit",v);       end
 
         % Serialization helpers
         function S = toStruct(this)
@@ -126,6 +78,20 @@ classdef Analysis < handle
             ps = desmostorm.model.units.PixelSize(this.PixelSizeValue, this.PixelSizeUnit);
         end
         
+    end
+
+    methods (Access=private)
+        function setValue(this,name,value)
+            prop = char(name + "_");
+            old = this.(prop);
+            if isequaln(old,value)
+                return
+            end
+            this.(prop) = value;
+            ev = desmostorm.config.ChangeEvent("Analysis",name,old,value);
+            notify(this,'AnalysisChanged',ev);
+            notify(this,'Changed',ev);
+        end
     end
 
 end

@@ -34,19 +34,11 @@ classdef IO < handle
                 v = desmostorm.Paths.user;
             end
 
-            old = this.DefaultFolder_;
-            this.DefaultFolder_ = v; 
-            ev = desmostorm.config.ChangeEvent("IO","DefaultFolder",old,v);
-            notify(this,'IOChanged',ev);
-            notify(this,'Changed',ev);
+            this.setValue("DefaultFolder",v);
         end
         
         function set.AutoSave(this, v)
-            old = this.AutoSave_;
-            this.AutoSave_ = logical(v);
-            ev = desmostorm.config.ChangeEvent("IO","AutoSave",old,v);
-            notify(this,'IOChanged',ev);
-            notify(this,'Changed',ev);
+            this.setValue("AutoSave",logical(v));
         end
 
         % Serialization helpers
@@ -63,6 +55,20 @@ classdef IO < handle
             end
         end
 
+    end
+
+    methods (Access=private)
+        function setValue(this,name,value)
+            prop = char(name + "_");
+            old = this.(prop);
+            if isequaln(old,value)
+                return
+            end
+            this.(prop) = value;
+            ev = desmostorm.config.ChangeEvent("IO",name,old,value);
+            notify(this,'IOChanged',ev);
+            notify(this,'Changed',ev);
+        end
     end
 
 end

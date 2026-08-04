@@ -59,112 +59,19 @@ classdef PeaksPlot < handle
 
         % ---------- Setters ----------
 
-        function set.RawLineWidth(this,v)
-            old = this.RawLineWidth_;
-            this.RawLineWidth_ = v;
-            ev = desmostorm.config.ChangeEvent("PeaksPlot","RawLineWidth",old,v);
-            notify(this,'PeaksPlotChanged',ev);
-            notify(this,'Changed',ev);
-        end
-
-        function set.Color(this,v)
-            old = this.Color_;
-            this.Color_ = v;
-            ev = desmostorm.config.ChangeEvent("PeaksPlot","Color",old,v);
-            notify(this,'PeaksPlotChanged',ev);
-            notify(this,'Changed',ev);
-        end
-
-        function set.SmoothLineWidth(this,v)
-            old = this.SmoothLineWidth_;
-            this.SmoothLineWidth_ = v;
-            ev = desmostorm.config.ChangeEvent("PeaksPlot","SmoothLineWidth",old,v);
-            notify(this,'PeaksPlotChanged',ev);
-            notify(this,'Changed',ev);
-        end
-
-        function set.BackgroundColor(this,v)
-            old = this.BackgroundColor_;
-            this.BackgroundColor_ = v;
-            ev = desmostorm.config.ChangeEvent("PeaksPlot","BackgroundColor",old,v);
-            notify(this,'PeaksPlotChanged',ev);
-            notify(this,'Changed',ev);
-        end
-
-        function set.ForegroundColor(this,v)
-            old = this.ForegroundColor_;
-            this.ForegroundColor_ = v;
-            ev = desmostorm.config.ChangeEvent("PeaksPlot","ForegroundColor",old,v);
-            notify(this,'PeaksPlotChanged',ev);
-            notify(this,'Changed',ev);
-        end
-
-        function set.ShownPlots(this,v)
-            old = this.ShownPlots_;
-            this.ShownPlots_ = string(v);
-            ev = desmostorm.config.ChangeEvent("PeaksPlot","ShownPlots",old,this.ShownPlots_);
-            notify(this,'PeaksPlotChanged',ev);
-            notify(this,'Changed',ev);
-        end
-
-        function set.ColorSource(this,v)
-            old = this.ColorSource_;
-            this.ColorSource_ = string(v);
-            ev = desmostorm.config.ChangeEvent("PeaksPlot","ColorSource",old,this.ColorSource_);
-            notify(this,'PeaksPlotChanged',ev);
-            notify(this,'Changed',ev);
-        end
-
-        function set.AnnotationColorMode(this,v)
-            old = this.AnnotationColorMode_;
-            this.AnnotationColorMode_ = string(v);
-            ev = desmostorm.config.ChangeEvent("PeaksPlot","AnnotationColorMode",old,this.AnnotationColorMode_);
-            notify(this,'PeaksPlotChanged',ev);
-            notify(this,'Changed',ev);
-        end
-
-        function set.AnnotationColor(this,v)
-            old = this.AnnotationColor_;
-            this.AnnotationColor_ = v;
-            ev = desmostorm.config.ChangeEvent("PeaksPlot","AnnotationColor",old,v);
-            notify(this,'PeaksPlotChanged',ev);
-            notify(this,'Changed',ev);
-        end
-
-        function set.DistanceAnnotations(this,v)
-            old = this.DistanceAnnotations_;
-            this.DistanceAnnotations_ = v;
-            ev = desmostorm.config.ChangeEvent("PeaksPlot","DistanceAnnotations",old,v);
-            notify(this,'PeaksPlotChanged',ev);
-            notify(this,'Changed',ev);
-        end
-
-        function set.DistanceAnnotationsMode(this,v)
-            old = this.DistanceAnnotationsMode_;
-            this.DistanceAnnotationsMode_ = string(v);
-            ev = desmostorm.config.ChangeEvent("PeaksPlot","DistanceAnnotationsMode",old,this.DistanceAnnotationsMode_);
-            notify(this,'PeaksPlotChanged',ev);
-            notify(this,'Changed',ev);
-        end
-
-        function set.WidthAnnotations(this,v)
-            old = this.WidthAnnotations_;
-            this.WidthAnnotations_ = v;
-            ev = desmostorm.config.ChangeEvent("PeaksPlot","WidthAnnotations",old,v);
-            notify(this,'PeaksPlotChanged',ev);
-            notify(this,'Changed',ev);
-        end
-
-        function set.WidthAnnotationsMode(this,v)
-            old = this.WidthAnnotationsMode_;
-            this.WidthAnnotationsMode_ = string(v);
-            ev = desmostorm.config.ChangeEvent("PeaksPlot","WidthAnnotationsMode",old,this.WidthAnnotationsMode_);
-            notify(this,'PeaksPlotChanged',ev);
-            notify(this,'Changed',ev);
-        end
-
-
-
+        function set.RawLineWidth(this,v),             this.setValue("RawLineWidth",v);             end
+        function set.Color(this,v),                    this.setValue("Color",v);                    end
+        function set.SmoothLineWidth(this,v),          this.setValue("SmoothLineWidth",v);          end
+        function set.BackgroundColor(this,v),          this.setValue("BackgroundColor",v);          end
+        function set.ForegroundColor(this,v),          this.setValue("ForegroundColor",v);          end
+        function set.ShownPlots(this,v),               this.setValue("ShownPlots",string(v));       end
+        function set.ColorSource(this,v),              this.setValue("ColorSource",string(v));      end
+        function set.AnnotationColorMode(this,v),      this.setValue("AnnotationColorMode",string(v)); end
+        function set.AnnotationColor(this,v),          this.setValue("AnnotationColor",v);          end
+        function set.DistanceAnnotations(this,v),      this.setValue("DistanceAnnotations",v);      end
+        function set.DistanceAnnotationsMode(this,v),  this.setValue("DistanceAnnotationsMode",string(v)); end
+        function set.WidthAnnotations(this,v),         this.setValue("WidthAnnotations",v);         end
+        function set.WidthAnnotationsMode(this,v),     this.setValue("WidthAnnotationsMode",string(v)); end
 
 
         % ---------- Serialization ----------
@@ -203,6 +110,20 @@ classdef PeaksPlot < handle
             end
         end
 
+    end
+
+    methods (Access=private)
+        function setValue(this,name,value)
+            prop = char(name + "_");
+            old = this.(prop);
+            if isequaln(old,value)
+                return
+            end
+            this.(prop) = value;
+            ev = desmostorm.config.ChangeEvent("PeaksPlot",name,old,value);
+            notify(this,'PeaksPlotChanged',ev);
+            notify(this,'Changed',ev);
+        end
     end
 
 end

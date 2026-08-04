@@ -1,7 +1,7 @@
 classdef (ConstructOnLoad) ChangeEvent < event.EventData
 % event data class for settings changed events
     properties
-        Domain   string   % "Analysis" | "Display" | "IO" | "PeaksPlot" | "Box"
+        Domain   string   % "Analysis" | "Display" | "IO" | "PeaksPlot" | "ROI" | "Box"
         Name     string   % e.g., "BoxSize", "ColormapName"
         OldValue
         NewValue

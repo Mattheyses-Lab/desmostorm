@@ -60,26 +60,13 @@ classdef Display < handle
         end
 
         function set.AutoScaleDisplayIntensity(this, v)
-            old = this.AutoScaleDisplayIntensity_;
-            this.AutoScaleDisplayIntensity_ = v;
-            ev = desmostorm.config.ChangeEvent("Display","AutoScaleDisplayIntensity",old,v);
-            notify(this,'DisplayChanged',ev);
-            notify(this,'Changed',ev);
+            this.setValue("AutoScaleDisplayIntensity",v);
         end
 
         function set.ChannelColorMode(this, v)
             v = string(v);
             mustBeMember(v,["colors","luts"]);
-
-            old = this.ChannelColorMode_;
-            if old == v
-                return
-            end
-
-            this.ChannelColorMode_ = v;
-            ev = desmostorm.config.ChangeEvent("Display","ChannelColorMode",old,v);
-            notify(this,'DisplayChanged',ev);
-            notify(this,'Changed',ev);
+            this.setValue("ChannelColorMode",v);
         end
 
         % ---------- Serialization ----------
@@ -102,6 +89,20 @@ classdef Display < handle
             end
         end
 
+    end
+
+    methods (Access=private)
+        function setValue(this,name,value)
+            prop = char(name + "_");
+            old = this.(prop);
+            if isequaln(old,value)
+                return
+            end
+            this.(prop) = value;
+            ev = desmostorm.config.ChangeEvent("Display",name,old,value);
+            notify(this,'DisplayChanged',ev);
+            notify(this,'Changed',ev);
+        end
     end
 
     methods (Static)

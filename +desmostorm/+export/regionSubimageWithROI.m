@@ -10,7 +10,10 @@ function regionSubimageWithROI(region,filename,opts)
         opts.Size                       (1,1) double = 3
         opts.Units                      (1,:) char = 'inches'
         opts.FontSize                   (1,1) double = 12
+        opts.ProgressDialog = matlab.ui.dialog.ProgressDialog.empty()
     end
+
+    setProgressMessage(opts.ProgressDialog,'Preparing region image...');
 
     % --- get region image and ROI data ---
     parentImage = region.Parent;
@@ -62,6 +65,7 @@ function regionSubimageWithROI(region,filename,opts)
     pause(1)
 
     % --- export axes content as image to specified file location ---
+    setProgressMessage(opts.ProgressDialog,'Writing region image...');
     matlabx.ui.export.axes2image(ax.getAxes(),filename, ...
         "HideToolbar",          true, ...
         "PreserveAspectRatio",  'off', ...
@@ -70,4 +74,11 @@ function regionSubimageWithROI(region,filename,opts)
         "Width",                opts.Size, ...
         "Height",               opts.Size);
 
+end
+
+function setProgressMessage(h,msg)
+    if ~isempty(h) && isvalid(h)
+        h.Message = msg;
+        drawnow limitrate
+    end
 end

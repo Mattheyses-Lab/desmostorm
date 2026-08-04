@@ -30,7 +30,10 @@ function regionLinescanPlot(region,filename,opts)
         opts.Height             (1,1) double = 3
         opts.BackgroundColor    = [1 1 1]
         opts.ForegroundColor    (1,3) double = [0 0 0]
+        opts.ProgressDialog = matlab.ui.dialog.ProgressDialog.empty()
     end
+
+    setProgressMessage(opts.ProgressDialog,'Preparing linescan plot...');
 
     W = opts.Width;
     H = opts.Height;
@@ -90,10 +93,18 @@ function regionLinescanPlot(region,filename,opts)
     desmostorm.app.focusMainFigure();
 
     % --- export plot to specified file location ---
+    setProgressMessage(opts.ProgressDialog,'Writing linescan plot...');
     peaksPlotContainer.export(filename, ...
         "BackgroundColor","none", ...
         "Units",opts.Units, ...
         "Height",opts.Height);
+end
+
+function setProgressMessage(h,msg)
+    if ~isempty(h) && isvalid(h)
+        h.Message = msg;
+        drawnow limitrate
+    end
 end
 
 function color = resolvePlotBackgroundColor(color)

@@ -31,37 +31,10 @@ classdef Box < handle
 
         % ---------- Setters ----------
 
-        function set.FaceColor(this,v)
-            old = this.FaceColor_;
-            this.FaceColor_ = v;
-            ev = desmostorm.config.ChangeEvent("Box","FaceColor",old,v);
-            notify(this,'BoxChanged',ev);
-            notify(this,'Changed',ev);
-        end
-
-        function set.EdgeColor(this,v)
-            old = this.EdgeColor_;
-            this.EdgeColor_ = v;
-            ev = desmostorm.config.ChangeEvent("Box","EdgeColor",old,v);
-            notify(this,'BoxChanged',ev);
-            notify(this,'Changed',ev);
-        end
-
-        function set.ShowTitle(this,v)
-            old = this.ShowTitle_;
-            this.ShowTitle_ = v;
-            ev = desmostorm.config.ChangeEvent("Box","ShowTitle",old,v);
-            notify(this,'BoxChanged',ev);
-            notify(this,'Changed',ev);
-        end
-
-        function set.TitleContent(this,v)
-            old = this.TitleContent_;
-            this.TitleContent_ = v;
-            ev = desmostorm.config.ChangeEvent("Box","TitleContent",old,v);
-            notify(this,'BoxChanged',ev);
-            notify(this,'Changed',ev);
-        end
+        function set.FaceColor(this,v),       this.setValue("FaceColor",v);       end
+        function set.EdgeColor(this,v),       this.setValue("EdgeColor",v);       end
+        function set.ShowTitle(this,v),       this.setValue("ShowTitle",v);       end
+        function set.TitleContent(this,v),    this.setValue("TitleContent",v);    end
 
         % ---------- Serialization ----------
         function S = toStruct(this)
@@ -77,12 +50,26 @@ classdef Box < handle
 
             for i = 1:numel(f)
                 prop = [f{i}, '_'];  % append underscore
-                if isprop(this, prop)
+                if isfield(S,f{i}) && isprop(this, prop)
                     this.(prop) = S.(f{i});
                 end
             end
         end
 
+    end
+
+    methods (Access=private)
+        function setValue(this,name,value)
+            prop = char(name + "_");
+            old = this.(prop);
+            if isequaln(old,value)
+                return
+            end
+            this.(prop) = value;
+            ev = desmostorm.config.ChangeEvent("Box",name,old,value);
+            notify(this,'BoxChanged',ev);
+            notify(this,'Changed',ev);
+        end
     end
 
 end
