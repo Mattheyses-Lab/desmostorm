@@ -357,6 +357,23 @@ classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
         end
 
         function xy = getAxesPoint(obj,E)
+            % Prefer hub-provided axes coordinates when newer HubEvent
+            % versions expose them. Fall back to the axes CurrentPoint so
+            % older matlabx releases still work.
+            propNames = ["CurrentPointAxes","AxesCurrentPoint","CurrentAxesPoint"];
+            for i = 1:numel(propNames)
+                if isprop(E,propNames(i))
+                    try
+                        cp = E.(propNames(i));
+                        if isnumeric(cp) && numel(cp) >= 2 && all(isfinite(cp(1,1:2)))
+                            xy = cp(1,1:2);
+                            return
+                        end
+                    catch
+                    end
+                end
+            end
+
             % Prefer the hub-provided current axes when available.
             ax = obj.MainAxes;
             if isprop(E,'CurrentAxes') && obj.isLiveGraphicsHandle(E.CurrentAxes)
@@ -450,6 +467,18 @@ classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
             end
         end
 
+        function tf = isKeyHubEvent(~,E)
+            if ismethod(E,'isKeyEvent')
+                try
+                    tf = E.isKeyEvent();
+                    return
+                catch
+                end
+            end
+
+            tf = any(string(E.Kind) == ["Key","KeyPress","KeyRelease"]);
+        end
+
         function [color,rawColor,smoothColor,annotationsColor,areaColor] = getPlotColors(obj,idx)
             % Use explicit per-plot colors when present, otherwise cycle overlays.
             if idx <= size(obj.Colors,1)
@@ -531,7 +560,7 @@ classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
     %% Hub-facing event handlers
     methods
         function tf = matches(obj,E)
-            if E.Kind == "Key" || isempty(obj.MainAxes) || ~isvalid(obj.MainAxes)
+            if obj.isKeyHubEvent(E) || isempty(obj.MainAxes) || ~isvalid(obj.MainAxes)
                 tf = false;
                 return
             end
@@ -578,10 +607,12 @@ classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
         end
 
         % No-ops required by FigureEventHub.
-        function onUp(~,~),     end
-        function onScroll(~,~), end
-        function onKey(~,~),    end
-        function onEnter(~,~),  end
+        function onUp(~,~),         end
+        function onScroll(~,~),     end
+        function onKey(~,~),        end
+        function onKeyPress(~,~),   end
+        function onKeyRelease(~,~), end
+        function onEnter(~,~),      end
 
         function onLeave(obj,~)
             obj.clearPeakHighlights();

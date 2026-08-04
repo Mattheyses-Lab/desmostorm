@@ -2753,7 +2753,7 @@ classdef GUI < handle
                 img.setActiveRegion(regionID);
             else
                 % update listbox
-                obj.RegionListBox.Value = string.empty();
+                obj.RegionListBox.Value = {};
                 % set active region to empty
                 img.setActiveRegion(string.empty());
             end
@@ -2773,9 +2773,7 @@ classdef GUI < handle
             if isempty(ids)
                 img.clearRegionSelection();
             else
-                %obj.RegionListBox.Value = ids;        % multi-select
                 img.setRegionSelection(ids);
-                %img.setActiveRegion(ids(end));        % last in selection is active
             end
 
             obj.isSyncingSelection = false;
