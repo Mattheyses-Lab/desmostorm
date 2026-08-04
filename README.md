@@ -55,25 +55,49 @@ package, navigate back to the project root and run the command again.
 
 Projects store images, regions, labels, per-image display ranges, project-wide
 channel display choices, and analysis results. App settings control defaults
-and display/analysis behavior.
+and display/analysis behavior. When a project has unsaved changes, an asterisk
+appears in the window title. Closing the project, opening another project, or
+exiting the GUI will prompt you to save or discard those changes.
 
 ## Region Picking And Labels
 
 Use the Pick tool in the main image viewer to create and edit region boxes.
-Click the Pick tool icon, then click in the image to place a new box. While
-the Pick tool is active, existing boxes can be dragged to new positions and
-right-clicked to delete them.
+Click the Pick tool icon to activate it. While the Pick tool is active:
 
-Region activation and selection are separate. Left-clicking a box makes that
-region active in the GUI and Region Viewer. Shift-clicking a box adds or
-removes it from the current selection; selected boxes remain shaded.
-Double-clicking a box clears the current selection.
+- Click empty image area to create a new region.
+- Click and drag an existing box to move it.
+- Click a box to make that region active in the GUI and Region Viewer.
+- Alt/Option-click a box to deactivate the active box.
+- Shift-click a box to add or remove it from the current selection; selected boxes remain shaded.
+- Control-click a box to delete that region.
+
+Region activation and selection are separate. The active region drives the
+Region Viewer, summary table, ROI editor, and linescan plot. The selected
+regions are the target for batch labeling with label hotkeys. There are
+currently no batch deselection or batch delete mouse actions; those are planned
+for a future context menu.
 
 Labels are managed in the **Labels** accordion item. Each label can have a
 name, ID, color, and hotkey. Pressing a label hotkey makes that label active
 and applies it to the currently selected regions in the active image. New
 regions are assigned the currently active label when they are placed, so choose
 the active label before picking a batch of regions with the same class.
+
+## Multi-Channel Display And Linescans
+
+The main image viewer and Region Viewer support multi-channel images. Changing
+the active channel in the image viewer updates channel-aware controls such as
+the colormap selector and current-channel linescan display. Channel colormaps
+and channel colors are stored with the project so they persist across save/load.
+
+Intensity sliders are created dynamically from the maximum channel count in the
+project and collapse to the channels present in the active image. Slider limits
+come from each image channel's data range, while slider values come from the
+saved or auto-scaled display range.
+
+Linescan plots can show either the current channel or all channels for the
+active region, depending on **Peaks Plot > Shown Plots**. Plot colors can follow
+project channel colors or use a manual color from the Peaks Plot settings.
 
 ## Classifier Training And Detection
 
