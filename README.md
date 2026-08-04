@@ -59,6 +59,24 @@ and display/analysis behavior. When a project has unsaved changes, an asterisk
 appears in the window title. Closing the project, opening another project, or
 exiting the GUI will prompt you to save or discard those changes.
 
+## Image Viewer
+
+The main Image Viewer shows the active image and provides channel display,
+zooming, colorbar, and region-picking tools.
+
+- Left/right arrow keys change the displayed channel.
+- Meta+Shift+M toggles the merged composite display. On macOS, Meta is Command; on Windows, use the Windows key.
+- The colormap selector applies to the currently displayed channel.
+- The colorbar reflects the active channel and its current display limits.
+
+To zoom, click the magnifying glass icon to enable zoom mode:
+
+- Left-click zooms in.
+- Right-click zooms out.
+- Shift-click toggles cursor-follow zoom behavior.
+- Scroll wheel or trackpad scroll also adjusts zoom.
+- Esc restores the full image view.
+
 ## Region Picking And Labels
 
 Use the Pick tool in the main image viewer to create and edit region boxes.

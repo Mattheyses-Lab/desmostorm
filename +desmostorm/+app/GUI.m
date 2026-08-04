@@ -34,7 +34,7 @@ classdef GUI < handle
         % ImageViewer
         ImageViewerPanel matlab.ui.container.Panel
         ImageViewerPanelGrid matlab.ui.container.GridLayout
-        Ax matlabx.ui.axes.ImageAxes
+        ImageViewer matlabx.ui.axes.ImageAxes
         % RegionViewer
         RegionViewerPanel matlab.ui.container.Panel
         RegionViewerPanelGrid matlab.ui.container.GridLayout
@@ -815,7 +815,7 @@ classdef GUI < handle
                 "Padding",[0 0 0 0]);
 
             % ImageAxes to view active image CData, select Regions
-            obj.Ax = matlabx.ui.axes.ImageAxes(obj.ImageViewerPanelGrid,...
+            obj.ImageViewer = matlabx.ui.axes.ImageAxes(obj.ImageViewerPanelGrid,...
                 'Name','ImageViewer',...
                 'CData',[],...
                 'ToolBelt',{'Zoom','Pick','Colorbar'},...
@@ -823,23 +823,23 @@ classdef GUI < handle
                 'CLim',[0 1]);
 
             % wire the optimistic callbacks for ImageViewer Pick tool
-            obj.Ax.Tools.Pick.BoxCreatedFcn          = @(~,d) obj.onBoxCreated(d);
-            obj.Ax.Tools.Pick.BoxMoveStartedFcn      = @(~,d) obj.onBoxMoveStarted(d);
-            obj.Ax.Tools.Pick.BoxPreviewMovedFcn     = @(~,d) obj.onBoxPreviewMoved(d);
-            obj.Ax.Tools.Pick.BoxMoveCommittedFcn    = @(~,d) obj.onBoxMoveCommitted(d);
-            obj.Ax.Tools.Pick.BoxDeletedFcn          = @(~,d) obj.onBoxDeleted(d);
-            obj.Ax.Tools.Pick.BoxActivatedFcn        = @(~,d) obj.onBoxActivated(d);
-            obj.Ax.Tools.Pick.BoxSelectionChangedFcn = @(~,d) obj.onBoxSelectionChanged(d);
+            obj.ImageViewer.Tools.Pick.BoxCreatedFcn          = @(~,d) obj.onBoxCreated(d);
+            obj.ImageViewer.Tools.Pick.BoxMoveStartedFcn      = @(~,d) obj.onBoxMoveStarted(d);
+            obj.ImageViewer.Tools.Pick.BoxPreviewMovedFcn     = @(~,d) obj.onBoxPreviewMoved(d);
+            obj.ImageViewer.Tools.Pick.BoxMoveCommittedFcn    = @(~,d) obj.onBoxMoveCommitted(d);
+            obj.ImageViewer.Tools.Pick.BoxDeletedFcn          = @(~,d) obj.onBoxDeleted(d);
+            obj.ImageViewer.Tools.Pick.BoxActivatedFcn        = @(~,d) obj.onBoxActivated(d);
+            obj.ImageViewer.Tools.Pick.BoxSelectionChangedFcn = @(~,d) obj.onBoxSelectionChanged(d);
 
-            obj.axesL(1) = addlistener(obj.Ax,'C','PostSet',@(~,~) obj.onImageViewerChannelChanged());
-            obj.axesL(2) = addlistener(obj.Ax,'ComponentColorMode','PostSet',@(~,~) obj.onImageViewerChannelDisplayChanged());
-            obj.axesL(3) = addlistener(obj.Ax,'ComponentColors','PostSet',@(~,~) obj.onImageViewerChannelDisplayChanged());
+            obj.axesL(1) = addlistener(obj.ImageViewer,'C','PostSet',@(~,~) obj.onImageViewerChannelChanged());
+            obj.axesL(2) = addlistener(obj.ImageViewer,'ComponentColorMode','PostSet',@(~,~) obj.onImageViewerChannelDisplayChanged());
+            obj.axesL(3) = addlistener(obj.ImageViewer,'ComponentColors','PostSet',@(~,~) obj.onImageViewerChannelDisplayChanged());
 
             % set the box size for Pick tool
-            obj.Ax.Tools.Pick.BoxSize = obj.Settings.Analysis.BoxSize;
+            obj.ImageViewer.Tools.Pick.BoxSize = obj.Settings.Analysis.BoxSize;
 
-            %obj.Ax.ImageVisible = 'off';
-            %obj.Ax.AxesVisible = 'on';
+            %obj.ImageViewer.ImageVisible = 'off';
+            %obj.ImageViewer.AxesVisible = 'on';
         end
 
         function setupRegionViewer(obj)
@@ -881,7 +881,7 @@ classdef GUI < handle
             obj.refreshROISettings();
 
             % keep ImageViewer and RegionViewer on the same active channel
-            obj.Ax.addLink(obj.RegionViewer, {'C', ...
+            obj.ImageViewer.addLink(obj.RegionViewer, {'C', ...
                 'ComponentCLims', ...
                 'ComponentColorMode', ...
                 'ComponentColormaps', ...
@@ -943,7 +943,7 @@ classdef GUI < handle
             if ~isempty(obj.projectL), delete(obj.projectL(isvalid(obj.projectL))); end
             if ~isempty(obj.settingsL), delete(obj.settingsL(isvalid(obj.settingsL))); end
             if ~isempty(obj.axesL), delete(obj.axesL(isvalid(obj.axesL))); end
-            if ~isempty(obj.Ax) && isvalid(obj.Ax), delete(obj.Ax); end
+            if ~isempty(obj.ImageViewer) && isvalid(obj.ImageViewer), delete(obj.ImageViewer); end
             if ~isempty(obj.RegionViewer) && isvalid(obj.RegionViewer), delete(obj.RegionViewer); end
             if ~isempty(obj.SettingsAccordion) && isvalid(obj.SettingsAccordion), delete(obj.SettingsAccordion); end
             if ~isempty(obj.Grid) && isvalid(obj.Grid), delete(obj.Grid); end
@@ -1242,31 +1242,31 @@ classdef GUI < handle
 
         function applyProjectChannelColormapsToAxes(obj)
         %APPLYPROJECTCHANNELCOLORMAPSTOAXES Apply saved project colormaps to ImageViewer
-            if isempty(obj.Project) || isempty(obj.Ax) || ~isvalid(obj.Ax)
+            if isempty(obj.Project) || isempty(obj.ImageViewer) || ~isvalid(obj.ImageViewer)
                 return
             end
 
-            n = min(obj.Project.MaxSizeC,obj.Ax.NumComponents);
+            n = min(obj.Project.MaxSizeC,obj.ImageViewer.NumComponents);
             for C = 1:n
-                obj.Ax.ComponentColormaps{C} = obj.Project.getChannelColormap(C);
+                obj.ImageViewer.ComponentColormaps{C} = obj.Project.getChannelColormap(C);
             end
         end
 
         function applyProjectChannelColorsToAxes(obj)
         %APPLYPROJECTCHANNELCOLORSTOAXES Apply saved project color names to ImageViewer
-            if isempty(obj.Project) || isempty(obj.Ax) || ~isvalid(obj.Ax)
+            if isempty(obj.Project) || isempty(obj.ImageViewer) || ~isvalid(obj.ImageViewer)
                 return
             end
 
-            n = min(obj.Project.MaxSizeC,obj.Ax.NumComponents);
+            n = min(obj.Project.MaxSizeC,obj.ImageViewer.NumComponents);
             for C = 1:n
-                obj.Ax.ComponentColors{C} = obj.Project.getChannelColorName(C);
+                obj.ImageViewer.ComponentColors{C} = obj.Project.getChannelColorName(C);
             end
         end
 
         function applyProjectChannelDisplayToAxes(obj)
         %APPLYPROJECTCHANNELDISPLAYTOAXES Apply project display choices and settings mode
-            if isempty(obj.Project) || isempty(obj.Ax) || ~isvalid(obj.Ax)
+            if isempty(obj.Project) || isempty(obj.ImageViewer) || ~isvalid(obj.ImageViewer)
                 return
             end
 
@@ -1367,14 +1367,14 @@ classdef GUI < handle
 
         function syncColormapSelectorToChannel(obj)
         %SYNCCOLORMAPSELECTORTOCHANNEL Reflect the active channel colormap in the selector
-            if isempty(obj.Project) || isempty(obj.Ax) || isempty(obj.ColormapTree)
+            if isempty(obj.Project) || isempty(obj.ImageViewer) || isempty(obj.ColormapTree)
                 return
             end
-            if ~isvalid(obj.Ax) || ~isvalid(obj.ColormapTree)
+            if ~isvalid(obj.ImageViewer) || ~isvalid(obj.ColormapTree)
                 return
             end
 
-            C = obj.Ax.C;
+            C = obj.ImageViewer.C;
             [name,category] = obj.Project.getChannelColormapInfo(C);
             node = obj.findColormapTreeNode(name,category);
             cmap = obj.Project.getChannelColormap(C);
@@ -1487,17 +1487,17 @@ classdef GUI < handle
 
         function onImageViewerChannelDisplayChanged(obj)
         %ONIMAGEVIEWERCHANNELDISPLAYCHANGED Sync context-menu display changes to project/settings
-            if isempty(obj.Project) || isempty(obj.Ax)
+            if isempty(obj.Project) || isempty(obj.ImageViewer)
                 return
             end
 
-            colors = obj.Ax.ComponentColors;
+            colors = obj.ImageViewer.ComponentColors;
             n = min(numel(colors),obj.Project.MaxSizeC);
             for C = 1:n
                 obj.Project.setChannelColor(C,string(colors{C}));
             end
 
-            obj.Settings.Display.ChannelColorMode = string(obj.Ax.ComponentColorMode);
+            obj.Settings.Display.ChannelColorMode = string(obj.ImageViewer.ComponentColorMode);
             obj.refreshChannelDisplayControls();
         end
 
@@ -1549,9 +1549,9 @@ classdef GUI < handle
             % get the active image
             img = obj.Project.ActiveImage;
             % if empty, clear view and return
-            if isempty(img), obj.Ax.CData = []; return, end
+            if isempty(img), obj.ImageViewer.CData = []; return, end
             % get current channel index of ImageViewer
-            C = obj.Ax.C;
+            C = obj.ImageViewer.C;
 
             % new image does not have at least C channels, reset to 1
             if C > img.SizeC
@@ -1567,7 +1567,7 @@ classdef GUI < handle
             end
 
             % update ImageViewer ImageData, C, and CLims
-            set(obj.Ax,'ImageData',img.ImageData,'C',C,'ComponentCLims',clims);
+            set(obj.ImageViewer,'ImageData',img.ImageData,'C',C,'ComponentCLims',clims);
             obj.applyProjectChannelDisplayToAxes();
             obj.syncColormapSelectorToChannel();
             obj.refreshChannelDisplayControls();
@@ -1578,15 +1578,15 @@ classdef GUI < handle
 
         function clearImageViewer(obj)
         %REFRESHIMAGEVIEWER Reset ImageViewer
-            obj.Ax.CData = [];
-            obj.Ax.Tools.Pick.clearBoxes();
+            obj.ImageViewer.CData = [];
+            obj.ImageViewer.Tools.Pick.clearBoxes();
         end
 
         function refreshRegionBoxes(obj)
         %REFRESHREGIONBOXES Sync Region boxes in ImageViewer to ActiveImage
 
             % clear boxes from ImageViewer
-            obj.Ax.Tools.Pick.clearBoxes();
+            obj.ImageViewer.Tools.Pick.clearBoxes();
 
             img = obj.Project.ActiveImage;
 
@@ -1597,14 +1597,14 @@ classdef GUI < handle
             % add a box for each region, colored according to its label
             for r = img.RegionArray'
                 boxColor = obj.Project.LabelBank.getByID(r.LabelID).Color;
-                obj.Ax.Tools.Pick.addBox(r.ID, r.Center, r.BoxSize, ...
+                obj.ImageViewer.Tools.Pick.addBox(r.ID, r.Center, r.BoxSize, ...
                     "EdgeColor", boxColor, "FaceColor", boxColor, "Label", r.Name);
             end
 
             % apply selection status to region boxes
-            obj.Ax.Tools.Pick.setSelectedBoxIDs(img.SelectedRegionIDs);
+            obj.ImageViewer.Tools.Pick.setSelectedBoxIDs(img.SelectedRegionIDs);
             % set active box
-            obj.Ax.Tools.Pick.setActiveBoxID(img.ActiveRegionID);
+            obj.ImageViewer.Tools.Pick.setActiveBoxID(img.ActiveRegionID);
         end
 
         function refreshIntensitySliders(obj)
@@ -1625,8 +1625,8 @@ classdef GUI < handle
             end
 
             nVisible = img.SizeC;
-            if ~isempty(obj.Ax) && isvalid(obj.Ax)
-                nVisible = min(nVisible,obj.Ax.NumComponents);
+            if ~isempty(obj.ImageViewer) && isvalid(obj.ImageViewer)
+                nVisible = min(nVisible,obj.ImageViewer.NumComponents);
             end
             nVisible = min(numel(obj.IntensitySliders), nVisible);
             for C = 1:numel(obj.IntensitySliders)
@@ -1759,7 +1759,7 @@ classdef GUI < handle
             % set active box
             reg = obj.Project.ActiveRegion;
             if ~isempty(reg)
-                obj.Ax.Tools.Pick.setActiveBoxID(reg.ID);
+                obj.ImageViewer.Tools.Pick.setActiveBoxID(reg.ID);
             end
         end
 
@@ -1774,7 +1774,7 @@ classdef GUI < handle
             id = string(regionID);
 
             % set active/selected region
-            obj.Ax.Tools.Pick.setActiveBoxID(id);
+            obj.ImageViewer.Tools.Pick.setActiveBoxID(id);
             img.setActiveRegion(id);
         end
 
@@ -1979,7 +1979,7 @@ classdef GUI < handle
 
             switch obj.Settings.PeaksPlot.ShownPlots
                 case "current"
-                    C = obj.Ax.C;
+                    C = obj.ImageViewer.C;
                     if C > numel(allData)
                         plotData = desmostorm.analysis.PeaksData.empty();
                         colorChannels = [];
@@ -2152,7 +2152,7 @@ classdef GUI < handle
             img = obj.Project.ActiveImage;
             if isempty(img), return; end
 
-            ids = obj.Ax.Tools.Pick.getSelectedBoxIDs();
+            ids = obj.ImageViewer.Tools.Pick.getSelectedBoxIDs();
             if isempty(ids), return; end
 
             bank = obj.Project.LabelBank;
@@ -2168,7 +2168,7 @@ classdef GUI < handle
             end
 
             % recolor overlays
-            obj.Ax.Tools.Pick.setBoxesColorByIDs(ids, L.Color);
+            obj.ImageViewer.Tools.Pick.setBoxesColorByIDs(ids, L.Color);
 
             % refresh region table
             obj.refreshRegionSummaryTable();
@@ -2179,7 +2179,7 @@ classdef GUI < handle
             img = obj.Project.ActiveImage;
             if isempty(img), return; end
 
-            ids = obj.Ax.Tools.Pick.getSelectedBoxIDs();
+            ids = obj.ImageViewer.Tools.Pick.getSelectedBoxIDs();
             if isempty(ids), return; end
 
             for i = 1:numel(ids)
@@ -2189,7 +2189,7 @@ classdef GUI < handle
                 end
             end
 
-            obj.Ax.Tools.Pick.setBoxesEdgeColorByIDs(ids, 'w');
+            obj.ImageViewer.Tools.Pick.setBoxesEdgeColorByIDs(ids, 'w');
             obj.markProjectDirty();
         end
 
@@ -2295,13 +2295,13 @@ classdef GUI < handle
         function onDisplayChanged(obj,e)
             switch e.Name
                 case "ChannelColorMode"
-                    obj.Ax.ComponentColorMode = char(obj.Settings.Display.ChannelColorMode);
+                    obj.ImageViewer.ComponentColorMode = char(obj.Settings.Display.ChannelColorMode);
                     obj.refreshChannelDisplayControls();
                 case "Colormap"
                     cmap = obj.Settings.Display.Colormap;
                     obj.ExampleColormapAxes.Colormap = cmap;
 
-                    C = obj.Ax.C;
+                    C = obj.ImageViewer.C;
                     if ~obj.isSyncingColormapSelection && ~isempty(obj.Project)
                         obj.Project.setChannelColormap( ...
                             C, ...
@@ -2309,8 +2309,8 @@ classdef GUI < handle
                             obj.Settings.Display.ColormapCategory);
                     end
 
-                    if C <= obj.Ax.NumComponents
-                        obj.Ax.ComponentColormaps{C} = cmap;
+                    if C <= obj.ImageViewer.NumComponents
+                        obj.ImageViewer.ComponentColormaps{C} = cmap;
                     end
                 case "BoxFaceColor"
                     %set(obj.ROI, 'FaceColor', obj.Settings.Display.BoxFaceColor);
@@ -2365,7 +2365,7 @@ classdef GUI < handle
                     obj.refreshRegionROI();
                     obj.refreshRegionLinescanPlot();
                     % update BoxSize for Pick tool
-                    obj.Ax.Tools.Pick.BoxSize = obj.Settings.Analysis.BoxSize;
+                    obj.ImageViewer.Tools.Pick.BoxSize = obj.Settings.Analysis.BoxSize;
                 case {"PixelSizeValue","PixelSizeUnit"}
                     obj.Project.setDefaultPixelSize(obj.Settings.Analysis.getDefaultPixelSize);
                     % re-process all existing regions to reflect new pixel size
@@ -2453,8 +2453,8 @@ classdef GUI < handle
             colorName = string(src.Value);
             obj.Project.setChannelColor(C,colorName);
 
-            if C <= obj.Ax.NumComponents
-                obj.Ax.ComponentColors{C} = colorName;
+            if C <= obj.ImageViewer.NumComponents
+                obj.ImageViewer.ComponentColors{C} = colorName;
             end
         end
 
@@ -2621,12 +2621,12 @@ classdef GUI < handle
             if isempty(img), return; end
 
             % set MaxRenderedResolution for smoother updates in ImageViewer, RegionViewer
-            obj.Ax.MaxRenderedResolution = obj.Ax.CDataSize(1)/4;
+            obj.ImageViewer.MaxRenderedResolution = obj.ImageViewer.CDataSize(1)/4;
             obj.RegionViewer.MaxRenderedResolution = obj.Settings.Analysis.BoxSize/4;
 
             % set the new CLim for the ImageViewer, linked RegionViewer will update
             clim = obj.IntensitySliders(C).Value;
-            obj.Ax.ComponentCLims{C} = clim;
+            obj.ImageViewer.ComponentCLims{C} = clim;
         end
 
         function onIntensitySliderChanged(obj,~,C)
@@ -2639,7 +2639,7 @@ classdef GUI < handle
             img.setDisplayRange(newVal,C);
 
             % update view
-            obj.Ax.ComponentCLims{C} = newVal;
+            obj.ImageViewer.ComponentCLims{C} = newVal;
 
             % disable AutoScaleDisplayIntensity if enabled
             if obj.Settings.Display.AutoScaleDisplayIntensity
@@ -2647,7 +2647,7 @@ classdef GUI < handle
             end
 
             % reset MaxRenderedResolution
-            obj.Ax.MaxRenderedResolution = 'none';
+            obj.ImageViewer.MaxRenderedResolution = 'none';
             obj.RegionViewer.MaxRenderedResolution = 'none';
 
             obj.markProjectDirty();
@@ -2893,8 +2893,8 @@ classdef GUI < handle
 
 
             % Apply active label color to the newly created box
-            obj.Ax.Tools.Pick.setBoxColorByID(data.ID, L.Color);
-            obj.Ax.Tools.Pick.setBoxLabelByID(data.ID, img.getRegion(data.ID).Name);
+            obj.ImageViewer.Tools.Pick.setBoxColorByID(data.ID, L.Color);
+            obj.ImageViewer.Tools.Pick.setBoxLabelByID(data.ID, img.getRegion(data.ID).Name);
         end
 
         function onBoxMoveStarted(obj, data)
@@ -3095,7 +3095,7 @@ classdef GUI < handle
             try
                 [h,cleanupProgress] = obj.createExportProgressDialog("Preparing linescan plot export..."); %#ok<ASGLU>
                 success = desmostorm.export.Exporter.exportRegionLinescanPlot(obj.Project,obj.Settings, ...
-                    "CurrentChannel",obj.Ax.C, ...
+                    "CurrentChannel",obj.ImageViewer.C, ...
                     "ProgressDialog",h);
                 if success
                     desmostorm.Log.INFO("Success.");
