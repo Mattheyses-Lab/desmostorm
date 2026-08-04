@@ -990,6 +990,9 @@ classdef GUI < handle
         end
 
         function onCloseRequest(obj)
+            if ~obj.confirmSaveIfDirty()
+                return
+            end
             desmostorm.Log.INFO("Exiting...");
             % delete the GUI, will also delete fig window
             obj.delete();
@@ -1058,10 +1061,19 @@ classdef GUI < handle
         end
 
         function refreshWindowName(obj)
+            dirtyMark = "";
+            projectName = "";
+            if ~isempty(obj.Project)
+                projectName = obj.Project.Name;
+                if obj.Project.HasUnsavedChanges
+                    dirtyMark = "*";
+                end
+            end
+
             if isempty(obj.Project)
-                obj.Fig.Name = sprintf("%s (%s)",desmostorm.Info.Name,desmostorm.Info.Version);
+                obj.Fig.Name = sprintf("%s%s (%s)",desmostorm.Info.Name,dirtyMark,desmostorm.Info.Version);
             else
-                obj.Fig.Name = sprintf("%s (%s) - %s",desmostorm.Info.Name,desmostorm.Info.Version,obj.Project.Name);
+                obj.Fig.Name = sprintf("%s%s (%s) - %s",desmostorm.Info.Name,dirtyMark,desmostorm.Info.Version,projectName);
             end
         end
 
@@ -1145,6 +1157,8 @@ classdef GUI < handle
                 obj.projectL(8) = addlistener(obj.Project,'RegionSelectionChanged', @(~,e) obj.onRegionSelectionChanged(e));
                 % Labels
                 obj.projectL(9) = addlistener(obj.Project,'LabelsChanged',          @(~,~) obj.onLabelsChanged());
+                % Dirty state
+                obj.projectL(10) = addlistener(obj.Project,'DirtyStateChanged',     @(~,~) obj.onDirtyStateChanged());
             end
             % Settings
             obj.settingsL(1) = addlistener(obj.Settings,'DisplayChanged',   @(~,e) obj.onDisplayChanged(e));
@@ -1712,12 +1726,14 @@ classdef GUI < handle
         %ONREGIONADDED RegionAdded event callback
             desmostorm.Log.INFO("Region added (" + obj.formatRegionEventLabel(evt) + ").")
             obj.refreshRegionListBox();
+            obj.markProjectDirty();
         end
 
         function onRegionRemoved(obj,evt)
         %ONREGIONREMOVED RegionRemoved event callback    
             desmostorm.Log.INFO("Region removed (" + obj.formatRegionEventLabel(evt) + ").")
             obj.refreshRegionListBox();
+            obj.markProjectDirty();
         end
 
         function onActiveRegionChanged(obj,evt)
@@ -2049,6 +2065,7 @@ classdef GUI < handle
             obj.refreshLabelsTree();
             obj.refreshRegionBoxes();
             obj.refreshRegionSummaryTable();
+            obj.markProjectDirty();
         end
 
         function onLabelHotkeyPressed(obj,key)
@@ -2155,6 +2172,7 @@ classdef GUI < handle
 
             % refresh region table
             obj.refreshRegionSummaryTable();
+            obj.markProjectDirty();
         end
 
         function clearLabelOnSelection(obj)
@@ -2172,6 +2190,7 @@ classdef GUI < handle
             end
 
             obj.Ax.Tools.Pick.setBoxesEdgeColorByIDs(ids, 'w');
+            obj.markProjectDirty();
         end
 
         % labels uitree callbacks
@@ -2231,6 +2250,40 @@ classdef GUI < handle
             obj.Fig.Visible = 'on';
         end
 
+        function markProjectDirty(obj)
+            if ~isempty(obj.Project)
+                obj.Project.markDirty();
+            end
+        end
+
+        function onDirtyStateChanged(obj)
+            obj.refreshWindowName();
+        end
+
+        function tf = confirmSaveIfDirty(obj)
+            tf = true;
+            if isempty(obj.Project) || ~obj.Project.HasUnsavedChanges
+                return
+            end
+
+            selection = uiconfirm(obj.Fig, ...
+                sprintf('Project "%s" has unsaved changes.',obj.Project.Name), ...
+                'Save changes?', ...
+                'Icon','warning', ...
+                'Options',{'Save','Discard','Cancel'}, ...
+                'DefaultOption','Save', ...
+                'CancelOption','Cancel');
+
+            switch selection
+                case 'Save'
+                    tf = obj.saveProject();
+                case 'Discard'
+                    tf = true;
+                otherwise
+                    tf = false;
+            end
+        end
+
 
 
 
@@ -2271,6 +2324,7 @@ classdef GUI < handle
                     % refresh region view
                     obj.refreshRegionViewer();
             end
+            obj.markProjectDirty();
         end
 
         function onPeaksPlotChanged(obj,e)
@@ -2283,15 +2337,18 @@ classdef GUI < handle
                 otherwise
                     set(obj.RegionLinescanPlot,e.Name,obj.Settings.PeaksPlot.(e.Name));
             end
+            obj.markProjectDirty();
         end
 
         function onROIChanged(obj,e)
             if isempty(obj.RegionViewer) || ~isvalid(obj.RegionViewer), return; end
             obj.RegionViewer.Tools.DrawRectangle.(e.Name) = e.NewValue;
+            obj.markProjectDirty();
         end
 
-        function onBoxChanged(obj,e)
+        function onBoxChanged(obj,~)
             % do something
+            obj.markProjectDirty();
         end
 
         function onAnalysisChanged(obj,e)
@@ -2316,12 +2373,14 @@ classdef GUI < handle
                     % refresh the region linescan plot
                     obj.refreshRegionLinescanPlot();
             end
+            obj.markProjectDirty();
         end
 
         function onIOChanged(obj,e)
             if e.Name=="DefaultFolder"
                 % do something
             end
+            obj.markProjectDirty();
         end
 
         function ColormapSelectionChanged(obj,evt)
@@ -2406,15 +2465,20 @@ classdef GUI < handle
 
         function onNew(obj)
         %ONNEW MenuSelectedCallback for [File]->[New]
+            if ~obj.confirmSaveIfDirty()
+                return
+            end
+
             % cleanup before starting new
-            obj.Project.delete();
-            obj.Settings.delete();
+            if ~isempty(obj.Project), obj.Project.delete(); end
+            if ~isempty(obj.Settings), obj.Settings.delete(); end
             obj.detatchListeners();
             % new Settings
             obj.Settings = desmostorm.config.Settings.load();
             % new Project
             obj.Project = desmostorm.model.STORMProject("untitled");
             obj.Project.DefaultPixelSize = obj.Settings.Analysis.getDefaultPixelSize();
+            obj.Project.markClean();
             % refresh hotkeys
             obj.refreshHotkeys();
             % refresh UI
@@ -2427,20 +2491,26 @@ classdef GUI < handle
 
         function onOpen(obj)
         %ONOPEN MenuSelectedCallback for [File]->[Open...]
+            if ~obj.confirmSaveIfDirty()
+                return
+            end
+
             % get project filename
             obj.Fig.Visible = 'off';
             [file, path] = uigetfile('*.mat','Select project file (.mat)','MultiSelect','off');
             obj.Fig.Visible = 'on';
             if isequal(file,0), return; end % cancelled | no files selected -> return
             fname = fullfile(path, file);
+
             % update log
             desmostorm.Log.INFO(sprintf("Loading project file: %s",fname));
             % set up progress dialog
             msg = sprintf("Loading project file:\n%s",fname);
             h = uiprogressdlg(obj.Fig,"Message",msg,'Indeterminate','on');
+            cleanupProgress = onCleanup(@() closeProgressDialog(h));
             % cleanup before loading
-            obj.Project.delete();   % delete project
-            obj.Settings.delete();  % delete settings
+            if ~isempty(obj.Project), obj.Project.delete(); end   % delete project
+            if ~isempty(obj.Settings), obj.Settings.delete(); end  % delete settings
             obj.detatchListeners(); % detach listeners
             % load Project and Settings
             [proj,stgs] = desmostorm.model.STORMProject.load(fname, ...
@@ -2458,8 +2528,10 @@ classdef GUI < handle
             obj.refreshHotkeys();
             obj.refreshUI();
             obj.refreshListeners();
-            % close progress dialog
-            close(h);
+            if ~isempty(obj.Project)
+                obj.Project.markClean();
+                obj.refreshWindowName();
+            end
             % update log
             desmostorm.Log.INFO(sprintf("Successfully loaded project file: %s",fname));
         end
@@ -2468,6 +2540,10 @@ classdef GUI < handle
         %ONOPEN MenuSelectedCallback for [File]->[Close]
             % no project -> return
             if isempty(obj.Project), return; end
+            if ~obj.confirmSaveIfDirty()
+                return
+            end
+
             projectName = obj.Project.Name;
             % --- delete project, detach listeners, refresh UI ---
             obj.Project.delete(); 
@@ -2479,6 +2555,14 @@ classdef GUI < handle
 
         function onSave(obj)
         %ONSAVE MenuSelectedCallback for [File]->[Save...]    
+            obj.saveProject();
+        end
+
+        function tf = saveProject(obj)
+        %SAVEPROJECT Save the active project; true only when save completes.
+            tf = false;
+            if isempty(obj.Project), return; end
+
             % get filename to save project
             obj.Fig.Visible = 'off';
             if obj.Project.isOnDisk
@@ -2490,19 +2574,20 @@ classdef GUI < handle
             obj.Fig.Visible = 'on';
             if isequal(file,0), return; end % cancelled | no files selected -> return
             fname = fullfile(path, file);
+
             % update log
             desmostorm.Log.INFO(sprintf("Saving project file: %s",fname));
             % create progress dialog
             msg = sprintf("Saving project file:\n%s",fname);
             h = uiprogressdlg(obj.Fig,"Message",msg,'Indeterminate','on');
+            cleanupProgress = onCleanup(@() closeProgressDialog(h));
             % save the project
             obj.Project.save(fname,obj.Settings);
             % refresh the window name
             obj.refreshWindowName();
-            % clost progress dialog
-            close(h);
             % update log
             desmostorm.Log.INFO(sprintf("Successfully saved project file: %s",fname));
+            tf = true;
         end
 
         function onSaveSettings(obj)
@@ -2564,6 +2649,8 @@ classdef GUI < handle
             % reset MaxRenderedResolution
             obj.Ax.MaxRenderedResolution = 'none';
             obj.RegionViewer.MaxRenderedResolution = 'none';
+
+            obj.markProjectDirty();
         end
 
     end
@@ -2580,6 +2667,7 @@ classdef GUI < handle
             img.processRegionLinescan(reg,obj.getRunConfig());
             % sync UI
             obj.syncActiveRegionToView();
+            obj.markProjectDirty();
         end
 
         function processAllRegions(obj)
@@ -2592,6 +2680,7 @@ classdef GUI < handle
             close(h);
             % sync UI
             obj.syncActiveImageToView();
+            obj.markProjectDirty();
             desmostorm.Log.INFO("Region analysis complete.");
         end
 
@@ -2703,6 +2792,7 @@ classdef GUI < handle
 
             % --- sync UI ---
             obj.syncActiveImageToView();
+            obj.markProjectDirty();
 
             % close the progress dialog
             close(h);
@@ -2846,6 +2936,7 @@ classdef GUI < handle
             obj.refreshRegionLinescanPlot();
             % update RegionSummaryTable
             obj.RegionSummaryTable.Data = r.SummaryTable;
+            obj.markProjectDirty();
         end
 
         function onBoxDeleted(obj, data)
@@ -2918,6 +3009,7 @@ classdef GUI < handle
             obj.refreshRegionLinescanPlot();
             % update RegionSummaryTable
             obj.RegionSummaryTable.Data = reg.SummaryTable;
+            obj.markProjectDirty();
         end
 
         function onROIDeleted(obj)
@@ -2934,6 +3026,7 @@ classdef GUI < handle
             obj.refreshRegionLinescanPlot();
             % update RegionSummaryTable
             obj.RegionSummaryTable.Data = reg.SummaryTable;
+            obj.markProjectDirty();
         end
 
     end

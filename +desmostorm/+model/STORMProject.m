@@ -9,6 +9,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
         CreatedAt datetime = datetime('now')
         Version (1,1) string = desmostorm.Info.Version
         isOnDisk (1,1) logical = false
+        HasUnsavedChanges (1,1) logical = false
     end
 
     %% Label bank
@@ -70,6 +71,8 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
         RegionSelectionChanged
 
         LabelsChanged
+
+        DirtyStateChanged
     end
 
     properties
@@ -147,8 +150,8 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             % label registry, default labels to start
             obj.LabelBank = desmostorm.model.LabelRegistry.default();            
 
-            % add a listener for the LabelsChanged event
-            obj.LabelsChangedListener = addlistener(obj.LabelBank,'LabelsChanged',@(~,~) notify(obj,'LabelsChanged'));
+            % forward label-bank mutations through the project
+            obj.attachLabelBankListener();
         end
 
     end
@@ -172,6 +175,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
 
             imageID = img.ID;
             notify(obj,'ImageAdded',desmostorm.model.events.ImageAdded(imageID));
+            obj.markDirty();
         end
 
         % add a new desmostorm.model.STORMImage for each of the images located at the paths in the cell array, filePaths
@@ -197,6 +201,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             obj.ImageOrder = obj.ImageOrder(obj.ImageOrder ~= imageID);
 
             notify(obj,'ImageRemoved',desmostorm.model.events.ImageRemoved(imageID));
+            obj.markDirty();
         end
 
         function setActiveImage(obj, imageID)
@@ -406,10 +411,38 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
 
         end
 
+        function onLabelBankChanged(obj)
+            notify(obj,'LabelsChanged');
+            obj.markDirty();
+        end
+
     end
 
     %% Helpers
     methods
+
+        function markDirty(obj)
+            if obj.HasUnsavedChanges
+                return
+            end
+
+            obj.HasUnsavedChanges = true;
+            notify(obj,'DirtyStateChanged');
+        end
+
+        function markClean(obj)
+            if ~obj.HasUnsavedChanges
+                return
+            end
+
+            obj.HasUnsavedChanges = false;
+            notify(obj,'DirtyStateChanged');
+        end
+
+        function attachLabelBankListener(obj)
+            delete(obj.LabelsChangedListener);
+            obj.LabelsChangedListener = addlistener(obj.LabelBank,'LabelsChanged',@(~,~) obj.onLabelBankChanged());
+        end
 
         function setDefaultPixelSize(obj, ps)
             arguments
@@ -485,8 +518,13 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             assert(matlabx.colors.maps.Registry.has(name, category), ...
                 'Colormap "%s" not found in category "%s".', name, category);
 
+            if obj.ChannelColormapNames(c) == name && obj.ChannelColormapCategories(c) == category
+                return
+            end
+
             obj.ChannelColormapNames(c) = name;
             obj.ChannelColormapCategories(c) = category;
+            obj.markDirty();
         end
 
         function [name,category] = getChannelColormapInfo(obj,c)
@@ -539,8 +577,12 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             if c > numel(obj.ChannelColorNames), return; end
 
             name = desmostorm.model.STORMProject.normalizeChannelColorName_(name);
+            if obj.ChannelColorNames(c) == name
+                return
+            end
 
             obj.ChannelColorNames(c) = name;
+            obj.markDirty();
         end
 
         function name = getChannelColorName(obj,c)
@@ -614,6 +656,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
 
             % indicate that it is now on disk
             obj.isOnDisk = true;
+            obj.markClean();
 
         end
 
@@ -685,6 +728,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             else
                 proj.LabelBank = desmostorm.model.LabelRegistry.default();
             end
+            proj.attachLabelBankListener();
 
             % Resolve image paths
             desmostorm.Log.DEBUG("Resolving image paths...")
@@ -745,6 +789,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
 
             % indicate file exists on disk at SourcePath
             proj.isOnDisk = true;
+            proj.markClean();
 
         end
 
