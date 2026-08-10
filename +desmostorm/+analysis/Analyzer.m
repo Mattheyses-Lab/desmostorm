@@ -35,15 +35,21 @@ classdef Analyzer
             end
         end
 
-        function out = autofitRegionROI(I, rc)
+        function out = autofitRegionROI(I, rc, opts)
             arguments
                 % image to analyze
                 I (:,:) double
                 % Analysis settings snapshot
                 rc (1,1) desmostorm.config.RunConfig
+                opts.DebugOutput = []
             end
             % automatically fit rectangular ROI
-            out = desmostorm.analysis.image.autofitRegionROI(I,rc);
+            if isempty(opts.DebugOutput)
+                out = desmostorm.analysis.image.autofitRegionROI(I,rc);
+            else
+                out = desmostorm.analysis.image.autofitRegionROI(I,rc, ...
+                    "DebugOutput",opts.DebugOutput);
+            end
         end
 
     end

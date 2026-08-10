@@ -1,66 +1,47 @@
 classdef PointCluster < handle
+%POINTCLUSTER Metrics and geometry for one 2-D point cluster.
 
     properties
-        % the group of clusters to which this cluster belongs
         Master (:,1) desmostorm.analysis.cluster.PointClusters = desmostorm.analysis.cluster.PointClusters.empty()
-        % index of this cluster in the master
-        Index (1,1) = NaN
-        % cluster centroid coordinates (x,y)
-        Centroid (1,2) double
-        % point to centroid distances
-        Distances (:,1) double
-        % alpha shape representing convex hull of the cluster points
-        Shape (:,1)
+        Index (1,1) double = NaN
+        Centroid (1,2) double = [NaN NaN]
+        Distances (:,1) double = zeros(0,1)
+        Shape = []
     end
 
     properties (Access=private)
-        % private backing for Points
-        Points_ (:,2) double
+        Points_ (:,2) double = zeros(0,2)
     end
 
     properties (Dependent)
-        % points comprising the cluster (has private backing Points_)
         Points (:,2) double
-
-        % number of points in the cluster
         nPoints (1,1) double
-        % standard deviation of point to centroid distances
         DistanceSD (1,1) double
-        % area of the convex hull
         HullArea (1,1) double
-        % perimeter of the convex hull
         HullPerimeter (1,1) double
-        % coordinates of the hull boundary
         Hull (:,2) double
 
-        % ---- PCA / ellipse features ----
-        Cov2 (2,2) double              % covariance of centered points
-        EigVals (1,2) double           % [lambda1 lambda2], lambda1 >= lambda2
-        EigVecs (2,2) double           % eigenvectors corresponding to EigVals
-        Anisotropy (1,1) double        % lambda1/lambda2
-        Eccentricity (1,1) double      % sqrt(1 - lambda2/lambda1)
+        Cov2 (2,2) double
+        EigVals (1,2) double
+        EigVecs (2,2) double
+        Anisotropy (1,1) double
+        Eccentricity (1,1) double
 
-        % ---- distance distribution ----
-        DistTailRatio (1,1) double     % q90/q50 of point-to-centroid distances
+        DistTailRatio (1,1) double
 
-        % ---- nearest-neighbor dispersion ----
-        NearestNeighborDistances (:,1) double % per-point NND within cluster
+        NearestNeighborDistances (:,1) double
         NNMedian (1,1) double
-        NNDispersion (1,1) double      % mad(NND)/median(NND)
-        Compactness (1,1) double       % 4*pi*A/P^2 (dimensionless)
+        NNDispersion (1,1) double
+        Compactness (1,1) double
 
-        % ---- density ----
-        PointDensity (1,1) double      % nPoints / HullArea
+        PointDensity (1,1) double
     end
 
-
-    %% constructor, Set/Get for Points, updating
     methods
-
         function obj = PointCluster(master,points,idx)
-            obj.Master = master;
-            obj.Index = idx;
-            obj.Points = points;
+            if nargin >= 1, obj.Master = master; end
+            if nargin >= 2, obj.Points = points; end
+            if nargin >= 3, obj.Index = idx; end
         end
 
         function pts = get.Points(obj)
@@ -73,39 +54,33 @@ classdef PointCluster < handle
         end
 
         function update(obj)
-            % calculate centroid coordinates
-            if isempty(obj.Points) % no points -> delete cluster
-                obj.delete();
+            if isempty(obj.Points)
+                obj.Centroid = [NaN NaN];
+                obj.Distances = zeros(0,1);
+                obj.Shape = [];
                 return
             end
-            % update centroid, distances, and shape
-            obj.updateCentroid();
-            obj.updateDistances();
+
+            obj.Centroid = mean(obj.Points,1);
+            obj.Distances = sqrt(sum((obj.Points - obj.Centroid).^2,2));
             obj.updateShape();
         end
 
-        function updateCentroid(obj)
-            obj.Centroid = mean(obj.Points, 1); % geometric mean of point positions
-        end
-
-        function updateDistances(obj)
-            obj.Distances = sqrt(sum((obj.Points - obj.Centroid).^2, 2));
-        end
-
         function updateShape(obj)
+            if obj.nPoints < 3 || size(unique(obj.Points,'rows'),1) < 3
+                obj.Shape = [];
+                return
+            end
+
             obj.Shape = alphaShape(obj.Points,Inf,"HoleThreshold",1);
         end
 
         function setIndex(obj,idx)
             obj.Index = idx;
         end
-
     end
 
-
-    %% derived getters
     methods
-
         function val = get.nPoints(obj)
             val = size(obj.Points,1);
         end
@@ -115,18 +90,19 @@ classdef PointCluster < handle
         end
 
         function val = get.HullArea(obj)
+            if isempty(obj.Shape), val = NaN; return; end
             val = obj.Shape.area();
         end
 
         function val = get.HullPerimeter(obj)
+            if isempty(obj.Shape), val = NaN; return; end
             val = obj.Shape.perimeter();
         end
 
         function val = get.Hull(obj)
-            [~,val] = obj.Shape.boundaryFacets;
+            if isempty(obj.Shape), val = zeros(0,2); return; end
+            [~,val] = obj.Shape.boundaryFacets();
         end
-
-        % -------- NEW: PCA / ellipse features --------
 
         function C = get.Cov2(obj)
             if obj.nPoints < 2
@@ -134,7 +110,6 @@ classdef PointCluster < handle
                 return
             end
             X = obj.Points - mean(obj.Points,1);
-            % Use normalization by (N-1) to match cov() default
             C = (X.'*X) / max(obj.nPoints-1,1);
         end
 
@@ -143,13 +118,7 @@ classdef PointCluster < handle
                 val = [NaN NaN];
                 return
             end
-            s = eig(obj.Cov2);
-            s = sort(s,'descend');
-            if numel(s) < 2
-                val = [NaN NaN];
-            else
-                val = s(:).';
-            end
+            val = sort(eig(obj.Cov2),'descend').';
         end
 
         function V = get.EigVecs(obj)
@@ -177,21 +146,16 @@ classdef PointCluster < handle
                 val = NaN;
                 return
             end
-            % clamp to [0,1] numerically
-            r = max(min(l(2)/l(1),1),0);
-            val = sqrt(1 - r);
+            val = sqrt(1 - max(min(l(2)/l(1),1),0));
         end
-
-        % -------- NEW: distance distribution --------
 
         function val = get.DistTailRatio(obj)
             if isempty(obj.Distances)
                 val = NaN;
                 return
             end
-            d = obj.Distances(:);
-            q50 = prctile(d,50);
-            q90 = prctile(d,90);
+            q50 = prctile(obj.Distances,50);
+            q90 = prctile(obj.Distances,90);
             if q50 <= 0
                 val = NaN;
             else
@@ -199,17 +163,14 @@ classdef PointCluster < handle
             end
         end
 
-        % -------- NEW: nearest-neighbor dispersion --------
-
         function dnn = get.NearestNeighborDistances(obj)
             n = obj.nPoints;
             if n < 2
-                dnn = NaN(0,1);
+                dnn = zeros(0,1);
                 return
             end
-            % pairwise distances (small clusters only; keep simple for now)
-            D = pdist2(obj.Points, obj.Points);
-            D(1:n+1:end) = inf; % ignore self-distance
+            D = pdist2(obj.Points,obj.Points);
+            D(1:n+1:end) = inf;
             dnn = min(D,[],2);
         end
 
@@ -233,126 +194,75 @@ classdef PointCluster < handle
                 val = NaN;
                 return
             end
-            val = mad(dnn,1) / m; % normalized MAD (scale-free)
+            val = mad(dnn,1) / m;
         end
-
-        % -------- NEW: shape compactness --------
 
         function val = get.Compactness(obj)
             A = obj.HullArea;
             P = obj.HullPerimeter;
-            if isempty(A) || isempty(P) || P <= 0
+            if isempty(A) || isempty(P) || isnan(A) || isnan(P) || P <= 0
                 val = NaN;
                 return
             end
             val = (4*pi*A) / (P^2);
         end
 
-        % -------- NEW: density --------
-
         function val = get.PointDensity(obj)
             A = obj.HullArea;
-            if isempty(A) || A <= 0
+            if isempty(A) || isnan(A) || A <= 0
                 val = NaN;
                 return
             end
             val = obj.nPoints / A;
         end
-
     end
 
-    %% processing and point refinement
     methods
-
         function removeOutliersNNDistance(obj)
-            %REMOVEOUTLIERSNNDISTANCE Remove points whose NN distance
-            % > 2.5 std deviations away from median NN distance
-
-            % number of points
             n = obj.nPoints;
-            % pairwise distances (small clusters only; keep simple for now)
-            D = pdist2(obj.Points, obj.Points);
-            D(1:n+1:end) = NaN; % ignore self-distance
-            % distance to NN for each point
-            DNN = min(D, [], 2, "omitmissing");
-            % median NN distance across all points
-            DNN_med = median(DNN, "omitmissing");
-            % find outlier indices
-            badIdx = DNN > (DNN_med + 2.5*std(DNN));
-            % Remove outliers
-            obj.Points(badIdx, :) = [];
+            if n < 3, return; end
+
+            D = pdist2(obj.Points,obj.Points);
+            D(1:n+1:end) = NaN;
+            dnn = min(D,[],2,"omitmissing");
+            dnnMed = median(dnn,"omitmissing");
+            badIdx = dnn > (dnnMed + 2.5*std(dnn));
+            obj.Points(badIdx,:) = [];
         end
 
-        function removeIsolatedPointsNNSupport(obj, minSupport, rFactor)
-            %REMOVEISOLATEDPOINTSNND Remove points or point groups that are locally isolated 
-            % based on the number of nearby supporting points within defined radius (DBSCAN lite)
+        function removeIsolatedPointsNNSupport(obj,minSupport,rFactor)
             arguments
                 obj
                 minSupport (1,1) double {mustBeGreaterThanOrEqual(minSupport,1)} = 4
                 rFactor (1,1) double {mustBeGreaterThanOrEqual(rFactor,1)} = 4
             end
 
-            % check inputs
-            if ~isvalid(obj), return; end
+            if ~isvalid(obj) || obj.nPoints < 3, return; end
 
             n = obj.nPoints;
-            if n < 3, return; end
-
-            % all point-to-point distances
-            D = pdist2(obj.Points, obj.Points);
+            D = pdist2(obj.Points,obj.Points);
             D(1:n+1:end) = NaN;
-            % distance to NN for each point
-            d1 = min(D, [], 2, "omitmissing");
-            % multiply by rFactor to define support radius, r
-            r  = rFactor * median(d1, "omitmissing");
-            % count neighbor supporting points within radius
-            support = sum(D <= r, 2);
-            % idxs to points with too few neighbors
-            badIdx = support < minSupport;
-            % delete bad points
-            obj.Points(badIdx,:) = [];
+            d1 = min(D,[],2,"omitmissing");
+            r = rFactor * median(d1,"omitmissing");
+            support = sum(D <= r,2);
+            obj.Points(support < minSupport,:) = [];
         end
 
-        function removeOutliersDBSCAN(obj)
-            % points to cluster
+        function removeOutliersDBSCAN(obj,minPts)
+            arguments
+                obj
+                minPts (1,1) double {mustBeGreaterThanOrEqual(minPts,3)} = 3
+            end
+
             pts = obj.Points;
-            % number of points
-            n = obj.nPoints;
-            if n < 3, return; end
+            if size(pts,1) < minPts + 1, return; end
 
-
-            fprintf('DBSCAN (cluster %i)\n',obj.Index);
-            fprintf('Number of points: %i\n',obj.nPoints);
-
-            % minimum neighbor points
-            minPts = 3;
-
-            % all point-to-point distances
-            D = pdist2(pts, pts);
-            
-            % find optimal epsilon value
             epsilon = desmostorm.analysis.cluster.chooseDbscanEpsilonKnee(pts,minPts,"SmoothFrac",0.01);
-            fprintf('Optimal epsilon: %f\n',epsilon);
+            if isnan(epsilon) || epsilon <= 0, return; end
 
-            % cluster with DBSCAN (Density-based spatial clustering of applications with noise)
-            clusterIdxs = dbscan(D,epsilon,5,"Distance","precomputed");
-            % number of noise points rejected (outliers)
-            nOutliers = numel(find(clusterIdxs==-1));
-            % remove outliers
-            obj.Points(clusterIdxs==-1,:) = [];
-
-            fprintf('Removed %i outliers\n',nOutliers);
-        end
-
-    end
-
-    %% teardown
-    methods
-        function delete(obj)
-            % create event data payload to carry cluster index
-            evt = desmostorm.analysis.cluster.ClusterDeletedEvent(obj.Index);
-            % notify master we deleted a cluster
-            notify(obj.Master,'ClusterDeleted',evt);
+            D = pdist2(pts,pts);
+            labels = dbscan(D,epsilon,minPts,"Distance","precomputed");
+            obj.Points(labels == -1,:) = [];
         end
     end
 

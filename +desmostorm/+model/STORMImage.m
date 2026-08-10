@@ -572,15 +572,16 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
 
             % otherwise, process each region
             for i = 1:numel(arr)
-                obj.autofitRegionROI(arr(i),config);
+                obj.autofitRegionROI(arr(i),config,"DebugOutput",false);
             end
         end
 
-        function autofitRegionROI(obj, reg, config)
+        function autofitRegionROI(obj, reg, config, opts)
             arguments
                 obj desmostorm.model.STORMImage
                 reg desmostorm.model.STORMRegion
                 config desmostorm.config.RunConfig
+                opts.DebugOutput = []
             end
 
             if isempty(reg), return; end
@@ -588,7 +589,12 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
             % get region CData
             I = obj.regionSubimage(reg);
             % get linescan info
-            ROI = desmostorm.analysis.Analyzer.autofitRegionROI(I, config);
+            if isempty(opts.DebugOutput)
+                ROI = desmostorm.analysis.Analyzer.autofitRegionROI(I, config);
+            else
+                ROI = desmostorm.analysis.Analyzer.autofitRegionROI(I, config, ...
+                    "DebugOutput",opts.DebugOutput);
+            end
 
             if isempty(ROI), return; end
 
