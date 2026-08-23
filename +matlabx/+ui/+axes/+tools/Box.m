@@ -1,5 +1,5 @@
-classdef Pick < matlabx.ui.axes.AxesTool
-% matlabx.ui.axes.tools.Pick - optimistic box creation on click
+classdef Box < matlabx.ui.axes.AxesTool
+% matlabx.ui.axes.tools.Box - optimistic box creation on click
 
     %% Draggable box management
 
@@ -48,9 +48,9 @@ classdef Pick < matlabx.ui.axes.AxesTool
 
     %% Lifecycle toggles
     methods
-        function obj = Pick(host)
-            obj@matlabx.ui.axes.AxesTool(host, "Pick",...
-                'Tooltip','Pick regions',...
+        function obj = Box(host)
+            obj@matlabx.ui.axes.AxesTool(host, "Box",...
+                'Tooltip','Box regions',...
                 'AxesType',"image",...
                 'Icon',matlabx.internal.Paths.icons('AddRectangleIcon.png'),...
                 'Priority',10,...
@@ -64,34 +64,109 @@ classdef Pick < matlabx.ui.axes.AxesTool
             obj.BoxROI = matlabx.ui.axes.overlays.ROIBox.empty();
 
         end
-
-        % Toggled Enabled=true via toolbar button
-        function onEnabled(obj)
-            obj.Host.setMode('Pick', true);
-        end
-
-        % Toggled Enabled=false via toolbar button
-        function onDisabled(obj)
-            obj.Host.setMode('Pick', false);
-        end
-
         % Called AFTER installed from Host, use for any extra required startup actions
         function onInstall(obj)
-            obj.Host.addMode('Pick');
-            obj.Host.addMode('PrimedForDrag')
-            obj.Host.addMode('DragBox');
-            obj.Host.addMode('HoverBox');
+            obj.addMode('PrimedForDrag');
+            obj.addMode('DragBox');
+            obj.addMode('HoverBox');
         end
 
         % Called AFTER uninstalled from Host, use for any extra required cleanup actions
         function onUninstall(obj)
-            obj.Host.removeMode('Pick');
-            obj.Host.removeMode('PrimedForDrag')
-            obj.Host.removeMode('DragBox');
-            obj.Host.removeMode('HoverBox');
+            obj.removeMode('PrimedForDrag');
+            obj.removeMode('DragBox');
+            obj.removeMode('HoverBox');
             obj.clearBoxes();
         end
 
+        function contributeContextMenu(obj, menu)
+        %CONTRIBUTECONTEXTMENU Add Box commands to the host context menu.
+            menu.addSubmenu( ...
+                "Box", ...
+                "Box", ...
+                "Owner", obj);
+
+            menu.addItem( ...
+                "Box.Help", ...
+                "Help...", ...
+                @(~,~) obj.Host.openToolHelpWindow(obj), ...
+                "Parent", "Box", ...
+                "Owner", obj);
+
+            menu.addItem( ...
+                "Box.ClearSelection", ...
+                "Clear Selection", ...
+                @(~,~) obj.clearBoxSelection(Emit=true), ...
+                "Parent", "Box", ...
+                "Owner", obj, ...
+                "Separator", "on", ...
+                "Enabled", matlab.lang.OnOffSwitchState(obj.hasSelectedBoxes()), ...
+                "RefreshFcn", @(h) obj.refreshRequiresSelection(h));
+
+            menu.addItem( ...
+                "Box.SelectAll", ...
+                "Select All", ...
+                @(~,~) obj.selectAllBoxes(), ...
+                "Parent", "Box", ...
+                "Owner", obj, ...
+                "Enabled", matlab.lang.OnOffSwitchState(obj.hasAnyBoxes()), ...
+                "RefreshFcn", @(h) obj.refreshRequiresBoxes(h));
+
+            menu.addItem( ...
+                "Box.DeleteSelected", ...
+                "Delete Selected", ...
+                @(~,~) obj.deleteSelectedBoxes(), ...
+                "Parent", "Box", ...
+                "Owner", obj, ...
+                "Separator", "on", ...
+                "Enabled", matlab.lang.OnOffSwitchState(obj.hasSelectedBoxes()), ...
+                "RefreshFcn", @(h) obj.refreshRequiresSelection(h));
+
+            menu.addItem( ...
+                "Box.DeleteAll", ...
+                "Delete All", ...
+                @(~,~) obj.deleteAllBoxes(), ...
+                "Parent", "Box", ...
+                "Owner", obj, ...
+                "Enabled", matlab.lang.OnOffSwitchState(obj.hasAnyBoxes()), ...
+                "RefreshFcn", @(h) obj.refreshRequiresBoxes(h));
+        end
+
+    end
+
+    %% Help
+    methods
+        function summary = getHelpSummary(~)
+        %GETHELPSUMMARY Return a one-line Box description.
+            summary = "Create, activate, select, move, and delete square box regions.";
+        end
+
+        function usage = getUsageHelp(~)
+        %GETUSAGEHELP Return short Box usage notes.
+            usage = [ ...
+                "Enable Box and click the image to create a new box."; ...
+                "Click an existing box to activate it and prime drag movement."; ...
+                "Use selection commands from the Box context menu for batch actions."];
+        end
+
+        function B = getBindingHelp(obj)
+        %GETBINDINGHELP Return Box click binding descriptions.
+            B = struct( ...
+                "ToggleTool", obj.ToggleHotkey, ...
+                "CreateBox", "click image background while Box is enabled", ...
+                "ActivateAndDrag", "click box, then drag", ...
+                "ToggleSelection", "shift+extendclick box", ...
+                "Deactivate", "alt+click box", ...
+                "DeleteBox", "control+contextclick box");
+        end
+
+        function notes = getNotesHelp(~)
+        %GETNOTESHELP Return additional Box behavior notes.
+            notes = [ ...
+                "Active and selected are separate states."; ...
+                "Only the active box is dragged; selected boxes are used for batch menu actions."; ...
+                "Right-click context menus are reserved for ImageAxes and tool commands."];
+        end
     end
 
     %% Active event hooks (only when Enabled==true && IsInterceptor==true)
@@ -142,14 +217,14 @@ classdef Pick < matlabx.ui.axes.AxesTool
         function onPassiveMove(obj,E)
 
             % if we are primed for drag (button down on box with no cursor movement)
-            if obj.Host.Mode.PrimedForDrag
+            if obj.Mode.PrimedForDrag
                 % start dragging
                 obj.startDraggingBox(obj.activeBoxIdx());
                 return
             end
 
             % if we are in the middle of dragging a box
-            if obj.Host.Mode.DragBox
+            if obj.Mode.DragBox
                 % keep dragging and return
                 obj.dragBox(obj.activeBoxIdx());
                 return
@@ -168,13 +243,13 @@ classdef Pick < matlabx.ui.axes.AxesTool
 
         function onPassiveUp(obj,~)
 
-            if obj.Host.Mode.PrimedForDrag
+            if obj.Mode.PrimedForDrag
                 % no longer primed for drag
-                obj.Host.setMode('PrimedForDrag',false);
+                obj.setMode('PrimedForDrag',false);
                 return
             end
 
-            if obj.Host.Mode.DragBox
+            if obj.Mode.DragBox
                 obj.stopDraggingBox(obj.activeBoxIdx());
             end
         end
@@ -191,7 +266,7 @@ classdef Pick < matlabx.ui.axes.AxesTool
     end
 
 
-    %% Private Helpers (Pick)
+    %% Private Helpers (Box)
     methods (Access=private)
 
         function id = normalizeId_(~, id)
@@ -236,6 +311,26 @@ classdef Pick < matlabx.ui.axes.AxesTool
             TF = strlength(id) > 0 && ismember(id,obj.BoxIds);
         end
 
+        function tf = hasAnyBoxes(obj)
+            tf = any(isvalid(obj.BoxROI));
+        end
+
+        function tf = hasSelectedBoxes(obj)
+            tf = ~isempty(obj.SelectedBoxIds);
+        end
+
+        function refreshRequiresBoxes(obj, h)
+            if isvalid(obj)
+                h.Enable = matlab.lang.OnOffSwitchState(obj.hasAnyBoxes());
+            end
+        end
+
+        function refreshRequiresSelection(obj, h)
+            if isvalid(obj)
+                h.Enable = matlab.lang.OnOffSwitchState(obj.hasSelectedBoxes());
+            end
+        end
+
         function deleteBoxById(obj, id)
             id = obj.normalizeId_(id);
             idx = obj.idxOfId(id);
@@ -257,7 +352,7 @@ classdef Pick < matlabx.ui.axes.AxesTool
 
             % reset ActiveHoverId if necessary
             if obj.ActiveHoverId == id
-                obj.Host.setMode('HoverBox',false);
+                obj.setMode('HoverBox',false);
                 obj.ActiveHoverId = "";
             end
 
@@ -307,7 +402,7 @@ classdef Pick < matlabx.ui.axes.AxesTool
 
         function primeDrag(obj)
             if obj.Enabled && strlength(obj.ActiveBoxId) > 0
-                obj.Host.setMode('PrimedForDrag', true);
+                obj.setMode('PrimedForDrag', true);
             end
         end
 
@@ -329,8 +424,8 @@ classdef Pick < matlabx.ui.axes.AxesTool
             end
 
             obj.ActiveBoxId = "";
-            obj.Host.setMode('PrimedForDrag', false);
-            obj.Host.setMode('DragBox', false);
+            obj.setMode('PrimedForDrag', false);
+            obj.setMode('DragBox', false);
             obj.applySelectionHighlights();
             obj.emitActiveChanged("");
         end
@@ -458,12 +553,12 @@ classdef Pick < matlabx.ui.axes.AxesTool
         % executes on mouse move when PrimedForDrag Mode is on
         function startDraggingBox(obj,idx)
             % we are no longer PrimedForDrag
-            obj.Host.setMode('PrimedForDrag',false);
+            obj.setMode('PrimedForDrag',false);
             if ~obj.isValidBoxIdx(idx)
                 return
             end
             % we are now dragging
-            obj.Host.setMode('DragBox',true);
+            obj.setMode('DragBox',true);
             % fire BoxMoveStartedFcn
             if ~isempty(obj.BoxMoveStartedFcn)
                 ID = obj.BoxIds(idx);
@@ -483,7 +578,7 @@ classdef Pick < matlabx.ui.axes.AxesTool
                     obj.BoxMoveCommittedFcn(obj, struct('ID', ID, 'CenterPx', ctr));
                 end
             end
-            obj.Host.setMode('DragBox',false);
+            obj.setMode('DragBox',false);
             obj.Host.updateFromTool();
         end
 
@@ -506,13 +601,13 @@ classdef Pick < matlabx.ui.axes.AxesTool
             % set that id as the ActiveHoverId
             obj.ActiveHoverId = id;
             % set Host HoverMox mode to true
-            obj.Host.setMode('HoverBox', true);
+            obj.setMode('HoverBox', true);
         end
 
         % set HoverHighlight mode to 'off' for box indicated by ActiveHoverId, if any
         function stopHover(obj)
             % if HoverBox Mode is already off, return
-            if ~obj.Host.Mode.HoverBox, return; end
+            if ~obj.Mode.HoverBox, return; end
             % if ActiveHoverId is empty, return
             if strlength(obj.ActiveHoverId) == 0, return; end
 
@@ -525,7 +620,7 @@ classdef Pick < matlabx.ui.axes.AxesTool
             % set ActiveHoverId as empty
             obj.ActiveHoverId = "";
             % set HoverBox Mode to off
-            obj.Host.setMode('HoverBox', false);
+            obj.setMode('HoverBox', false);
         end
 
     end
@@ -619,9 +714,41 @@ classdef Pick < matlabx.ui.axes.AxesTool
             ids = obj.SelectedBoxIds;
         end
 
-        function clearBoxSelection(obj)
+        function clearBoxSelection(obj, opts)
+            arguments
+                obj
+                opts.Emit (1,1) logical = false
+            end
+
             obj.SelectedBoxIds = string.empty(1,0);
             obj.applySelectionHighlights();
+
+            if opts.Emit
+                obj.emitSelectionChanged();
+            end
+        end
+
+        function selectAllBoxes(obj, opts)
+            arguments
+                obj
+                opts.Emit (1,1) logical = true
+            end
+
+            obj.setSelectedBoxIDs(obj.BoxIds, Emit=opts.Emit);
+        end
+
+        function deleteSelectedBoxes(obj)
+            ids = obj.SelectedBoxIds;
+            for i = 1:numel(ids)
+                obj.deleteBoxById(ids(i));
+            end
+        end
+
+        function deleteAllBoxes(obj)
+            ids = obj.BoxIds;
+            for i = numel(ids):-1:1
+                obj.deleteBoxById(ids(i));
+            end
         end
 
         function setActiveBoxID(obj,id)
@@ -662,11 +789,11 @@ classdef Pick < matlabx.ui.axes.AxesTool
     methods
 
         function pointer = getPreferredPointer(obj)
-            if obj.Host.Mode.DragBox
+            if obj.Mode.DragBox
                 pointer = 'fleur';
-            elseif obj.Host.Mode.HoverBox
+            elseif obj.Mode.HoverBox
                 pointer = 'hand';
-            elseif obj.Host.Mode.Pick
+            elseif obj.Enabled
                 pointer = 'crosshair';
             else
                 pointer = '';

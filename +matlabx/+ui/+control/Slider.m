@@ -1000,7 +1000,7 @@ classdef Slider < matlab.ui.componentcontainer.ComponentContainer
             ax = matlabx.ui.axes.ImageAxes(g,...
                 "ImageData",I,...
                 "FontSize",fontSize,...
-                "ToolBelt",{'Zoom','Colorbar'});
+                "Tools",{'Zoom','Colorbar'});
 
             s = struct();
             s.C = matlabx.ui.control.Slider(g,...
@@ -1076,8 +1076,8 @@ classdef Slider < matlab.ui.componentcontainer.ComponentContainer
                     "RoundDigits",roundDigits,...
                     "ValueDisplayFormat",displayFmt,...
                     "TrackColor",[0 0 0],...
-                    "ValueChangingFcn",@(o,~) setCLimDuringSlide(o,c),...
-                    "ValueChangedFcn",@(o,~) setCLim(o,c));
+                    "ValueChangingFcn",@(o,~) setComponentCLimDuringSlide(o,c),...
+                    "ValueChangedFcn",@(o,~) setComponentCLim(o,c));
             end
 
             sliderHeight = s.C.ComponentHeight;
@@ -1100,16 +1100,16 @@ classdef Slider < matlab.ui.componentcontainer.ComponentContainer
                 ax.T = src.Value;
             end
 
-            function setCLimDuringSlide(src,channelIdx)
+            function setComponentCLimDuringSlide(src,channelIdx)
                 % Lower preview resolution while dragging keeps visual updates
                 % responsive on larger demo images.
                 ax.MaxRenderedResolution = 500;
-                ax.setCLim(src.Value,channelIdx);
+                ax.setComponentCLim(src.Value,channelIdx);
             end
 
-            function setCLim(src,channelIdx)
+            function setComponentCLim(src,channelIdx)
                 % Restore full rendering once the final value is committed.
-                ax.setCLim(src.Value,channelIdx);
+                ax.setComponentCLim(src.Value,channelIdx);
                 ax.MaxRenderedResolution = 'none';
             end
 

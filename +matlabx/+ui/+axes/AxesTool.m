@@ -27,12 +27,27 @@ classdef AxesTool < handle
 %       An Installed tool with PassivelyInterceptsDown/Move/Up/Scroll/KeyPress/KeyRelease=true
 %       for an event kind. The Host routes the event to every matching passive
 %       interceptor, in priority order, before the active interceptor by calling
-%       onPassiveDown(), onPassiveMove(), etc. Passive
-%       interceptors are useful for persistent overlays or hotkeys that must be
-%       maintained even while the tool is disabled.
+%       onPassiveDown(), onPassiveMove(), etc. Passive interceptors are useful
+%       for persistent overlays or event observation that must continue even
+%       while the tool is disabled. Simple tool toggle shortcuts should use
+%       ToggleHotkey, which the Host registers when the tool is installed.
 %
 %   A tool can call E.stop() to prevent the active interceptor and downstream
 %   Host behavior from receiving the event.
+%
+%   Tool hotkeys
+%   ------------
+%   ToggleHotkey declares the keypress that toggles or runs a tool while it is
+%   installed. Prefer matlabx.keyboard.hotkey(...) for declarations:
+%
+%       ToggleHotkey = matlabx.keyboard.hotkey("z", "Modifiers", ["shift","meta"])
+%
+%   Tool help
+%   ---------
+%   getHelpInfo() returns a small struct used by host UI such as context-menu
+%   Help commands. Subclasses can override getHelpSummary(), getUsageHelp(),
+%   getBindingHelp(), and getNotesHelp() to document their interactive behavior
+%   without requiring a fully declarative binding system.
 %
 %   Host notifications
 %   ------------------
@@ -81,6 +96,7 @@ classdef AxesTool < handle
     properties (SetAccess=protected)
         Enabled (1,1) logical = false       % true/false (set by toggling toolbar buttons)
         Installed (1,1) logical = false     % true/false (whether the tool is installed in the Host)
+        Mode struct = struct()              % tool-owned logical states for subclasses
     end
 
     % special properties for development/debugging purposes
@@ -259,6 +275,46 @@ classdef AxesTool < handle
         function onHostAxesChanged(~,~),   end   % e.g., XLim/YLim/CLim changed
         function onHostRenderSourceChanged(~,~),  end   % rendered source plane/composite changed
 
+        % Optional context-menu contribution hook
+        function contributeContextMenu(~,~), end
+
+        function S = getHelpInfo(obj)
+            %GETHELPINFO Return user-facing help information for this tool.
+            S = struct( ...
+                "Name", obj.Name, ...
+                "Class", string(class(obj)), ...
+                "Style", string(obj.Style), ...
+                "Summary", obj.getHelpSummary(), ...
+                "Usage", obj.getUsageHelp(), ...
+                "Bindings", obj.getBindingHelp(), ...
+                "Notes", obj.getNotesHelp());
+        end
+
+        function summary = getHelpSummary(obj)
+            %GETHELPSUMMARY Return a one-line description for getHelpInfo.
+            summary = string(obj.Tooltip);
+        end
+
+        function usage = getUsageHelp(~)
+            %GETUSAGEHELP Return short usage notes for getHelpInfo.
+            usage = strings(1,0);
+        end
+
+        function B = getBindingHelp(obj)
+            %GETBINDINGHELP Return click/key binding descriptions for getHelpInfo.
+            toggleHotkey = obj.ToggleHotkey;
+            if strlength(toggleHotkey) == 0
+                toggleHotkey = "none";
+            end
+
+            B = struct("ToggleTool", toggleHotkey);
+        end
+
+        function notes = getNotesHelp(~)
+            %GETNOTESHELP Return optional additional notes for getHelpInfo.
+            notes = strings(1,0);
+        end
+
     end
 
     %% derived getters
@@ -282,7 +338,49 @@ classdef AxesTool < handle
 
     methods(Access=protected)
 
+        function addMode(obj, modeName)
+        %ADDMODE Add a false-valued logical mode owned by this tool.
+            modeName = char(modeName);
+
+            if isfield(obj.Mode, modeName)
+                warning('Could not add mode. "%s" mode already exists.', modeName)
+                return
+            end
+
+            obj.Mode.(modeName) = false;
+        end
+
+        function setMode(obj, modeName, modeState)
+        %SETMODE Set one tool-owned logical mode.
+            modeName = char(modeName);
+
+            if ~isfield(obj.Mode, modeName)
+                warning('Could not set mode state. "%s" mode does not exist.', modeName)
+                return
+            end
+
+            obj.Mode.(modeName) = logical(modeState);
+        end
+
+        function removeMode(obj, modeName)
+        %REMOVEMODE Remove a tool-owned mode.
+            modeName = char(modeName);
+
+            if ~isfield(obj.Mode, modeName)
+                warning('Could not remove mode. "%s" mode does not exist.', modeName)
+                return
+            end
+
+            obj.Mode = rmfield(obj.Mode, modeName);
+        end
+
+        function tf = isMode(obj, modeName)
+        %ISMODE Return true when a named tool-owned mode exists.
+            tf = isfield(obj.Mode, char(modeName));
+        end
+
         function configureHostEventListeners(obj)
+        %CONFIGUREHOSTEVENTLISTENERS Attach optional host notification listeners.
             obj.L = event.listener.empty;
 
             if obj.ListenToRenderSourceChanged
@@ -294,6 +392,7 @@ classdef AxesTool < handle
         end
 
         function printStatus(obj,status)
+        %PRINTSTATUS Emit a debug log message for this tool.
             matlabx.Log.DEBUG( ...
                 strip(string(status)), ...
                 "Source", class(obj), ...
@@ -306,7 +405,7 @@ classdef AxesTool < handle
 
     %% teardown
 
-    methods (Access = {?matlabx.ui.axes.AxesTool, ?matlabx.ui.axes.ImageAxes})
+    methods (Access = {?matlabx.ui.axes.AxesTool, ?matlabx.ui.axes.ImageAxes, ?matlabx.ui.axes.ImageAxesToolManager})
 
         % subclass delete() will be called before this runs
         function delete(obj)
@@ -335,7 +434,9 @@ classdef AxesTool < handle
     methods (Access = protected)
 
         % teardown hook for subclasses, implement to perform any needed cleanup before tool deletion
-        function teardown(~),     end
+        function teardown(~)
+        %TEARDOWN Hook for subclasses that need deletion cleanup.
+        end
 
     end
 
