@@ -2,22 +2,24 @@ classdef Zoom < matlabx.ui.axes.AxesTool
 %ZOOM Zoom/cursor-follow navigation tool for matlabx.ui.axes.ImageAxes.
 %
 %   When enabled:
-%       left-click      increase zoom
-%       right-click     decrease zoom
-%       shift-click     toggle cursor-follow navigation
+%       meta-click           increase zoom
+%       meta-contextclick    decrease zoom
+%       shift-extendclick    toggle cursor-follow navigation
 %       scroll wheel    increase/decrease zoom
 %
 %   Zoom is intentionally non-exclusive so it can coexist with interaction
-%   tools such as Pick or DrawRectangle. Its toggle hotkey is handled as a
-%   passive key interception so the tool can be enabled while inactive.
+%   tools such as Box or DrawRectangle. Its toggle hotkey is contributed to
+%   the host hotkey registry when the tool is installed.
 
     properties
-        ScrollEventsPerZoomStep (1,1) double {mustBeInteger, mustBePositive} = 5
+        ScrollEventsPerZoomStep (1,1) double {mustBeInteger, mustBePositive} = 1
+        ScrollZoomFactor (1,1) double {mustBeGreaterThan(ScrollZoomFactor,1)} = 1.3
     end
 
     properties (Access=private)
         ScrollEventCount (1,1) double {mustBeNonnegative, mustBeInteger} = 0
         LastScrollDirection (1,1) double {mustBeMember(LastScrollDirection,[-1,0,1])} = 0
+        PreviousViewportBoxVisible (1,1) matlab.lang.OnOffSwitchState = "off"
     end
 
     %% Lifecycle
@@ -29,20 +31,24 @@ classdef Zoom < matlabx.ui.axes.AxesTool
                 'AxesType',         "both", ...
                 'Icon',             matlabx.internal.Paths.icons('ZoomIcon.png'), ...
                 'Priority',         1, ...
-                'ToggleHotkey',     matlabx.keyboard.normalize('z','',{'shift','meta'}), ...
+                'ToggleHotkey',     matlabx.keyboard.hotkey("z", "Modifiers", ["shift","meta"]), ...
                 'IsExclusive',      false, ...
                 'InterceptsMove',   false, ...
                 'InterceptsDown',   true, ...
                 'InterceptsScroll', true, ...
-                'InterceptsKeyPress',    true, ...
-                'PassivelyInterceptsKeyPress', true);
+                'InterceptsKeyPress',    true);
         end
 
         function onEnabled(obj)
         %ONENABLED  Enable Zoom when toolbar button is enabled.
             obj.ScrollEventCount = 0;
             obj.LastScrollDirection = 0;
-            obj.Host.setMode('Zoom', true);
+
+            % The viewport box is ImageAxes-owned state. Zoom temporarily turns it
+            % on while active, then restores the user's previous preference when it
+            % is disabled.
+            obj.PreviousViewportBoxVisible = obj.Host.ViewportBoxVisible;
+            obj.Host.ViewportBoxVisible = "on";
             obj.Host.enableZoom();
         end
 
@@ -51,21 +57,155 @@ classdef Zoom < matlabx.ui.axes.AxesTool
             obj.ScrollEventCount = 0;
             obj.LastScrollDirection = 0;
             if isvalid(obj.Host)
-                obj.Host.setMode('Zoom', false);
                 obj.Host.disableZoom();
+                obj.Host.ViewportBoxVisible = obj.PreviousViewportBoxVisible;
             end
         end
 
-        function onInstall(obj)
-        %ONINSTALL  Register Zoom mode with the host.
-            obj.Host.addMode('Zoom');
+        function contributeContextMenu(obj, menu)
+        %CONTRIBUTECONTEXTMENU Add Zoom commands to the host context menu.
+            menu.addSubmenu( ...
+                "Zoom", ...
+                "Zoom", ...
+                "Owner", obj);
+
+            menu.addItem( ...
+                "Zoom.Help", ...
+                "Help...", ...
+                @(~,~) obj.Host.openToolHelpWindow(obj), ...
+                "Parent", "Zoom", ...
+                "Owner", obj);
+
+            menu.addItem( ...
+                "Zoom.FollowCursor", ...
+                "Follow Cursor", ...
+                @(h,~) obj.onFollowCursorMenuSelected(h), ...
+                "Parent", "Zoom", ...
+                "Owner", obj, ...
+                "Separator", "on", ...
+                "Checked", matlab.lang.OnOffSwitchState(obj.Host.FollowCursorEnabled), ...
+                "RefreshFcn", @(h) obj.refreshFollowCursorMenuItem(h));
+
+            menu.addSubmenu( ...
+                "Zoom.Level", ...
+                "Level", ...
+                "Parent", "Zoom", ...
+                "Owner", obj);
+
+            factors = obj.Host.getZoomFactors();
+            for i = 1:numel(factors)
+                factor = factors(i);
+                menu.addItem( ...
+                    "Zoom.Level." + obj.zoomFactorId(factor), ...
+                    obj.zoomFactorLabel(factor), ...
+                    @(h,~) obj.onZoomLevelMenuSelected(h, factor), ...
+                    "Parent", "Zoom.Level", ...
+                    "Owner", obj, ...
+                    "Checked", matlab.lang.OnOffSwitchState(obj.isCurrentZoomFactor(factor)), ...
+                    "UserData", factor, ...
+                    "RefreshFcn", @(h) obj.refreshZoomLevelMenuItem(h, factor));
+            end
         end
 
-        function onUninstall(obj)
-        %ONUNINSTALL  Remove Zoom mode from the host.
-            obj.Host.removeMode('Zoom');
+    end
+
+    %% Help
+    methods
+        function summary = getHelpSummary(~)
+        %GETHELPSUMMARY Return a one-line Zoom description.
+            summary = "Zoom and cursor-follow navigation for ImageAxes.";
         end
 
+        function usage = getUsageHelp(~)
+        %GETUSAGEHELP Return short Zoom usage notes.
+            usage = [ ...
+                "Enable Zoom to inspect a smaller viewport of the image."; ...
+                "Scroll, modifier-click, or use zoom hotkeys to change magnification around the cursor."; ...
+                "Follow Cursor pans the zoomed viewport as the cursor moves across the image."];
+        end
+
+        function B = getBindingHelp(obj)
+        %GETBINDINGHELP Return Zoom click/key binding descriptions.
+            B = struct( ...
+                "ToggleTool", obj.ToggleHotkey, ...
+                "ZoomInAtCursor", "meta+click, mouse-wheel up, meta+equal", ...
+                "ZoomOutAtCursor", "meta+contextclick, mouse-wheel down, meta+hyphen", ...
+                "ToggleFollowCursor", "shift+extendclick", ...
+                "DisableZoom", "escape");
+        end
+
+        function notes = getNotesHelp(~)
+        %GETNOTESHELP Return additional Zoom behavior notes.
+            notes = [ ...
+                "Context-menu level changes and programmatic zoom-factor changes are center-anchored."; ...
+                "Click, key, and scroll zoom changes are cursor-anchored when the cursor is over the image."; ...
+                "Zoom temporarily shows the ImageAxes viewport box, then restores the prior ViewportBoxVisible setting when disabled."];
+        end
+    end
+
+    %% Context menu callbacks
+    methods (Access=private)
+        function onFollowCursorMenuSelected(obj, h)
+        %ONFOLLOWCURSORMENUSELECTED Toggle cursor-follow from context menu.
+            obj.Host.toggleFollowCursorEnabled();
+            obj.refreshFollowCursorMenuItem(h);
+        end
+
+        function onZoomLevelMenuSelected(obj, h, factor)
+        %ONZOOMLEVELMENUSELECTED Enable zoom and set a supported zoom factor.
+            if ~obj.Enabled
+                obj.enable();
+            end
+
+            obj.Host.setZoomFactor(factor);
+            obj.refreshZoomLevelMenuGroup(h.Parent);
+        end
+
+        function refreshFollowCursorMenuItem(obj, h)
+        %REFRESHFOLLOWCURSORMENUITEM Sync Follow Cursor checked state.
+            if isvalid(obj.Host)
+                h.Checked = matlab.lang.OnOffSwitchState(obj.Host.FollowCursorEnabled);
+            end
+        end
+
+        function refreshZoomLevelMenuItem(obj, h, factor)
+        %REFRESHZOOMLEVELMENUITEM Sync one zoom-level checked state.
+            if isvalid(obj.Host)
+                h.Checked = matlab.lang.OnOffSwitchState(obj.isCurrentZoomFactor(factor));
+            end
+        end
+
+        function refreshZoomLevelMenuGroup(obj, levelMenu)
+        %REFRESHZOOMLEVELMENUGROUP Sync checked state for all level items.
+            items = levelMenu.Children;
+            for i = 1:numel(items)
+                factor = items(i).UserData;
+                if isnumeric(factor) && isscalar(factor)
+                    obj.refreshZoomLevelMenuItem(items(i), factor);
+                end
+            end
+        end
+
+        function tf = isCurrentZoomFactor(obj, factor)
+        %ISCURRENTZOOMFACTOR True when factor matches the host zoom factor.
+            tf = abs(obj.Host.ZoomFactor - factor) < 1e-10;
+        end
+    end
+
+    methods (Static, Access=private)
+        function label = zoomFactorLabel(factor)
+        %ZOOMFACTORLABEL Return a compact display label for a zoom factor.
+            if abs(factor - round(factor)) < 1e-10
+                label = sprintf('%gx', round(factor));
+            else
+                label = sprintf('%.3gx', factor);
+            end
+        end
+
+        function id = zoomFactorId(factor)
+        %ZOOMFACTORID Return a stable id suffix for a zoom factor.
+            id = "x" + replace(string(sprintf('%.12g', factor)), ".", "p");
+        end
     end
 
     %% Active event hooks (only when Enabled==true && IsInterceptor==true)
@@ -80,13 +220,16 @@ classdef Zoom < matlabx.ui.axes.AxesTool
                 return
             end
 
-            switch E.SelectionType
-                case 'normal'
+            switch E.MouseChord
+                case "meta+click"
                     H.increaseZoom();
-                case 'alt'
+                    E.stop();
+                case "meta+contextclick"
                     H.decreaseZoom();
-                case 'extend'
+                    E.stop();
+                case "shift+extendclick"
                     obj.Host.toggleFollowCursorEnabled();
+                    E.stop();
             end
 
         end
@@ -117,11 +260,11 @@ classdef Zoom < matlabx.ui.axes.AxesTool
 
             obj.ScrollEventCount = 0;
 
-            % Adjust zoom level based on scroll direction
+            % Adjust zoom level continuously based on scroll direction.
             if scrollDirection < 0
-                H.increaseZoom();
+                H.stepZoomContinuousAtCursor(1, obj.ScrollZoomFactor);
             elseif scrollDirection > 0
-                H.decreaseZoom();
+                H.stepZoomContinuousAtCursor(-1, obj.ScrollZoomFactor);
             end
         end
 
@@ -141,31 +284,11 @@ classdef Zoom < matlabx.ui.axes.AxesTool
 
     end
 
-    %% Passive event hooks (only when Installed==true && IsPassiveInterceptor==true)
-    methods
-
-        function onPassiveKeyPress(obj,E)
-            if obj.ToggleHotkey == E.Hotkey
-                E.stop();
-            else
-                return
-            end
-
-            switch obj.Enabled
-                case false
-                    obj.enable();
-                case true
-                    obj.disable();
-            end
-        end
-
-    end
-
     %% Host display helpers
     methods
 
         function pointer = getPreferredPointer(obj)
-            if obj.Host.Mode.Zoom
+            if obj.Enabled
                 pointer = 'crosshair';
             else
                 pointer = '';
@@ -174,7 +297,7 @@ classdef Zoom < matlabx.ui.axes.AxesTool
 
         function str = getLabelString(obj)
             % Return char vector with info on zoom level.
-            switch obj.Host.Mode.Zoom
+            switch obj.Enabled
                 case true
                     str = 'Zoom: on';
                 case false
@@ -183,14 +306,4 @@ classdef Zoom < matlabx.ui.axes.AxesTool
         end
 
     end
-    %% Teardown
-    methods (Access = protected)
-
-        % called at the beginning of superclass delete()
-        function teardown(obj)
-            % extra required cleanup on teardown
-        end
-
-    end
-
 end
