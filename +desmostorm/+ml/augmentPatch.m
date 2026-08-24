@@ -1,22 +1,32 @@
 function out = augmentPatch(in)
-%augmentPatch Training-only augmentation for {X,Y}.
-% Rotation (0-360), flips, mild translation/scale, mild intensity jitter.
+%AUGMENTPATCH Apply stochastic image-only augmentation to one patch sample.
+%
+%   OUT = AUGMENTPATCH(IN) accepts the cell payload emitted by patchDatastore:
+%   {X,Y}, where X is an image patch and Y is its categorical label. The label
+%   is passed through unchanged; only the image receives augmentation.
+%
+%   Augmentations intentionally preserve plaque/background semantics:
+%       - arbitrary in-plane rotation
+%       - horizontal/vertical flips
+%       - mild translation/scale jitter
+%       - mild linear intensity jitter clipped to [0,1]
 
 X = in{1};
 Y = in{2};
 
-% Random rotation 0-360
+% Random rotation makes plaque orientation non-informative to the classifier.
 theta = 360 * rand();
 tform = randomAffine2d(Rotation=[theta theta]);
 
+% Keep the augmented patch the same pixel size as the network input sample.
 R = affineOutputView(size(X,[1 2]), tform, BoundsStyle="CenterOutput");
 X = imwarp(X, tform, OutputView=R);
 
-% Random flips
+% Flips are safe because labels are object/background, not orientation classes.
 if rand() < 0.5, X = fliplr(X); end
 if rand() < 0.5, X = flipud(X); end
 
-% Optional translation/scale
+% Optional small affine jitter reduces sensitivity to hand-drawn ROI centering.
 if rand() < 0.35
     scMin = 0.95; scMax = 1.05;
     dxMax = 6;    % +/- pixels
@@ -31,7 +41,8 @@ if rand() < 0.35
     X = imwarp(X, t2, OutputView=R2);
 end
 
-% Mild intensity jitter
+% Mild intensity jitter helps tolerate sample-to-sample display/intensity range
+% differences without manufacturing unrealistic contrast.
 if rand() < 0.5
     a = 0.90 + 0.20*rand();
     b = -0.04 + 0.08*rand();

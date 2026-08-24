@@ -1,5 +1,10 @@
 function [Ptrain, Pval] = splitByImage(P, valFrac)
-%splitByImage Split by imageFilename, ensuring validation is non-empty and has both classes if possible.
+%SPLITBYIMAGE Split patch rows into train/validation sets by source image.
+%
+% Splitting by image avoids leakage where visually similar patches from the same
+% source image appear in both train and validation sets. The helper greedily
+% tries to include both classes in validation when the project has enough
+% labeled images to make that possible.
     arguments
         P table
         valFrac (1,1) double {mustBeGreaterThan(valFrac,0), mustBeLessThan(valFrac,1)} = 0.2
@@ -9,7 +14,8 @@ function [Ptrain, Pval] = splitByImage(P, valFrac)
     nImgs = numel(imgs);
     nValTarget = max(1, round(valFrac * nImgs));
     
-    % For each image, determine if it contains object and/or background
+    % For each image, determine whether it can help validation cover either
+    % class. This only uses labels, not patch counts.
     hasObject = false(nImgs,1);
     hasBack   = false(nImgs,1);
     
@@ -19,7 +25,7 @@ function [Ptrain, Pval] = splitByImage(P, valFrac)
         hasBack(i)   = any(Pi.label == "background");
     end
     
-    % Prefer validation images that collectively cover both classes
+    % Prefer validation images that collectively cover both classes.
     idxAll = randperm(nImgs);
     
     valSet = false(nImgs,1);
@@ -31,9 +37,7 @@ function [Ptrain, Pval] = splitByImage(P, valFrac)
             break
         end
     
-        ok = true;
-    
-        % greedily satisfy missing classes first
+        % Greedily satisfy missing classes first.
         if needObject && hasObject(k)
             ok = true;
         elseif needBack && hasBack(k)
@@ -52,7 +56,7 @@ function [Ptrain, Pval] = splitByImage(P, valFrac)
         end
     end
     
-    % If we still don't have enough validation images, fill randomly
+    % If we still do not have enough validation images, fill randomly.
     if sum(valSet) < nValTarget
         remaining = find(~valSet);
         fill = remaining(randperm(numel(remaining), min(nValTarget - sum(valSet), numel(remaining))));
@@ -65,7 +69,7 @@ function [Ptrain, Pval] = splitByImage(P, valFrac)
     Pval   = P(isVal,:);
     Ptrain = P(~isVal,:);
     
-    % As a last resort: if validation ended up empty, force 1 image into validation
+    % As a last resort, force one image into validation.
     if isempty(Pval) && nImgs > 0
         valImgs = imgs(1);
         isVal = ismember(P.imageFilename, valImgs);

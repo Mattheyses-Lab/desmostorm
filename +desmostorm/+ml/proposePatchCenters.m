@@ -1,5 +1,11 @@
 function [centers, scores] = proposePatchCenters(imgOrPath, net, opts)
-%proposePatchCenters Sliding-window proposal generator using patch classifier.
+%PROPOSEPATCHCENTERS Generate classifier-backed region proposals.
+%
+% The function first builds a list of candidate patch centers, then scores
+% each centered crop with the binary patch classifier. Candidate generation can
+% use the legacy full-image grid or newer point-cluster modes that reduce the
+% number of patches sent through the network.
+%
 % High-recall defaults: Stride=96, ScoreThreshold=0.6, NmsIoU=0.2.
 %
 % Outputs:
@@ -14,7 +20,12 @@ function [centers, scores] = proposePatchCenters(imgOrPath, net, opts)
         opts.NmsIoU (1,1) double {mustBeGreaterThanOrEqual(opts.NmsIoU,0), mustBeLessThanOrEqual(opts.NmsIoU,1)} = 0.2
         opts.BatchSize (1,1) double {mustBePositive} = 64
         opts.PositiveClass (1,1) string = "object"
+        opts.CandidateMode (1,1) string {mustBeMember(opts.CandidateMode,["grid","cluster","ClusterCentroid","ClusterArea"])} = "grid"
+        opts.ProgressDialog = []
     end
+
+    desmostorm.ml.updateProgressDialog(opts.ProgressDialog, ...
+        "Preparing classifier proposal generation...");
 
     % Network input size (e.g. [224 224])
     netInputSize = net.Layers(1).InputSize(1:2);
@@ -46,11 +57,30 @@ function [centers, scores] = proposePatchCenters(imgOrPath, net, opts)
             "BoxSize=%d does not fit inside image (%dx%d).", s, H, W);
     end
     
-    xs = xMin : opts.Stride : xMax;
-    ys = yMin : opts.Stride : yMax;
-    [XX,YY] = meshgrid(xs, ys);
-    C = [XX(:) YY(:)];
+    candidateMode = normalizeCandidateMode(opts.CandidateMode);
+    desmostorm.ml.updateProgressDialog(opts.ProgressDialog, ...
+        "Finding classifier proposal candidates...");
+    switch candidateMode
+        case "grid"
+            xs = xMin : opts.Stride : xMax;
+            ys = yMin : opts.Stride : yMax;
+            [XX,YY] = meshgrid(xs, ys);
+            C = [XX(:) YY(:)];
+        case {"ClusterCentroid","ClusterArea"}
+            C = desmostorm.ml.detectPatchCenterCandidates(I0, ...
+                "Mode",candidateMode, ...
+                "AreaSampleStride",opts.Stride);
+            C = keepCentersInsideBounds(C,xMin,xMax,yMin,yMax);
+    end
     M = size(C,1);
+    desmostorm.Log.INFO(sprintf( ...
+        "Proposal candidate generation complete: %d candidate center(s) using %s mode.", ...
+        M, candidateMode));
+    if M == 0
+        centers = zeros(0,2);
+        scores = zeros(0,1);
+        return
+    end
     
     % Determine positive class index (if possible)
     posIdx = 2;
@@ -66,6 +96,9 @@ function [centers, scores] = proposePatchCenters(imgOrPath, net, opts)
     
     scoresAll = zeros(M,1);
     
+    desmostorm.ml.updateProgressDialog(opts.ProgressDialog, ...
+        sprintf("Scoring %d classifier proposal candidate(s)...",M),0);
+
     bs = opts.BatchSize;
     for k = 1:bs:M
         k2 = min(M, k+bs-1);
@@ -101,11 +134,18 @@ function [centers, scores] = proposePatchCenters(imgOrPath, net, opts)
             scoresAll(idx) = double(string(Y) == opts.PositiveClass);
         end
 
+        desmostorm.ml.updateProgressDialog(opts.ProgressDialog, ...
+            sprintf("Scoring classifier proposals (%d/%d)...",k2,M), ...
+            k2 / M);
+
     end
     
     keep = scoresAll >= opts.ScoreThreshold;
     Ck = C(keep,:);
     Sk = scoresAll(keep);
+    desmostorm.Log.INFO(sprintf( ...
+        "Classifier scoring retained %d/%d candidate(s) at score threshold %.3g.", ...
+        size(Ck,1),M,opts.ScoreThreshold));
     
     if isempty(Ck)
         centers = zeros(0,2);
@@ -114,10 +154,15 @@ function [centers, scores] = proposePatchCenters(imgOrPath, net, opts)
     end
     
     B = centerToBBox(Ck, s);
+    desmostorm.ml.updateProgressDialog(opts.ProgressDialog, ...
+        "Suppressing overlapping classifier proposals...");
     keepIdx = nmsFixedBoxes(B, Sk, opts.NmsIoU);
     
     centers = Ck(keepIdx,:);
     scores  = Sk(keepIdx);
+    desmostorm.Log.INFO(sprintf( ...
+        "Classifier proposal generation complete: %d proposal(s) after NMS.", ...
+        size(centers,1)));
 
 end
 
@@ -127,6 +172,25 @@ function B = centerToBBox(C, s)
     x = C(:,1) - s/2;
     y = C(:,2) - s/2;
     B = [x y repmat([s s], size(C,1), 1)];
+end
+
+function mode = normalizeCandidateMode(mode)
+%NORMALIZECANDIDATEMODE Keep old saved "cluster" options working.
+    mode = string(mode);
+    if mode == "cluster"
+        mode = "ClusterCentroid";
+    end
+end
+
+function C = keepCentersInsideBounds(C,xMin,xMax,yMin,yMax)
+    if isempty(C)
+        return
+    end
+
+    keep = ...
+        C(:,1) >= xMin & C(:,1) <= xMax & ...
+        C(:,2) >= yMin & C(:,2) <= yMax;
+    C = C(keep,:);
 end
 
 function keepIdx = nmsFixedBoxes(B, S, iouThr)

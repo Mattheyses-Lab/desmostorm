@@ -275,7 +275,14 @@ classdef GUI < handle
 
             % --- Test ---
             obj.MenubarUI.Test = uimenu(obj.Fig,'Text','Test');
-            obj.MenubarUI.Test_Cluster = uimenu(obj.MenubarUI.Test,'Text','Cluster','MenuSelectedFcn',@(~,~) obj.onTestRegion());
+            obj.MenubarUI.Test_Image = uimenu(obj.MenubarUI.Test,'Text','Image');
+            obj.MenubarUI.Test_Image_TuneClusters = uimenu(obj.MenubarUI.Test_Image, ...
+                'Text','Tune Cluster Parameters', ...
+                'MenuSelectedFcn',@(~,~) obj.onTuneImageClusterParameters());
+            obj.MenubarUI.Test_Region = uimenu(obj.MenubarUI.Test,'Text','Region');
+            obj.MenubarUI.Test_Region_TuneClusters = uimenu(obj.MenubarUI.Test_Region, ...
+                'Text','Tune Cluster Parameters', ...
+                'MenuSelectedFcn',@(~,~) obj.onTuneRegionClusterParameters());
         end 
 
         function setupGrids(obj)
@@ -818,25 +825,25 @@ classdef GUI < handle
             obj.ImageViewer = matlabx.ui.axes.ImageAxes(obj.ImageViewerPanelGrid,...
                 'Name','ImageViewer',...
                 'CData',[],...
-                'ToolBelt',{'Zoom','Pick','Colorbar'},...
+                'Tools',{'Zoom','Box','Colorbar'},...
                 'Colormap',obj.Settings.Display.Colormap,...
                 'CLim',[0 1]);
 
-            % wire the optimistic callbacks for ImageViewer Pick tool
-            obj.ImageViewer.Tools.Pick.BoxCreatedFcn          = @(~,d) obj.onBoxCreated(d);
-            obj.ImageViewer.Tools.Pick.BoxMoveStartedFcn      = @(~,d) obj.onBoxMoveStarted(d);
-            obj.ImageViewer.Tools.Pick.BoxPreviewMovedFcn     = @(~,d) obj.onBoxPreviewMoved(d);
-            obj.ImageViewer.Tools.Pick.BoxMoveCommittedFcn    = @(~,d) obj.onBoxMoveCommitted(d);
-            obj.ImageViewer.Tools.Pick.BoxDeletedFcn          = @(~,d) obj.onBoxDeleted(d);
-            obj.ImageViewer.Tools.Pick.BoxActivatedFcn        = @(~,d) obj.onBoxActivated(d);
-            obj.ImageViewer.Tools.Pick.BoxSelectionChangedFcn = @(~,d) obj.onBoxSelectionChanged(d);
+            % wire the optimistic callbacks for ImageViewer Box tool
+            obj.ImageViewer.Tools.Box.BoxCreatedFcn          = @(~,d) obj.onBoxCreated(d);
+            obj.ImageViewer.Tools.Box.BoxMoveStartedFcn      = @(~,d) obj.onBoxMoveStarted(d);
+            obj.ImageViewer.Tools.Box.BoxPreviewMovedFcn     = @(~,d) obj.onBoxPreviewMoved(d);
+            obj.ImageViewer.Tools.Box.BoxMoveCommittedFcn    = @(~,d) obj.onBoxMoveCommitted(d);
+            obj.ImageViewer.Tools.Box.BoxDeletedFcn          = @(~,d) obj.onBoxDeleted(d);
+            obj.ImageViewer.Tools.Box.BoxActivatedFcn        = @(~,d) obj.onBoxActivated(d);
+            obj.ImageViewer.Tools.Box.BoxSelectionChangedFcn = @(~,d) obj.onBoxSelectionChanged(d);
 
             obj.axesL(1) = addlistener(obj.ImageViewer,'C','PostSet',@(~,~) obj.onImageViewerChannelChanged());
             obj.axesL(2) = addlistener(obj.ImageViewer,'ComponentColorMode','PostSet',@(~,~) obj.onImageViewerChannelDisplayChanged());
             obj.axesL(3) = addlistener(obj.ImageViewer,'ComponentColors','PostSet',@(~,~) obj.onImageViewerChannelDisplayChanged());
 
-            % set the box size for Pick tool
-            obj.ImageViewer.Tools.Pick.BoxSize = obj.Settings.Analysis.BoxSize;
+            % set the box size for Box tool
+            obj.ImageViewer.Tools.Box.BoxSize = obj.Settings.Analysis.BoxSize;
 
             %obj.ImageViewer.ImageVisible = 'off';
             %obj.ImageViewer.AxesVisible = 'on';
@@ -869,7 +876,7 @@ classdef GUI < handle
             obj.RegionViewer = matlabx.ui.axes.ImageAxes(obj.RegionViewerPanelGrid,...
                 'Name','RegionViewer',...
                 'CData',[],...
-                'ToolBelt',{'DrawRectangle'},...
+                'Tools',{'DrawRectangle'},...
                 'Colormap',obj.Settings.Display.Colormap,...
                 'CLim',[0 1]);
 
@@ -970,17 +977,30 @@ classdef GUI < handle
 
     methods
 
-        function onTestRegion(obj)
+        function onTuneImageClusterParameters(obj)
+            if isempty(obj.Project)
+                return
+            end
+
             img = obj.Project.ActiveImage;
-            % if empty, return
+            if isempty(img)
+                return
+            end
+
+            matlabx.app.PointClusterTuner(img.CData);
+        end
+
+        function onTuneRegionClusterParameters(obj)
+            if isempty(obj.Project)
+                return
+            end
+
+            img = obj.Project.ActiveImage;
             if isempty(img) || isempty(img.ActiveRegion)
                 return
             end
 
-            % get active region CData
-            I = img.regionSubimage(img.ActiveRegion);
-
-            desmostorm.analysis.image.detectPlaques(I,"DisplayClusterOutput",true);
+            matlabx.app.PointClusterTuner(img.regionSubimage(img.ActiveRegion));
         end
 
         function onLogFlush(obj,lines)
@@ -1247,9 +1267,11 @@ classdef GUI < handle
             end
 
             n = min(obj.Project.MaxSizeC,obj.ImageViewer.NumComponents);
+            cmaps = obj.ImageViewer.ComponentColormaps;
             for C = 1:n
-                obj.ImageViewer.ComponentColormaps{C} = obj.Project.getChannelColormap(C);
+                cmaps{C} = obj.Project.getChannelColormap(C);
             end
+            obj.ImageViewer.ComponentColormaps = cmaps;
         end
 
         function applyProjectChannelColorsToAxes(obj)
@@ -1259,9 +1281,11 @@ classdef GUI < handle
             end
 
             n = min(obj.Project.MaxSizeC,obj.ImageViewer.NumComponents);
+            colors = obj.ImageViewer.ComponentColors;
             for C = 1:n
-                obj.ImageViewer.ComponentColors{C} = obj.Project.getChannelColorName(C);
+                colors{C} = obj.Project.getChannelColorName(C);
             end
+            obj.ImageViewer.ComponentColors = colors;
         end
 
         function applyProjectChannelDisplayToAxes(obj)
@@ -1579,14 +1603,14 @@ classdef GUI < handle
         function clearImageViewer(obj)
         %REFRESHIMAGEVIEWER Reset ImageViewer
             obj.ImageViewer.CData = [];
-            obj.ImageViewer.Tools.Pick.clearBoxes();
+            obj.ImageViewer.Tools.Box.clearBoxes();
         end
 
         function refreshRegionBoxes(obj)
         %REFRESHREGIONBOXES Sync Region boxes in ImageViewer to ActiveImage
 
             % clear boxes from ImageViewer
-            obj.ImageViewer.Tools.Pick.clearBoxes();
+            obj.ImageViewer.Tools.Box.clearBoxes();
 
             img = obj.Project.ActiveImage;
 
@@ -1597,14 +1621,14 @@ classdef GUI < handle
             % add a box for each region, colored according to its label
             for r = img.RegionArray'
                 boxColor = obj.Project.LabelBank.getByID(r.LabelID).Color;
-                obj.ImageViewer.Tools.Pick.addBox(r.ID, r.Center, r.BoxSize, ...
+                obj.ImageViewer.Tools.Box.addBox(r.ID, r.Center, r.BoxSize, ...
                     "EdgeColor", boxColor, "FaceColor", boxColor, "Label", r.Name);
             end
 
             % apply selection status to region boxes
-            obj.ImageViewer.Tools.Pick.setSelectedBoxIDs(img.SelectedRegionIDs);
+            obj.ImageViewer.Tools.Box.setSelectedBoxIDs(img.SelectedRegionIDs);
             % set active box
-            obj.ImageViewer.Tools.Pick.setActiveBoxID(img.ActiveRegionID);
+            obj.ImageViewer.Tools.Box.setActiveBoxID(img.ActiveRegionID);
         end
 
         function refreshIntensitySliders(obj)
@@ -1759,7 +1783,7 @@ classdef GUI < handle
             % set active box
             reg = obj.Project.ActiveRegion;
             if ~isempty(reg)
-                obj.ImageViewer.Tools.Pick.setActiveBoxID(reg.ID);
+                obj.ImageViewer.Tools.Box.setActiveBoxID(reg.ID);
             end
         end
 
@@ -1774,7 +1798,7 @@ classdef GUI < handle
             id = string(regionID);
 
             % set active/selected region
-            obj.ImageViewer.Tools.Pick.setActiveBoxID(id);
+            obj.ImageViewer.Tools.Box.setActiveBoxID(id);
             img.setActiveRegion(id);
         end
 
@@ -2152,7 +2176,7 @@ classdef GUI < handle
             img = obj.Project.ActiveImage;
             if isempty(img), return; end
 
-            ids = obj.ImageViewer.Tools.Pick.getSelectedBoxIDs();
+            ids = obj.ImageViewer.Tools.Box.getSelectedBoxIDs();
             if isempty(ids), return; end
 
             bank = obj.Project.LabelBank;
@@ -2168,7 +2192,7 @@ classdef GUI < handle
             end
 
             % recolor overlays
-            obj.ImageViewer.Tools.Pick.setBoxesColorByIDs(ids, L.Color);
+            obj.ImageViewer.Tools.Box.setBoxesColorByIDs(ids, L.Color);
 
             % refresh region table
             obj.refreshRegionSummaryTable();
@@ -2179,7 +2203,7 @@ classdef GUI < handle
             img = obj.Project.ActiveImage;
             if isempty(img), return; end
 
-            ids = obj.ImageViewer.Tools.Pick.getSelectedBoxIDs();
+            ids = obj.ImageViewer.Tools.Box.getSelectedBoxIDs();
             if isempty(ids), return; end
 
             for i = 1:numel(ids)
@@ -2189,7 +2213,7 @@ classdef GUI < handle
                 end
             end
 
-            obj.ImageViewer.Tools.Pick.setBoxesEdgeColorByIDs(ids, 'w');
+            obj.ImageViewer.Tools.Box.setBoxesColorByIDs(ids, 'w');
             obj.markProjectDirty();
         end
 
@@ -2310,7 +2334,7 @@ classdef GUI < handle
                     end
 
                     if C <= obj.ImageViewer.NumComponents
-                        obj.ImageViewer.ComponentColormaps{C} = cmap;
+                        obj.ImageViewer.setComponentColormap(cmap,C);
                     end
                 case "BoxFaceColor"
                     %set(obj.ROI, 'FaceColor', obj.Settings.Display.BoxFaceColor);
@@ -2364,8 +2388,8 @@ classdef GUI < handle
                     obj.syncActiveImageToView();
                     obj.refreshRegionROI();
                     obj.refreshRegionLinescanPlot();
-                    % update BoxSize for Pick tool
-                    obj.ImageViewer.Tools.Pick.BoxSize = obj.Settings.Analysis.BoxSize;
+                    % update BoxSize for Box tool
+                    obj.ImageViewer.Tools.Box.BoxSize = obj.Settings.Analysis.BoxSize;
                 case {"PixelSizeValue","PixelSizeUnit"}
                     obj.Project.setDefaultPixelSize(obj.Settings.Analysis.getDefaultPixelSize);
                     % re-process all existing regions to reflect new pixel size
@@ -2454,7 +2478,7 @@ classdef GUI < handle
             obj.Project.setChannelColor(C,colorName);
 
             if C <= obj.ImageViewer.NumComponents
-                obj.ImageViewer.ComponentColors{C} = colorName;
+                obj.ImageViewer.setComponentColor(colorName,C);
             end
         end
 
@@ -2626,7 +2650,7 @@ classdef GUI < handle
 
             % set the new CLim for the ImageViewer, linked RegionViewer will update
             clim = obj.IntensitySliders(C).Value;
-            obj.ImageViewer.ComponentCLims{C} = clim;
+            obj.ImageViewer.setComponentCLim(clim,C);
         end
 
         function onIntensitySliderChanged(obj,~,C)
@@ -2639,7 +2663,7 @@ classdef GUI < handle
             img.setDisplayRange(newVal,C);
 
             % update view
-            obj.ImageViewer.ComponentCLims{C} = newVal;
+            obj.ImageViewer.setComponentCLim(newVal,C);
 
             % disable AutoScaleDisplayIntensity if enabled
             if obj.Settings.Display.AutoScaleDisplayIntensity
@@ -2687,15 +2711,23 @@ classdef GUI < handle
         function onAutoFitAllROIs(obj)
             % create progress dialog
             desmostorm.Log.INFO("Fitting ROIs for all regions...");
-            h = uiprogressdlg(obj.Fig,"Message",'Fitting ROIs. Please wait...','Indeterminate','on');
+            h = uiprogressdlg(obj.Fig, ...
+                "Title","Auto-Fit Region ROIs", ...
+                "Message",'Preparing ROI auto-fit...', ...
+                "Indeterminate",'off', ...
+                "Value",0);
+            cleanup = onCleanup(@() closeProgressDialog(h));
             % re-process everything
-            obj.Project.autofitAllRegionROIs(obj.getRunConfig())
+            summary = obj.Project.autofitAllRegionROIs(obj.getRunConfig(), ...
+                "ProgressDialog",h);
             % close the progress dialog
-            close(h);
+            delete(cleanup);
 
             % reprocess region measurements
             obj.processAllRegions();
-            desmostorm.Log.INFO("ROI fitting complete.");
+            desmostorm.Log.INFO(sprintf( ...
+                "ROI fitting complete: %d/%d succeeded, %d failed.", ...
+                summary.Succeeded,summary.Attempted,summary.Failed));
         end
 
         function onAutoFitActiveROI(obj)
@@ -2709,11 +2741,21 @@ classdef GUI < handle
 
             % create progress dialog
             desmostorm.Log.INFO(sprintf("Fitting ROI for region: %s",reg.Name));
-            h = uiprogressdlg(obj.Fig,"Message",'Fitting ROI. Please wait...','Indeterminate','on');
+            h = uiprogressdlg(obj.Fig, ...
+                "Title","Auto-Fit Region ROI", ...
+                "Message",'Preparing ROI auto-fit...', ...
+                "Indeterminate",'off', ...
+                "Value",0);
+            cleanup = onCleanup(@() closeProgressDialog(h));
             % re-process everything
-            img.autofitRegionROI(reg,obj.getRunConfig());
+            ok = img.autofitRegionROI(reg,obj.getRunConfig(), ...
+                "ProgressDialog",h);
             % close the progress dialog
-            close(h);
+            delete(cleanup);
+            if ~ok
+                desmostorm.Log.WARN(sprintf("ROI fitting failed for region: %s",reg.Name));
+                return
+            end
             % reprocess region measurements
             obj.processActiveRegion();
             desmostorm.Log.INFO(sprintf("ROI fitting complete for region: %s",reg.Name));
@@ -2746,10 +2788,19 @@ classdef GUI < handle
             pkg = desmostorm.ml.loadClassifierPackage(classifierFile);
             net = pkg.Net;
             propOpts = pkg.PropOpts;
+            if ~isfield(propOpts,"CandidateMode")
+                propOpts.CandidateMode = "grid";
+            elseif string(propOpts.CandidateMode) == "cluster"
+                propOpts.CandidateMode = "ClusterCentroid";
+            end
+            if ~isfield(propOpts,"PositiveClass")
+                propOpts.PositiveClass = "object";
+            end
 
             % get proposal options
             params = matlabx.app.ParamsDialog.prompt( ...
                 'Class proposal options', ...
+                {'CandidateMode','CandidateMode','choice',propOpts.CandidateMode,{'grid','ClusterCentroid','ClusterArea'}},...
                 {'Stride','Stride','double',propOpts.Stride, @(x) x>=1, 'Stride must be >= 1'},...
                 {'ScoreThreshold','ScoreThreshold','double',propOpts.ScoreThreshold, @(x) x<=1 && x>=0, 'ScoreThreshold must be between 0 and 1'},...
                 {'NmsIoU','NmsIoU','double',propOpts.NmsIoU, @(x) x>=0 && x<=1, 'NmsIoU must be between 0 and 1'},...
@@ -2763,28 +2814,37 @@ classdef GUI < handle
                 return
             end
 
+            propOpts.CandidateMode   = string(params.CandidateMode);
             propOpts.Stride         = params.Stride;
             propOpts.ScoreThreshold = params.ScoreThreshold;
             propOpts.NmsIoU         = params.NmsIoU;
             propOpts.BatchSize      = str2double(params.BatchSize);
 
-            % create progress dialog
-            h = uiprogressdlg(obj.Fig,"Message",'Please wait...','Indeterminate','on');
+            % Create one dialog for the whole classifier run. The ML layer
+            % updates it with per-image proposal-generation details.
+            h = uiprogressdlg(obj.Fig, ...
+                "Message",'Preparing classifier proposals...', ...
+                "Indeterminate",'off', ...
+                "Value",0);
+            cleanupProgress = onCleanup(@() closeProgressDialog(h));
 
-            fprintf('\n');
-            fprintf('Proposal options\n');
-            fprintf('----------------\n');
-            fprintf('BoxSize            : %d\n',    propOpts.BoxSize);
-            fprintf('Stride             : %d\n',    propOpts.Stride);
-            fprintf('ScoreThreshold     : %.2f\n',  propOpts.ScoreThreshold);
-            fprintf('NmsIoU             : %.2f\n',  propOpts.NmsIoU);
-            fprintf('BatchSize          : %d\n',    propOpts.BatchSize);
-            fprintf('PositiveClass      : %s\n',    propOpts.PositiveClass);
-            fprintf('\n');
+            desmostorm.Log.INFO(sprintf([ ...
+                'Proposal options: BoxSize=%d, CandidateMode=%s, Stride=%d, ' ...
+                'ScoreThreshold=%.3g, NmsIoU=%.3g, BatchSize=%d, PositiveClass=%s'], ...
+                propOpts.BoxSize, ...
+                char(propOpts.CandidateMode), ...
+                propOpts.Stride, ...
+                propOpts.ScoreThreshold, ...
+                propOpts.NmsIoU, ...
+                propOpts.BatchSize, ...
+                propOpts.PositiveClass));
 
             % --- run ---
             N = numel(imgs);
             for i = 1:N
+                h.Message = sprintf("Running classifier on image %d/%d: %s",i,N,imgs(i).Name);
+                h.Value = (i-1) / N;
+                propOpts.ProgressDialog = h;
                 desmostorm.Log.INFO(sprintf("Running classifier on image (%i/%i): %s",i,N,imgs(i).Name));
                 imgs(i).runClassifier(net,propOpts);
             end
@@ -2793,9 +2853,8 @@ classdef GUI < handle
             % --- sync UI ---
             obj.syncActiveImageToView();
             obj.markProjectDirty();
-
-            % close the progress dialog
-            close(h);
+            h.Value = 1;
+            h.Message = "Classifier run complete.";
 
         end
 
@@ -2819,6 +2878,13 @@ classdef GUI < handle
 
             if isempty(params), return; end
 
+            % Show coarse progress around setup, training, packaging, and save.
+            % MATLAB's training-progress window still owns iteration details.
+            h = uiprogressdlg(obj.Fig, ...
+                "Message","Preparing classifier training...", ...
+                "Indeterminate","on");
+            cleanupProgress = onCleanup(@() closeProgressDialog(h));
+
             % --- train a new classifier ---
             desmostorm.Log.INFO(sprintf("Training new classifier: %s",params.BaseName));
             desmostorm.ml.trainNewClassifierFromProject(obj.Project,...
@@ -2826,7 +2892,8 @@ classdef GUI < handle
                 "MaxEpochs",        params.MaxEpochs, ...
                 "InitialLearnRate", params.InitialLearnRate, ...
                 "IoUMax",           params.IoUMax, ...
-                "MiniBatchSize",    str2double(params.MiniBatchSize));
+                "MiniBatchSize",    str2double(params.MiniBatchSize), ...
+                "ProgressDialog",   h);
 
 
             desmostorm.Log.INFO("Initial training complete.");
@@ -2866,13 +2933,21 @@ classdef GUI < handle
 
             if isempty(params), return; end
 
+            % Show coarse progress around setup, training, packaging, and save.
+            % MATLAB's training-progress window still owns iteration details.
+            h = uiprogressdlg(obj.Fig, ...
+                "Message","Preparing classifier retraining...", ...
+                "Indeterminate","on");
+            cleanupProgress = onCleanup(@() closeProgressDialog(h));
+
             % --- continue training classifier ---
             desmostorm.Log.INFO(sprintf("Continuing training from: %s",classifierFile));
             desmostorm.ml.continueClassifierTrainingFromProject(obj.Project,classifierFile, ...
                 "MaxEpochs",            params.MaxEpochs, ...
                 "InitialLearnRate",     params.InitialLearnRate, ...
                 "IoUMax",               params.IoUMax, ...
-                "MiniBatchSize",        str2double(params.MiniBatchSize));
+                "MiniBatchSize",        str2double(params.MiniBatchSize), ...
+                "ProgressDialog",       h);
 
             desmostorm.Log.INFO("Continued training complete.");
         end
@@ -2880,7 +2955,7 @@ classdef GUI < handle
 
     end
 
-    %% Event handlers for Pick tool callbacks
+    %% Event handlers for Box tool callbacks
     methods (Access=private)
 
         function onBoxCreated(obj, data)
@@ -2893,8 +2968,8 @@ classdef GUI < handle
 
 
             % Apply active label color to the newly created box
-            obj.ImageViewer.Tools.Pick.setBoxColorByID(data.ID, L.Color);
-            obj.ImageViewer.Tools.Pick.setBoxLabelByID(data.ID, img.getRegion(data.ID).Name);
+            obj.ImageViewer.Tools.Box.setBoxColorByID(data.ID, L.Color);
+            obj.ImageViewer.Tools.Box.setBoxLabelByID(data.ID, img.getRegion(data.ID).Name);
         end
 
         function onBoxMoveStarted(obj, data)
@@ -3002,7 +3077,7 @@ classdef GUI < handle
             % get the ActiveRegion, exit if empty
             reg = img.ActiveRegion; if isempty(reg), return; end
             % update region linescan properties
-            reg.updateROI(ROI);
+            reg.updateROI(ROI,"Source","user");
             % process the linescan for this region
             img.processRegionLinescan(reg,obj.getRunConfig());
             % update the region linescan plot

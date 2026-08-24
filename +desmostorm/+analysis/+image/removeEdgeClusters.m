@@ -17,15 +17,13 @@ end
 debugOutput = opts.DebugOutput || opts.DisplayOutput;
 [H,W] = size(I);
 
-% Locate puncta and cluster them using the same default behavior as
-% removeIsolatedPuncta. Keeping these steps parallel makes it easier to tune or
-% merge the preprocessing flow later.
-[seedPts,~] = matlabx.image.measure.findPuncta(I);
-clustData = desmostorm.analysis.cluster.PointClusters(seedPts, ...
-    "MinPointsPerCluster",opts.MinPunctaPerCluster, ...
-    "RefinePoints",false, ...
-    "Recluster",true, ...
-    "RefineClusters",false);
+% Locate puncta and cluster them using the same explicit clustering pipeline
+% as removeIsolatedPuncta. Keeping these steps parallel makes it easier to tune
+% or merge the preprocessing flow later.
+[seedPts,~] = matlabx.image.measure.detectPuncta(I);
+clustData = matlabx.analysis.cluster.PointClusters(seedPts, ...
+    "MinPointsPerCluster",opts.MinPunctaPerCluster);
+clustData.recluster();
 
 isolatedPts = clustData.UnclusteredPoints;
 edgeClusterIdx = findEdgeClusterIdx(clustData,W,H,opts.EdgeDistanceFraction);
@@ -50,15 +48,17 @@ if debugOutput
     img2 = matlabx.image.Image5D.fromComponents(imgCell2,"Names",names2);
 
     ax = matlabx.app.quickshow(img,"Title","removeEdgeClusters Results");
-    ax.ComponentColormaps{1} = turbo;
-    ax.ComponentColormaps{4} = turbo;
+    ax.setComponentColormap(turbo,1);
+    ax.setComponentColormap(turbo,4);
 
     ax2 = matlabx.app.quickshow(img2,"Title","removeEdgeClusters Results");
-    ax2.ComponentColormaps{1} = turbo;
-    ax2.ComponentColormaps{2} = turbo;
+    ax2.setComponentColormap(turbo,1);
+    ax2.setComponentColormap(turbo,2);
 
 
-    clustData.plot(ax2.getAxes());
+    ax2.Overlays.add("PointClusters", ...
+        "ClusterData", clustData, ...
+        "C", 1);
 
     desmostorm.Log.DEBUG(sprintf( ...
         "removeEdgeClusters: %d seed point(s), %d cluster(s), %d edge cluster(s), %d removal seed point(s).", ...

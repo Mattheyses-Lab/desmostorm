@@ -564,41 +564,73 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
 
         % --- autofit Region ROIs ---
 
-        function autofitAllRegionROIs(obj, config)
+        function nFit = autofitAllRegionROIs(obj, config, opts)
+            arguments
+                obj desmostorm.model.STORMImage
+                config desmostorm.config.RunConfig
+                opts.ProgressDialog = []
+            end
+
             % get Region array
             arr = obj.RegionArray;
             % return if empty
-            if isempty(arr), return; end
+            if isempty(arr)
+                nFit = 0;
+                return
+            end
 
             % otherwise, process each region
+            nFit = 0;
             for i = 1:numel(arr)
-                obj.autofitRegionROI(arr(i),config,"DebugOutput",false);
+                if obj.autofitRegionROI(arr(i),config, ...
+                        "DebugOutput",false, ...
+                        "ProgressDialog",opts.ProgressDialog)
+                    nFit = nFit + 1;
+                end
             end
         end
 
-        function autofitRegionROI(obj, reg, config, opts)
+        function ok = autofitRegionROI(obj, reg, config, opts)
             arguments
                 obj desmostorm.model.STORMImage
                 reg desmostorm.model.STORMRegion
                 config desmostorm.config.RunConfig
                 opts.DebugOutput = []
+                opts.ProgressDialog = []
             end
 
+            ok = false;
             if isempty(reg), return; end
+
+            desmostorm.Log.INFO(sprintf("Auto-fitting ROI for %s.",reg.Name));
 
             % get region CData
             I = obj.regionSubimage(reg);
             % get linescan info
-            if isempty(opts.DebugOutput)
+            if isempty(opts.DebugOutput) && isempty(opts.ProgressDialog)
                 ROI = desmostorm.analysis.Analyzer.autofitRegionROI(I, config);
-            else
+            elseif isempty(opts.DebugOutput)
+                ROI = desmostorm.analysis.Analyzer.autofitRegionROI(I, config, ...
+                    "ProgressDialog",opts.ProgressDialog);
+            elseif isempty(opts.ProgressDialog)
                 ROI = desmostorm.analysis.Analyzer.autofitRegionROI(I, config, ...
                     "DebugOutput",opts.DebugOutput);
+            else
+                ROI = desmostorm.analysis.Analyzer.autofitRegionROI(I, config, ...
+                    "DebugOutput",opts.DebugOutput, ...
+                    "ProgressDialog",opts.ProgressDialog);
             end
 
-            if isempty(ROI), return; end
+            if isempty(ROI)
+                desmostorm.Log.WARN(sprintf("Auto-fit ROI failed for %s.",reg.Name));
+                return
+            end
 
-            reg.updateROI(ROI);
+            reg.updateROI(ROI,"Source","autofit");
+            ok = true;
+            desmostorm.Log.INFO(sprintf( ...
+                "Auto-fit ROI set for %s (theta %.1f deg, %.0f x %.0f px).", ...
+                reg.Name,ROI.RotationAngle,ROI.Width,ROI.Height));
         end
 
         % --- retrieve Region subimage ---
@@ -646,12 +678,27 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
             % remove any existing regions first
             obj.removeAllRegions();
 
+            if ~isfield(propOpts,"CandidateMode")
+                propOpts.CandidateMode = "grid";
+            elseif string(propOpts.CandidateMode) == "cluster"
+                propOpts.CandidateMode = "ClusterCentroid";
+            end
+            if ~isfield(propOpts,"PositiveClass")
+                propOpts.PositiveClass = "object";
+            end
+            if ~isfield(propOpts,"ProgressDialog")
+                propOpts.ProgressDialog = [];
+            end
+
             [ctrs,scores] = desmostorm.ml.proposePatchCenters(obj.SourcePath,net,...
                 "BoxSize",          propOpts.BoxSize, ...
                 "Stride",           propOpts.Stride, ...
                 "ScoreThreshold",   propOpts.ScoreThreshold, ...
                 "BatchSize",        propOpts.BatchSize, ...
-                "NmsIoU",           propOpts.NmsIoU);
+                "NmsIoU",           propOpts.NmsIoU, ...
+                "CandidateMode",    propOpts.CandidateMode, ...
+                "PositiveClass",    propOpts.PositiveClass, ...
+                "ProgressDialog",   propOpts.ProgressDialog);
 
             % number of positive patches detected
             nFound = size(ctrs,1);

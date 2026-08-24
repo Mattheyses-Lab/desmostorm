@@ -1,5 +1,5 @@
 function net = trainPatchClassifier(Ptrain, Pval, boxSize, opts)
-%trainPatchClassifier Train or continue training a binary patch classifier.
+%TRAINPATCHCLASSIFIER Train or continue training a binary patch classifier.
 %
 % Fresh training:
 %   net = desmostorm.ml.trainPatchClassifier(Ptrain, Pval, 300, ...
@@ -30,6 +30,7 @@ function net = trainPatchClassifier(Ptrain, Pval, boxSize, opts)
         opts.ExecutionEnvironment (1,1) string = "cpu"
         opts.Augment (1,1) logical = true
         opts.ValidationFrequency (1,1) double {mustBePositive} = 50
+        opts.ProgressDialog = []
     end
     
     % ---- Basic checks ----
@@ -57,6 +58,8 @@ function net = trainPatchClassifier(Ptrain, Pval, boxSize, opts)
     end
     
     % ---- Choose starting network ----
+    desmostorm.ml.updateProgressDialog(opts.ProgressDialog, ...
+        "Preparing classifier network architecture...");
     if opts.ContinueTraining
         if ~(isa(opts.BaseNet, "SeriesNetwork") || isa(opts.BaseNet, "DAGNetwork"))
             error("trainPatchClassifier:BadBaseNet", ...
@@ -108,8 +111,12 @@ function net = trainPatchClassifier(Ptrain, Pval, boxSize, opts)
     
     % ---- Datastores ----
     desmostorm.Log.INFO("Building training datastore...")
+    desmostorm.ml.updateProgressDialog(opts.ProgressDialog, ...
+        "Building training datastore...");
     dsTrain = desmostorm.ml.patchDatastore(Ptrain, boxSize, netInputSize);
     desmostorm.Log.INFO("Building validation datastore...")
+    desmostorm.ml.updateProgressDialog(opts.ProgressDialog, ...
+        "Building validation datastore...");
     dsVal   = desmostorm.ml.patchDatastore(Pval,   boxSize, netInputSize);
     
     desmostorm.Log.INFO("Building augmentation datastore...")
@@ -118,6 +125,8 @@ function net = trainPatchClassifier(Ptrain, Pval, boxSize, opts)
     end
     
     % ---- Validation sanity check ----
+    desmostorm.ml.updateProgressDialog(opts.ProgressDialog, ...
+        "Checking validation datastore...");
     try
         v = read(dsVal);
         Xv = v{1};
@@ -221,26 +230,30 @@ function net = trainPatchClassifier(Ptrain, Pval, boxSize, opts)
         Plots="training-progress", ...
         ExecutionEnvironment=opts.ExecutionEnvironment);
     
-    fprintf('\n');
-    fprintf('Training options\n');
-    fprintf('----------------\n');
-    fprintf('ContinueTraining   : %s\n', string(opts.ContinueTraining));
-    fprintf('BoxSize            : %d\n', boxSize);
-    fprintf('MaxEpochs          : %d\n', opts.MaxEpochs);
-    fprintf('MiniBatchSize      : %d\n', opts.MiniBatchSize);
-    fprintf('InitialLearnRate   : %.3g\n', opts.InitialLearnRate);
-    fprintf('ExecutionEnv       : %s\n', opts.ExecutionEnvironment);
-    fprintf('Augment            : %s\n', string(opts.Augment));
-    fprintf('ValidationFreq     : %d\n', opts.ValidationFrequency);
-    fprintf('NumTrainPatches    : %d\n', height(Ptrain));
-    fprintf('NumValPatches      : %d\n', height(Pval));
-    fprintf('TrainClasses       : %s\n', strjoin(string(categories(Ptrain.label)), ', '));
-    fprintf('ValClasses         : %s\n', strjoin(string(categories(Pval.label)), ', '));
-    fprintf('\n');
+    desmostorm.Log.INFO(sprintf([ ...
+        'Training options: ContinueTraining=%s, BoxSize=%d, MaxEpochs=%d, ' ...
+        'MiniBatchSize=%d, InitialLearnRate=%.3g, ExecutionEnvironment=%s, ' ...
+        'Augment=%s, ValidationFrequency=%d, TrainPatches=%d, ValPatches=%d, ' ...
+        'TrainClasses=%s, ValClasses=%s'], ...
+        string(opts.ContinueTraining), ...
+        boxSize, ...
+        opts.MaxEpochs, ...
+        opts.MiniBatchSize, ...
+        opts.InitialLearnRate, ...
+        opts.ExecutionEnvironment, ...
+        string(opts.Augment), ...
+        opts.ValidationFrequency, ...
+        height(Ptrain), ...
+        height(Pval), ...
+        strjoin(string(categories(Ptrain.label)), ', '), ...
+        strjoin(string(categories(Pval.label)), ', ')));
 
     % ---- Train ----
     desmostorm.Log.INFO("Training network...")
+    desmostorm.ml.updateProgressDialog(opts.ProgressDialog, ...
+        "Training network. MATLAB training progress may open separately...");
     net = trainNetwork(dsTrain, lgraph, options);
+    desmostorm.Log.INFO("Network training complete.")
 
 end
 

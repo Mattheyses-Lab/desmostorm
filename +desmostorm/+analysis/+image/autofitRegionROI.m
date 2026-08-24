@@ -19,6 +19,7 @@ arguments
     opts.DebugOutput (1,1) logical = desmostorm.Preferences.get( ...
         "AnalysisDebugOutput", desmostorm.runtime.isDeveloperMode())
     opts.ShowPlots = []
+    opts.ProgressDialog = []
 end
 
 diagnostics = struct();
@@ -35,8 +36,11 @@ if isempty(I)
     return
 end
 
+updateAutofitProgress(opts.ProgressDialog,"Preparing ROI auto-fit...",0.02);
+
 I = double(I);
 [H,W] = size(I,[1 2]);
+desmostorm.Log.DEBUG(sprintf("Auto-fit ROI input image size: %d x %d px.",H,W));
 
 % Start from a centered ROI that can rotate freely inside the region crop.
 % This makes angle scoring less dependent on the user-selected box size than
@@ -46,12 +50,14 @@ ROI = initialROI(H,W);
 % Cleanup currently removes sparse DBSCAN noise points and edge junk. These
 % are useful for profile stability, but should remain swappable preprocessing
 % steps while the autofit path is still experimental.
+updateAutofitProgress(opts.ProgressDialog,"Preprocessing region image...",0.12);
 [Ifit,diagnostics.Preprocess] = preprocessForAutofit(I,debugOutput);
 
 % Keep the sweep broad for now. We can later narrow this using a cluster/mask
 % orientation prior once enough bad cases have been examined.
 thetas = -90:1:89;
 
+updateAutofitProgress(opts.ProgressDialog,"Scoring candidate rotation angles...",0.32);
 angleScores = scoreRotationAngles(Ifit,ROI,config,thetas);
 diagnostics.AngleScores = angleScores;
 
@@ -61,6 +67,7 @@ diagnostics.AngleChoice = choice;
 if isnan(theta)
     diagnostics.AngleChoice = choice;
     desmostorm.Log.WARN("Auto-fit ROI failed to converge: no suitable rotation angle found.");
+    updateAutofitProgress(opts.ProgressDialog,"ROI auto-fit failed to converge.",1);
     if debugOutput
         ROI.RotationAngle = NaN;
         showAutofitDebugOutput(I,Ifit,ROI,diagnostics);
@@ -70,16 +77,26 @@ if isnan(theta)
 end
 
 ROI.RotationAngle = theta;
+desmostorm.Log.DEBUG(sprintf( ...
+    "Auto-fit ROI selected rotation angle %.2f deg using %s.", ...
+    theta,choice.Method));
 
 % Refine height first: the plaque pair is usually best resolved along this
 % axis, and a cleaner height gives the width profile a better average.
+updateAutofitProgress(opts.ProgressDialog,"Refining ROI height...",0.62);
 [ROI,diagnostics.HeightRefinement] = refineROIHeight(Ifit,ROI,config);
 
 % Width is the axis most likely to exceed the initial fitting ROI. Reset it to
 % the largest centered width that still fits at the chosen angle/refined height,
 % then refine inward from that generous starting point.
+updateAutofitProgress(opts.ProgressDialog,"Refining ROI width...",0.80);
 ROI.Width = maxCenteredWidthForRotation(W,H,ROI.RotationAngle,ROI.Height);
 [ROI,diagnostics.WidthRefinement] = refineROIWidth(Ifit,ROI,config);
+
+updateAutofitProgress(opts.ProgressDialog,"ROI auto-fit complete.",1);
+desmostorm.Log.DEBUG(sprintf( ...
+    "Auto-fit ROI result: center=(%.1f, %.1f), width=%.1f px, height=%.1f px, theta=%.2f deg.", ...
+    ROI.CenterX,ROI.CenterY,ROI.Width,ROI.Height,ROI.RotationAngle));
 
 if debugOutput
     showAutofitDebugOutput(I,Ifit,ROI,diagnostics);
@@ -663,6 +680,25 @@ function idx = nearestIndex(x,value)
     [~,idx] = min(abs(x - value));
 end
 
+function updateAutofitProgress(h,msg,value)
+%UPDATEAUTOFITPROGRESS Best-effort progress feedback for GUI callers.
+%
+% Auto-fit is also used from non-GUI contexts, so progress reporting must be
+% optional and failure-tolerant. A stale or closed dialog should never affect
+% the analysis result.
+    if isempty(h), return; end
+
+    try
+        h.Message = msg;
+        if nargin >= 3 && ~isempty(value)
+            h.Indeterminate = "off";
+            h.Value = value;
+        end
+        drawnow limitrate
+    catch
+    end
+end
+
 function showAutofitDebugOutput(Iraw,Ifit,ROI,diagnostics)
 %SHOWAUTOFITDEBUGOUTPUT Display final analysis diagnostics.
 %
@@ -692,11 +728,11 @@ function showAutofitDebugOutput(Iraw,Ifit,ROI,diagnostics)
 
     imageAx = matlabx.ui.axes.ImageAxes(layout, ...
         "Name","Auto-fit image", ...
-        "ToolBelt",{'DrawRectangle'}, ...
+        "Tools",{'DrawRectangle'}, ...
         "ImageData",img, ...
         "Colormap",turbo);
-    imageAx.ComponentColormaps{1} = turbo;
-    imageAx.ComponentColormaps{2} = turbo;
+    imageAx.setComponentColormap(turbo,1);
+    imageAx.setComponentColormap(turbo,2);
     imageAx.Tools.DrawRectangle.RotationAngleMode = 'half-circle';
     if ~isnan(ROI.RotationAngle)
         imageAx.Tools.DrawRectangle.setROIPosition(ROI);

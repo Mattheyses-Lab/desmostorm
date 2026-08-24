@@ -1,5 +1,10 @@
 function T = detectorLabelTable(project, opts)
-%DETECTORLABELTABLE Build training labels table for MATLAB object detectors.
+%DETECTORLABELTABLE Build a box-label table for MATLAB object detectors.
+%
+% This helper is separate from the patch-classifier workflow. It converts
+% existing desmostorm regions into the table shape expected by detector
+% training APIs: one imageFilename column plus one cell-valued box column named
+% by opts.ClassName.
 
 arguments
     project (1,1) desmostorm.model.STORMProject
@@ -25,6 +30,8 @@ for i = 1:n
     img = imgs(i);
     imageFilename(i) = string(img.SourcePath);
 
+    % Detector training reads source images from disk, so fail early if the
+    % project points to missing files and strict checking is enabled.
     if opts.RequireFilesExist && ~isfile(imageFilename(i))
         error("desmostorm:ml:detectorLabelTable:MissingFile", ...
             "Image file not found on disk: %s", imageFilename(i));
@@ -39,6 +46,7 @@ for i = 1:n
         continue
     end
 
+    % Convert each region center/box size into MATLAB detector [x y w h] boxes.
     B = zeros(numel(regs), 4);
 
     for r = 1:numel(regs)

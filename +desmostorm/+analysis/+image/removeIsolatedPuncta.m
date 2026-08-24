@@ -10,15 +10,15 @@ end
 
 debugOutput = opts.DebugOutput || opts.DisplayOutput;
 
-% locate puncta
-[seedPts,~] = matlabx.image.measure.findPuncta(I);
+% Locate puncta, then cluster them. PointClusters now performs only the
+% initial clustering in its constructor; reclustering is an explicit pipeline
+% step so callers can decide which stages are appropriate.
+[seedPts,~] = matlabx.image.measure.detectPuncta(I);
 
 % use DBSCAN to coalesce puncta locations into clusters
-clustData = desmostorm.analysis.cluster.PointClusters(seedPts,...
-    "MinPointsPerCluster",opts.MinPunctaPerCluster,...
-    "RefinePoints",false,...
-    "Recluster",true,...
-    "RefineClusters",false);
+clustData = matlabx.analysis.cluster.PointClusters(seedPts,...
+    "MinPointsPerCluster",opts.MinPunctaPerCluster);
+clustData.recluster();
 
 % keep only isolated (unclustered) points
 isolatedPts = clustData.UnclusteredPoints;
@@ -50,16 +50,18 @@ if debugOutput
 
     ax1 = matlabx.app.quickshow(img1,"Title","removeIsolatedPuncta Results");
     %ax1.ComponentColorMode = 'luts';
-    ax1.ComponentColormaps{1} = turbo;
-    ax1.ComponentColormaps{4} = turbo;
+    ax1.setComponentColormap(turbo,1);
+    ax1.setComponentColormap(turbo,4);
 
 
     ax2 = matlabx.app.quickshow(img2,"Title","removeIsolatedPuncta Results");
     %ax2.ComponentColorMode = 'luts';
-    ax2.ComponentColormaps{1} = turbo;
-    ax2.ComponentColormaps{2} = turbo;
+    ax2.setComponentColormap(turbo,1);
+    ax2.setComponentColormap(turbo,2);
 
-    clustData.plot(ax2.getAxes());
+    ax2.Overlays.add("PointClusters", ...
+        "ClusterData", clustData, ...
+        "C", 1);
 
     T = clustData.exportClusterMetrics;
     desmostorm.Log.DEBUG(sprintf( ...

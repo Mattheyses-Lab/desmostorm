@@ -1,5 +1,5 @@
 function [nextVersion, stem] = nextClassifierVersion(saveDir, baseName)
-%nextClassifierVersion Determine next available version number for a base name.
+%NEXTCLASSIFIERVERSION Determine the next available classifier version number.
 %
 % Example:
 %   classifier_myModel_v001.mat
@@ -10,12 +10,15 @@ function [nextVersion, stem] = nextClassifierVersion(saveDir, baseName)
         baseName {mustBeTextScalar}
     end
     
+    % Normalize user-entered names to filename-safe stems while preserving the
+    % readable base name as much as MATLAB allows.
     stem = matlab.lang.makeValidName(string(baseName), 'ReplacementStyle', 'delete');
     stem = regexprep(stem, "^x", ""); % optional cleanup if makeValidName prepends x
     if strlength(stem) == 0
         error("nextClassifierVersion:BadBaseName", "Base name must contain at least one valid character.");
     end
     
+    % Scan existing packages for numeric version suffixes and append one.
     files = dir(fullfile(saveDir, sprintf("classifier_%s_v*.mat", stem)));
     
     versions = 0;

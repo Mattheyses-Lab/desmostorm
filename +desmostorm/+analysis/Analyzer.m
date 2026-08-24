@@ -42,13 +42,21 @@ classdef Analyzer
                 % Analysis settings snapshot
                 rc (1,1) desmostorm.config.RunConfig
                 opts.DebugOutput = []
+                opts.ProgressDialog = []
             end
             % automatically fit rectangular ROI
-            if isempty(opts.DebugOutput)
+            if isempty(opts.DebugOutput) && isempty(opts.ProgressDialog)
                 out = desmostorm.analysis.image.autofitRegionROI(I,rc);
-            else
+            elseif isempty(opts.DebugOutput)
+                out = desmostorm.analysis.image.autofitRegionROI(I,rc, ...
+                    "ProgressDialog",opts.ProgressDialog);
+            elseif isempty(opts.ProgressDialog)
                 out = desmostorm.analysis.image.autofitRegionROI(I,rc, ...
                     "DebugOutput",opts.DebugOutput);
+            else
+                out = desmostorm.analysis.image.autofitRegionROI(I,rc, ...
+                    "DebugOutput",opts.DebugOutput, ...
+                    "ProgressDialog",opts.ProgressDialog);
             end
         end
 

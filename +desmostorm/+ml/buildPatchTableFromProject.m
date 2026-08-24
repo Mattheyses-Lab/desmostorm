@@ -1,5 +1,5 @@
 function P = buildPatchTableFromProject(project, opts)
-%buildPatchTableFromProject Build patch table from project regions.
+%BUILDPATCHTABLEFROMPROJECT Build a classifier patch table from project regions.
 %
 % Uses only USER-labeled regions:
 %   Label == "object"     & LabelSource == "user"  -> positive
@@ -55,7 +55,9 @@ for i = 1:numel(imgs)
         continue
     end
 
-    % Collect user-reviewed positives and negatives from this image
+    % Collect user-reviewed positives and negatives from this image. Classifier
+    % proposals and unlabeled regions are intentionally excluded so training
+    % data only reflects user-reviewed labels.
     Cpos = zeros(0,2);
     CnegUser = zeros(0,2);
 
@@ -87,7 +89,7 @@ for i = 1:numel(imgs)
     totalPos = totalPos + nPos;
     totalNegUser = totalNegUser + nNegUser;
 
-    % Add user positives
+    % Add user positives exactly at their reviewed region centers.
     if nPos > 0
         rowsPos = [repmat({fn}, nPos, 1), ...
                    num2cell(Cpos(:,1)), num2cell(Cpos(:,2)), ...
@@ -96,7 +98,7 @@ for i = 1:numel(imgs)
         rows = [rows; rowsPos]; %#ok<AGROW>
     end
 
-    % Add user negatives
+    % Add user negatives exactly at their reviewed region centers.
     if nNegUser > 0
         rowsNeg = [repmat({fn}, nNegUser, 1), ...
                    num2cell(CnegUser(:,1)), num2cell(CnegUser(:,2)), ...
@@ -105,7 +107,9 @@ for i = 1:numel(imgs)
         rows = [rows; rowsNeg]; %#ok<AGROW>
     end
 
-    % Top up random negatives only if there are positives in this image
+    % Top up random negatives only if there are positives in this image. This
+    % keeps the automatically sampled background near images known to contain
+    % true objects while avoiding empty-image dominance.
     if nPos == 0
         continue
     end
@@ -117,7 +121,9 @@ for i = 1:numel(imgs)
         continue
     end
 
-    % Reject overlap with both user positives and user negatives
+    % Reject overlap with both user positives and user negatives. User-labeled
+    % background boxes are also protected because the user may have placed them
+    % around informative hard negatives.
     Cblock = [Cpos; CnegUser];
     if isempty(Cblock)
         Bblock = zeros(0,4);
@@ -174,7 +180,8 @@ P.imageFilename = string(P.imageFilename);
 P.label = categorical(string(P.label), [opts.PositiveLabel opts.NegativeLabel]);
 P.source = categorical(string(P.source), ["user","random","classifier"]);
 
-% stable sort is nice for reproducibility
+% Stable sort is nice for reproducibility and makes CSV audit files easier to
+% diff across training runs.
 P = sortrows(P, ["imageFilename","label","source"]);
 
 if ~any(P.label == opts.PositiveLabel)
@@ -182,11 +189,19 @@ if ~any(P.label == opts.PositiveLabel)
         "No user-labeled positive regions ('%s') were found in the project.", opts.PositiveLabel);
 end
 
+desmostorm.Log.INFO(sprintf( ...
+    "Patch table summary: %d total patch(es), %d positive, %d user negative, %d random negative.", ...
+    height(P), ...
+    sum(P.label == opts.PositiveLabel), ...
+    totalNegUser, ...
+    sum(P.source == "random")));
+
 end
 
 % -------------------------------------------------------------------------
 
 function P = emptyPatchTable()
+%EMPTYPATCHTABLE Return an empty table with the canonical patch schema.
 P = table( ...
     strings(0,1), zeros(0,1), zeros(0,1), ...
     categorical(strings(0,1), ["object","background"]), ...
@@ -195,12 +210,14 @@ P = table( ...
 end
 
 function B = centerToBBox(C, s)
+%CENTERTOBBOX Convert center coordinates into fixed-size [x y w h] boxes.
     x = C(:,1) - s/2;
     y = C(:,2) - s/2;
     B = [x y repmat([s s], size(C,1), 1)];
 end
 
 function iou = bboxIoU(b1, B)
+%BBOXIOU Compute IoU between one box and an array of boxes.
     if isempty(B)
         iou = zeros(0,1);
         return

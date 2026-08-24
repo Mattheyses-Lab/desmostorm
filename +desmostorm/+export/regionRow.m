@@ -21,6 +21,7 @@ row.LabelID = string(region.LabelID);
 row.LabelSource = string(region.LabelSource);
 row.Score = sprintf('%.2f',region.Score);
 
+row.ROISource = string(region.ROISource);
 row.RegionCenter = string(sprintf('(%.1f, %.1f)',region.Center(1),region.Center(2)));
 row.RegionWidth_px = region.BoxSize;
 row.RegionHeight_px = region.BoxSize;

@@ -1,6 +1,10 @@
 function [pkgNew, out] = continueClassifierTrainingFromProject(project, classifierFile, opts)
-%continueClassifierTrainingFromProject Continue training from an existing
-% classifier package using current project labels.
+%CONTINUECLASSIFIERTRAININGFROMPROJECT Retrain an existing classifier package.
+%
+% This orchestration layer preserves the previous classifier package as
+% provenance, merges newly reviewed project labels with the older training
+% table, continues training from the saved network, and writes a new versioned
+% classifier package next to the source package by default.
 %
 % Workflow:
 %   - load existing package
@@ -30,8 +34,11 @@ function [pkgNew, out] = continueClassifierTrainingFromProject(project, classifi
         opts.ValidationFrequency (1,1) double {mustBePositive} = 50
     
         opts.Notes (1,1) string = ""
+        opts.ProgressDialog = []
     end
     
+    desmostorm.ml.updateProgressDialog(opts.ProgressDialog, ...
+        "Loading classifier package...");
     desmostorm.Log.INFO(sprintf("Loading classifier package: %s",classifierFile))
     pkgOld = desmostorm.ml.loadClassifierPackage(classifierFile);
     
@@ -46,6 +53,8 @@ function [pkgNew, out] = continueClassifierTrainingFromProject(project, classifi
     
     % Build project patch table from current project
     desmostorm.Log.INFO("Building patch table from current project...")
+    desmostorm.ml.updateProgressDialog(opts.ProgressDialog, ...
+        "Building patch table from current project...",0.05);
     patchTableProject = desmostorm.ml.buildPatchTableFromProject(project, ...
         BoxSize=pkgOld.BoxSize, ...
         NegPerPos=opts.NegPerPos, ...
@@ -56,10 +65,20 @@ function [pkgNew, out] = continueClassifierTrainingFromProject(project, classifi
     
     % Merge old training table with new project table
     desmostorm.Log.INFO("Merging patch table with existing training data...")
+    desmostorm.ml.updateProgressDialog(opts.ProgressDialog, ...
+        "Merging project labels with existing training data...",0.12);
     patchTableTraining = desmostorm.ml.mergePatchTables(pkgOld.PatchTable, patchTableProject);
+    desmostorm.Log.INFO(sprintf( ...
+        "Merged patch table: %d project patch(es), %d total training patch(es).", ...
+        height(patchTableProject),height(patchTableTraining)));
     
     desmostorm.Log.INFO("Splitting patch table into training and validation sets...")
+    desmostorm.ml.updateProgressDialog(opts.ProgressDialog, ...
+        "Splitting patches into training and validation sets...",0.18);
     [Ptrain, Pval] = desmostorm.ml.splitByImage(patchTableTraining, opts.ValFrac);
+    desmostorm.Log.INFO(sprintf( ...
+        "Patch split complete: %d training patch(es), %d validation patch(es).", ...
+        height(Ptrain),height(Pval)));
     
     trainOpts = pkgOld.TrainOpts;
     trainOpts.BaseNet = pkgOld.Net;
@@ -73,6 +92,8 @@ function [pkgNew, out] = continueClassifierTrainingFromProject(project, classifi
     
     % netNew = desmostorm.ml.trainPatchClassifier(Ptrain, Pval, pkgOld.BoxSize, trainOpts);
 
+    desmostorm.ml.updateProgressDialog(opts.ProgressDialog, ...
+        "Continuing classifier network training...");
     netNew = desmostorm.ml.trainPatchClassifier(Ptrain, Pval, pkgOld.BoxSize, ...
         "BaseNet",trainOpts.BaseNet,...
         "ContinueTraining",trainOpts.ContinueTraining,...
@@ -81,14 +102,22 @@ function [pkgNew, out] = continueClassifierTrainingFromProject(project, classifi
         "InitialLearnRate",trainOpts.InitialLearnRate,...
         "ExecutionEnvironment",trainOpts.ExecutionEnvironment,...
         "Augment",trainOpts.Augment,...
-        "ValidationFrequency",trainOpts.ValidationFrequency);
+        "ValidationFrequency",trainOpts.ValidationFrequency, ...
+        "ProgressDialog",opts.ProgressDialog);
     
     propOpts = pkgOld.PropOpts;
     propOpts.PositiveClass = opts.PositiveLabel;
+    if ~isfield(propOpts,"CandidateMode")
+        propOpts.CandidateMode = "grid";
+    elseif string(propOpts.CandidateMode) == "cluster"
+        propOpts.CandidateMode = "ClusterCentroid";
+    end
     
     [nextVersion, stem] = desmostorm.ml.nextClassifierVersion(saveDir, baseName);
     
     desmostorm.Log.INFO("Packaging classifier and saving files...")
+    desmostorm.ml.updateProgressDialog(opts.ProgressDialog, ...
+        "Packaging classifier and saving files...");
     pkgNew = desmostorm.ml.makeClassifierPackage( ...
         netNew, pkgOld.BoxSize, trainOpts, propOpts, patchTableTraining, ...
         PositiveClass=opts.PositiveLabel, ...
@@ -105,6 +134,8 @@ function [pkgNew, out] = continueClassifierTrainingFromProject(project, classifi
     desmostorm.Log.INFO(sprintf("Saved project patch table: %s",projectPatchOut))
     writetable(patchTableTraining, trainingPatchOut);
     desmostorm.Log.INFO(sprintf("Saved training patch table: %s",trainingPatchOut))
+    desmostorm.ml.updateProgressDialog(opts.ProgressDialog, ...
+        "Classifier retraining complete.",1);
     
     out = struct();
     out.ClassifierFile = string(classifierOut);

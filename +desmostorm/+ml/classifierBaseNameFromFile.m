@@ -1,7 +1,13 @@
 function stem = classifierBaseNameFromFile(classifierFile)
-%classifierBaseNameFromFile Extract base model name from classifier filename.
+%CLASSIFIERBASENAMEFROMFILE Extract the base model name from a package file.
 %
-% classifier_myModel_v003.mat -> myModel
+% Classifier packages are versioned as classifier_<base>_v###.mat. Continued
+% training uses this helper to keep writing new versions under the same base
+% name.
+%
+% Example
+% -------
+%   classifier_myModel_v003.mat -> myModel
 
     arguments
         classifierFile {mustBeTextScalar}
@@ -9,6 +15,8 @@ function stem = classifierBaseNameFromFile(classifierFile)
     
     [~, name, ~] = fileparts(string(classifierFile));
     
+    % Require the expected package naming convention so versioning stays
+    % predictable and accidental input files fail early.
     tok = regexp(name, "^classifier_(.+)_v\d+$", "tokens", "once");
     if isempty(tok)
         error("classifierBaseNameFromFile:BadName", ...

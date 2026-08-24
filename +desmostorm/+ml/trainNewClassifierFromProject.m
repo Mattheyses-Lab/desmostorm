@@ -1,6 +1,10 @@
 function [pkg, out] = trainNewClassifierFromProject(project, opts)
-%trainNewClassifierFromProject Build patch table from current project, train
-% a fresh classifier from pretrained backbone, and save package + patch tables.
+%TRAINNEWCLASSIFIERFROMPROJECT Train and save a new patch classifier package.
+%
+% This is the GUI-facing orchestration layer for initial classifier training.
+% It converts reviewed project regions into a patch table, splits that table
+% into train/validation subsets, trains a transfer-learning classifier, then
+% saves a versioned classifier package and CSV audit tables.
 %
 % Outputs
 % -------
@@ -31,12 +35,17 @@ function [pkg, out] = trainNewClassifierFromProject(project, opts)
         opts.ValidationFrequency (1,1) double {mustBePositive} = 50
     
         opts.Notes (1,1) string = ""
+        opts.ProgressDialog = []
     end
     
+    desmostorm.ml.updateProgressDialog(opts.ProgressDialog, ...
+        "Preparing classifier training...");
     matlabx.utils.files.ensureDir(opts.SaveDir);
     
     % Build current project patch table
     desmostorm.Log.INFO("Building patch table from current project...")
+    desmostorm.ml.updateProgressDialog(opts.ProgressDialog, ...
+        "Building patch table from current project...",0.05);
     patchTableProject = desmostorm.ml.buildPatchTableFromProject(project, ...
         BoxSize=opts.BoxSize, ...
         NegPerPos=opts.NegPerPos, ...
@@ -47,9 +56,17 @@ function [pkg, out] = trainNewClassifierFromProject(project, opts)
     
     % For fresh training, project table == training table
     patchTableTraining = patchTableProject;
+    desmostorm.Log.INFO(sprintf( ...
+        "Patch table built: %d patch(es) from current project.", ...
+        height(patchTableProject)));
     
     desmostorm.Log.INFO("Splitting patch table into training and validation sets...")
+    desmostorm.ml.updateProgressDialog(opts.ProgressDialog, ...
+        "Splitting patches into training and validation sets...",0.15);
     [Ptrain, Pval] = desmostorm.ml.splitByImage(patchTableTraining, opts.ValFrac);
+    desmostorm.Log.INFO(sprintf( ...
+        "Patch split complete: %d training patch(es), %d validation patch(es).", ...
+        height(Ptrain),height(Pval)));
     
     % Training options
     trainOpts = struct;
@@ -63,6 +80,8 @@ function [pkg, out] = trainNewClassifierFromProject(project, opts)
     trainOpts.ValidationFrequency = opts.ValidationFrequency;
     
     % Train the classifier
+    desmostorm.ml.updateProgressDialog(opts.ProgressDialog, ...
+        "Training classifier network...");
     net = desmostorm.ml.trainPatchClassifier(Ptrain, Pval, opts.BoxSize, ...
         "BaseNet", trainOpts.BaseNet, ...
         "ContinueTraining", trainOpts.ContinueTraining, ...
@@ -71,7 +90,8 @@ function [pkg, out] = trainNewClassifierFromProject(project, opts)
         "InitialLearnRate", trainOpts.InitialLearnRate, ...
         "ExecutionEnvironment", trainOpts.ExecutionEnvironment, ...
         "Augment", trainOpts.Augment, ...
-        "ValidationFrequency", trainOpts.ValidationFrequency);
+        "ValidationFrequency", trainOpts.ValidationFrequency, ...
+        "ProgressDialog", opts.ProgressDialog);
     
     % Proposal options
     propOpts = struct;
@@ -81,12 +101,17 @@ function [pkg, out] = trainNewClassifierFromProject(project, opts)
     propOpts.NmsIoU = 0.2;
     propOpts.BatchSize = 64;
     propOpts.PositiveClass = opts.PositiveLabel;
+    propOpts.CandidateMode = "grid";
     
     % Determine version number for this iteration
+    desmostorm.ml.updateProgressDialog(opts.ProgressDialog, ...
+        "Preparing classifier package filenames...");
     [nextVersion, stem] = desmostorm.ml.nextClassifierVersion(opts.SaveDir, opts.BaseName);
     
     % Package everything for saving
     desmostorm.Log.INFO("Packaging classifier and saving files...")
+    desmostorm.ml.updateProgressDialog(opts.ProgressDialog, ...
+        "Packaging classifier and saving files...");
     pkg = desmostorm.ml.makeClassifierPackage( ...
         net, opts.BoxSize, trainOpts, propOpts, patchTableTraining, ...
         PositiveClass=opts.PositiveLabel, ...
@@ -105,6 +130,8 @@ function [pkg, out] = trainNewClassifierFromProject(project, opts)
     desmostorm.Log.INFO(sprintf("Saved project patch table: %s",projectPatchFile))
     writetable(patchTableTraining, trainingPatchFile);
     desmostorm.Log.INFO(sprintf("Saved training patch table: %s",trainingPatchFile))
+    desmostorm.ml.updateProgressDialog(opts.ProgressDialog, ...
+        "Classifier training complete.",1);
     
     % Collect struct output
     out = struct();

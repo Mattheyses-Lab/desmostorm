@@ -1,10 +1,12 @@
 function T = mergePatchTables(Told, Tnew, opts)
-%mergePatchTables Merge old and new patch tables, with new rows taking precedence.
+%MERGEPATCHTABLES Merge old and new patch tables, with new rows taking precedence.
 %
 % Duplicate identity is based on:
 %   imageFilename + centerX + centerY
 %
 % If the same patch appears in both tables, the row in Tnew wins.
+% This supports retraining: labels reviewed in the current project should
+% override stale labels from a previously saved classifier package.
 
     arguments
         Told table
@@ -21,7 +23,8 @@ function T = mergePatchTables(Told, Tnew, opts)
         return
     end
     
-    % Ensure common required vars exist
+    % Ensure common required vars exist before doing type harmonization. Missing
+    % core columns mean the input is not a valid desmostorm patch table.
     req = ["imageFilename","centerX","centerY","label"];
     for v = req
         if ~ismember(v, string(Told.Properties.VariableNames))
@@ -32,14 +35,16 @@ function T = mergePatchTables(Told, Tnew, opts)
         end
     end
     
-    % Normalize types
+    % Normalize types so identity keys and vertical concatenation behave
+    % predictably even if older CSV/MAT inputs used slightly different storage.
     Told.imageFilename = string(Told.imageFilename);
     Tnew.imageFilename = string(Tnew.imageFilename);
     
     if ~iscategorical(Told.label), Told.label = categorical(Told.label); end
     if ~iscategorical(Tnew.label), Tnew.label = categorical(Tnew.label); end
     
-    % Union categories
+    % Union categories so categorical label columns can concatenate without
+    % dropping classes that only appear in one input table.
     allCats = union(categories(Told.label), categories(Tnew.label));
     Told.label = categorical(string(Told.label), allCats);
     Tnew.label = categorical(string(Tnew.label), allCats);
@@ -59,7 +64,7 @@ function T = mergePatchTables(Told, Tnew, opts)
     % Match column order
     Tnew = Tnew(:, Told.Properties.VariableNames);
     
-    % Build keys
+    % Build stable duplicate keys after type normalization.
     oldKey = makePatchKeys(Told, opts.CenterPrecision);
     newKey = makePatchKeys(Tnew, opts.CenterPrecision);
     
@@ -70,6 +75,7 @@ function T = mergePatchTables(Told, Tnew, opts)
 end
 
 function key = makePatchKeys(T, prec)
+%MAKEPATCHKEYS Build row identity keys from image path and rounded center.
     fmt = "%." + string(prec) + "f";
     n = height(T);
     key = strings(n,1);
@@ -82,6 +88,7 @@ function key = makePatchKeys(T, prec)
 end
 
 function col = defaultColumnLike(exampleCol, n)
+%DEFAULTCOLUMNLIKE Create a missing table column compatible with exampleCol.
     if isstring(exampleCol)
         col = strings(n,1);
     elseif iscategorical(exampleCol)

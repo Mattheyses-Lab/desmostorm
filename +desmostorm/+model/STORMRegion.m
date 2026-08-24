@@ -30,6 +30,7 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
             'Width',NaN,...             % width of the rectangle (px)
             'Height',NaN,...            % height of the rectangle (px)
             'RotationAngle',NaN)        % CCW rotation angle of the rectangle (deg)
+        ROISource (1,1) string = "none"
         % Linescan measurement results
         LinescanResults (:,1) desmostorm.analysis.PeaksData = desmostorm.analysis.PeaksData.empty()
     end
@@ -75,9 +76,15 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
     %% Public helpers (update results)
     methods
 
-        function updateROI(obj,data)
+        function updateROI(obj,data,opts)
+            arguments
+                obj (1,1) desmostorm.model.STORMRegion
+                data (1,1) struct
+                opts.Source (1,1) string = "user"
+            end
             % Update the region linescan properties with the values in data
             obj.ROI = data;
+            obj.ROISource = opts.Source;
         end
 
         function updateLinescanResults(obj,data)
@@ -93,6 +100,7 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
         function resetROI(obj)
             % reset the linescan ROI params
             obj.ROI = desmostorm.model.STORMRegion.ROITemplate();
+            obj.ROISource = "none";
             % also reset linescan results
             obj.resetLinescanResults();
         end
@@ -182,6 +190,7 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
                 'Label';...
                 'LabelSource';...
                 'Score';...
+                'ROISource';...
                 'Region center (x,y)';...
                 'Region width';...
                 'Region height';...
@@ -195,6 +204,7 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
                 char(obj.LabelID),...
                 char(obj.LabelSource),...
                 sprintf('%.2f',obj.Score),...
+                char(obj.ROISource),...
                 sprintf('(%.1f, %.1f)',obj.Center(1),obj.Center(2)),...
                 sprintf('%i px',obj.BoxSize),...
                 sprintf('%i px',obj.BoxSize),...
@@ -283,6 +293,7 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
             R.Center        = obj.Center;
             R.BoxSize       = obj.BoxSize;
             R.ROI           = obj.ROI;
+            R.ROISource     = obj.ROISource;
             R.LabelID       = obj.LabelID;
             R.LabelSource   = obj.LabelSource;
             R.Score         = obj.Score;
@@ -321,6 +332,12 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
                 if isfield(R,'ROI') && ~isempty(R.ROI)
                     reg.ROI = R.ROI;
                 end
+
+                if isfield(R,'ROISource') && ~isempty(R.ROISource)
+                    reg.ROISource = string(R.ROISource);
+                elseif desmostorm.model.STORMRegion.hasValidROI(reg.ROI)
+                    reg.ROISource = "unknown";
+                end
         end
 
         function T = SummaryTableTemplate()
@@ -343,6 +360,19 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
                 'Width',NaN,...             % width of the rectangle (px)
                 'Height',NaN,...            % height of the rectangle (px)
                 'RotationAngle',NaN);       % CCW rotation angle of the rectangle (deg)
+        end
+
+    end
+
+    methods (Static, Access=private)
+
+        function tf = hasValidROI(ROI)
+            required = ["CenterX","CenterY","Width","Height","RotationAngle"];
+            tf = isstruct(ROI) && all(isfield(ROI,cellstr(required)));
+            if tf
+                vals = [ROI.CenterX,ROI.CenterY,ROI.Width,ROI.Height,ROI.RotationAngle];
+                tf = all(isfinite(vals));
+            end
         end
 
     end

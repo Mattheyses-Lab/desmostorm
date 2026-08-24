@@ -314,15 +314,52 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
         end
 
         % process all Regions (compute and analyze linescans from drawn ROIs)
-        function autofitAllRegionROIs(obj, config)
+        function summary = autofitAllRegionROIs(obj, config, opts)
+            arguments
+                obj (1,1) desmostorm.model.STORMProject
+                config desmostorm.config.RunConfig
+                opts.ProgressDialog = []
+            end
+
             % get Image array
             arr = obj.ImageArray;
             % return if empty
+            summary = struct("Attempted",0,"Succeeded",0,"Failed",0);
             if isempty(arr), return; end
-            % otherwise, process each image
+
+            total = 0;
             for i = 1:numel(arr)
-                arr(i).autofitAllRegionROIs(config);
+                total = total + numel(arr(i).RegionArray);
             end
+            if total == 0, return; end
+
+            % Update the GUI-owned progress dialog between regions. Each
+            % region-level fit can still update the same dialog with stage
+            % details while it is running.
+            for i = 1:numel(arr)
+                regs = arr(i).RegionArray;
+                for j = 1:numel(regs)
+                    summary.Attempted = summary.Attempted + 1;
+                    obj.updateAutofitProgress(opts.ProgressDialog, ...
+                        sprintf("Fitting ROI %d/%d: %s",summary.Attempted,total,regs(j).Name), ...
+                        (summary.Attempted - 1) / total);
+
+                    ok = arr(i).autofitRegionROI(regs(j),config, ...
+                        "DebugOutput",false);
+                    if ok
+                        summary.Succeeded = summary.Succeeded + 1;
+                    else
+                        summary.Failed = summary.Failed + 1;
+                    end
+                    obj.updateAutofitProgress(opts.ProgressDialog, ...
+                        sprintf("Fitting ROI %d/%d: %s",summary.Attempted,total,regs(j).Name), ...
+                        summary.Attempted / total);
+                end
+            end
+
+            obj.updateAutofitProgress(opts.ProgressDialog, ...
+                sprintf("ROI auto-fit complete: %d/%d succeeded.",summary.Succeeded,total), ...
+                1);
         end
 
     end
@@ -796,6 +833,19 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
     end
 
     methods (Access=private)
+
+        function updateAutofitProgress(~,h,msg,value)
+        %UPDATEAUTOFITPROGRESS Best-effort progress feedback for GUI callers.
+            if isempty(h), return; end
+
+            try
+                h.Message = msg;
+                h.Indeterminate = "off";
+                h.Value = value;
+                drawnow limitrate
+            catch
+            end
+        end
 
         function P = toStruct(obj, settings)
             % Project meta

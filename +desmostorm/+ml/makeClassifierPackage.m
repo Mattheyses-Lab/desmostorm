@@ -1,5 +1,9 @@
 function pkg = makeClassifierPackage(net, boxSize, trainOpts, propOpts, patchTable, opts)
-%makeClassifierPackage Create classifier package struct for saving/loading.
+%MAKECLASSIFIERPACKAGE Assemble a versioned classifier package struct.
+%
+% The package intentionally keeps the trained network, training settings,
+% proposal settings, and patch table together. That makes each saved .mat file
+% a portable unit that can be applied by downstream users and audited later.
 
     arguments
         net
@@ -14,6 +18,8 @@ function pkg = makeClassifierPackage(net, boxSize, trainOpts, propOpts, patchTab
         opts.Version (1,1) string = "1.0"
     end
     
+    % Keep top-level fields simple; packages are saved as a single struct so
+    % future schema migration can happen in loadClassifierPackage if needed.
     pkg = struct();
     pkg.Version = opts.Version;
     pkg.Net = net;
