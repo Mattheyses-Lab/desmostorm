@@ -19,5 +19,15 @@ function pkg = loadClassifierPackage(filename)
     end
     
     pkg = S.ClassifierPackage;
+
+    % If the package includes materialized patches, attach the patch root to
+    % table metadata so patchDatastore can resolve relative patch filenames in
+    % future package formats. Current packages store absolute patch filenames,
+    % so this is mostly a compatibility hook.
+    if isfield(pkg,"PatchStore") && isstruct(pkg.PatchStore) && ...
+            isfield(pkg.PatchStore,"Root") && isfield(pkg,"PatchTable") && ...
+            istable(pkg.PatchTable)
+        pkg.PatchTable.Properties.UserData.PatchRoot = string(pkg.PatchStore.Root);
+    end
     
 end

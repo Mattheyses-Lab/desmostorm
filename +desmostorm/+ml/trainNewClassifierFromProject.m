@@ -107,6 +107,24 @@ function [pkg, out] = trainNewClassifierFromProject(project, opts)
     desmostorm.ml.updateProgressDialog(opts.ProgressDialog, ...
         "Preparing classifier package filenames...");
     [nextVersion, stem] = desmostorm.ml.nextClassifierVersion(opts.SaveDir, opts.BaseName);
+
+    % Build filenames before packaging so the materialized patch folder can sit
+    % next to the classifier MAT-file using the same versioned stem.
+    classifierFile = fullfile(opts.SaveDir, sprintf("classifier_%s_v%03d.mat", stem, nextVersion));
+    projectPatchFile = fullfile(opts.SaveDir, sprintf("patchTable_%s_v%03d_project.csv", stem, nextVersion));
+    trainingPatchFile = fullfile(opts.SaveDir, sprintf("patchTable_%s_v%03d_training.csv", stem, nextVersion));
+    patchDir = fullfile(opts.SaveDir, sprintf("classifier_%s_v%03d_patches", stem, nextVersion));
+    manifestFile = fullfile(patchDir,"patch_manifest.csv");
+
+    % Materialize the exact training table used for this classifier version.
+    % Future continued-training runs can then read these patches even if the
+    % original source images are moved.
+    desmostorm.ml.updateProgressDialog(opts.ProgressDialog, ...
+        "Materializing classifier training patches...");
+    [patchTableTraining,patchStore] = desmostorm.ml.materializePatchTable( ...
+        patchTableTraining,patchDir,opts.BoxSize, ...
+        "ManifestFile",manifestFile, ...
+        "ProgressDialog",opts.ProgressDialog);
     
     % Package everything for saving
     desmostorm.Log.INFO("Packaging classifier and saving files...")
@@ -116,12 +134,8 @@ function [pkg, out] = trainNewClassifierFromProject(project, opts)
         net, opts.BoxSize, trainOpts, propOpts, patchTableTraining, ...
         PositiveClass=opts.PositiveLabel, ...
         SourceModel="", ...
-        Notes=opts.Notes);
-    
-    % Build filenames
-    classifierFile = fullfile(opts.SaveDir, sprintf("classifier_%s_v%03d.mat", stem, nextVersion));
-    projectPatchFile = fullfile(opts.SaveDir, sprintf("patchTable_%s_v%03d_project.csv", stem, nextVersion));
-    trainingPatchFile = fullfile(opts.SaveDir, sprintf("patchTable_%s_v%03d_training.csv", stem, nextVersion));
+        Notes=opts.Notes, ...
+        PatchStore=patchStore);
     
     % Save files
     desmostorm.ml.saveClassifierPackage(classifierFile, pkg);

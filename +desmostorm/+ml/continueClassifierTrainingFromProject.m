@@ -114,6 +114,23 @@ function [pkgNew, out] = continueClassifierTrainingFromProject(project, classifi
     end
     
     [nextVersion, stem] = desmostorm.ml.nextClassifierVersion(saveDir, baseName);
+
+    classifierOut = fullfile(saveDir, sprintf("classifier_%s_v%03d.mat", stem, nextVersion));
+    projectPatchOut = fullfile(saveDir, sprintf("patchTable_%s_v%03d_project.csv", stem, nextVersion));
+    trainingPatchOut = fullfile(saveDir, sprintf("patchTable_%s_v%03d_training.csv", stem, nextVersion));
+    patchDir = fullfile(saveDir, sprintf("classifier_%s_v%03d_patches", stem, nextVersion));
+    manifestFile = fullfile(patchDir,"patch_manifest.csv");
+
+    % Save/copy the exact merged training table as cropped patch files for this
+    % new package version. Rows inherited from an older materialized package can
+    % be copied from their patchFilename; newly reviewed rows are cropped from
+    % the current project images.
+    desmostorm.ml.updateProgressDialog(opts.ProgressDialog, ...
+        "Materializing classifier training patches...");
+    [patchTableTraining,patchStore] = desmostorm.ml.materializePatchTable( ...
+        patchTableTraining,patchDir,pkgOld.BoxSize, ...
+        "ManifestFile",manifestFile, ...
+        "ProgressDialog",opts.ProgressDialog);
     
     desmostorm.Log.INFO("Packaging classifier and saving files...")
     desmostorm.ml.updateProgressDialog(opts.ProgressDialog, ...
@@ -122,11 +139,8 @@ function [pkgNew, out] = continueClassifierTrainingFromProject(project, classifi
         netNew, pkgOld.BoxSize, trainOpts, propOpts, patchTableTraining, ...
         PositiveClass=opts.PositiveLabel, ...
         SourceModel=string(classifierFile), ...
-        Notes=opts.Notes);
-    
-    classifierOut = fullfile(saveDir, sprintf("classifier_%s_v%03d.mat", stem, nextVersion));
-    projectPatchOut = fullfile(saveDir, sprintf("patchTable_%s_v%03d_project.csv", stem, nextVersion));
-    trainingPatchOut = fullfile(saveDir, sprintf("patchTable_%s_v%03d_training.csv", stem, nextVersion));
+        Notes=opts.Notes, ...
+        PatchStore=patchStore);
     
     desmostorm.ml.saveClassifierPackage(classifierOut, pkgNew);
     desmostorm.Log.INFO(sprintf("Saved classifier package: %s",classifierOut))

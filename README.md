@@ -137,25 +137,59 @@ The training pipeline also samples random background patches from images that
 contain positive examples. Random negatives are rejected if they overlap too
 strongly with user-labeled regions.
 
+For a useful first classifier, include both positives and negatives. A project
+with only positive labels can still train because DesmoSTORM adds random
+background negatives, but those negatives are often too easy. The classifier may
+show high training accuracy while still producing many false positives on
+plaque-like fragments, neighboring structures, edge junk, or bad centers.
+
+The most effective workflow is iterative hard-negative mining:
+
+1. Label representative `object` regions.
+2. Label obvious `background` regions, especially structures that look almost
+   like real objects but should not be detected.
+3. Train a classifier.
+4. Run the classifier on images.
+5. Mark correct proposals, adjust centers if needed, and label false positives
+   as `background`.
+6. Continue training with the reviewed proposals.
+
 ### Train A New Classifier
 
 1. Open or create a project.
 2. Load training images.
-3. Pick and label representative `object` and `background` regions.
-4. Select **Run > Train New Classifier...**.
-5. Choose training parameters and wait for training to finish.
+3. Pick and label representative `object` regions.
+4. Pick and label representative `background` regions, including hard negatives
+   that resemble plaques but should not be detected.
+5. Select **Run > Train New Classifier...**.
+6. Choose training parameters and wait for training to finish.
 
 Dialog parameters:
 
 - **Classifier name**: base name used when saving the classifier. Spaces are not allowed.
-- **MaxEpochs**: number of training epochs.
-- **InitialLearnRate**: optimizer learning rate.
-- **IoUMax**: maximum allowed overlap for random negative patches.
-- **MiniBatchSize**: number of patches per training batch.
+- **MaxEpochs**: number of passes through the training patch table. More epochs
+  can help small datasets, but very high values can overfit.
+- **InitialLearnRate**: optimizer learning rate. Larger values adapt faster;
+  smaller values are more conservative.
+- **IoUMax**: maximum allowed overlap for random negative patches. Lower values
+  keep random negatives farther from user-labeled boxes.
+- **ValidationFrequency**: number of training iterations between validation
+  checks. This is measured in mini-batch iterations, not epochs. For small
+  datasets, a value of `50` may validate only a few times.
+- **MiniBatchSize**: number of patches per training batch. Larger batches can be
+  faster on suitable hardware but require more memory.
 
 Fresh training starts from pretrained `resnet18`, replaces the classification
 head for the two labels, crops project regions at the configured box size, and
 resizes patches to the network input size.
+
+Suggested starting point:
+
+- Use `MaxEpochs=5-15`.
+- Use `InitialLearnRate=1e-4` to `3e-4`.
+- Use a smaller `ValidationFrequency` when the dataset is small.
+- Do not judge success by training accuracy alone. Proposal precision after
+  review is usually more informative.
 
 ### Retrain An Existing Classifier
 
@@ -168,6 +202,37 @@ Continued training loads the previous classifier package, builds a new patch
 table from the current project, merges it with the package's stored training
 table, and saves the result as the next classifier version.
 
+Use continued training after reviewing classifier proposals. This is where false
+positives become valuable: label them as `background`, keep or correct true
+objects, and retrain. For continued training, smaller updates are usually safer:
+
+- Use `MaxEpochs=3-8`.
+- Use `InitialLearnRate=1e-5` to `1e-4`.
+- Keep validation frequent enough to see whether the new labels are helping.
+
+Repeated continued training is useful, but it can become history-dependent if
+each round adds only a few new examples. In that case, retrain the package from
+scratch using the accumulated patch table.
+
+### Retrain From Scratch
+
+Use **Run > Retrain Existing Classifier From Scratch...** when you have a
+classifier package with a good accumulated patch table but want to rebuild the
+network cleanly. This workflow:
+
+1. Loads the selected classifier package.
+2. Uses the package's accumulated training patch table.
+3. Initializes a fresh `resnet18` transfer-learning model.
+4. Splits the accumulated table into training and validation sets.
+5. Trains a new network without reusing the old network weights.
+6. Saves the result as the next classifier version.
+7. Materializes the training patches into the new version's patch folder.
+
+This is a good cleanup step after several rounds of proposal review and
+continued training. It keeps the curated examples but removes dependence on the
+old optimization history. If the source package is not already materialized,
+the original image files referenced by its patch table must still be available.
+
 ### Apply A Classifier
 
 1. Open a project and load images.
@@ -177,6 +242,10 @@ table, and saves the result as the next classifier version.
 
 Dialog parameters:
 
+- **CandidateMode**: how candidate patch centers are generated.
+  `grid` scans the full image on a regular grid. `ClusterCentroid` evaluates
+  cluster centroids from detected puncta. `ClusterArea` samples centers inside
+  cluster areas.
 - **Stride**: spacing, in pixels, between sliding-window patch centers. Smaller values search more densely but run slower.
 - **ScoreThreshold**: minimum positive-class score required to keep a proposal.
 - **NmsIoU**: non-maximum suppression overlap threshold used to remove duplicate proposals.
@@ -186,6 +255,11 @@ Running a classifier removes existing regions on each processed image and adds
 new proposal regions with `LabelID="unlabeled"` and
 `LabelSource="classifier"`. Review and relabel those proposals before using
 them as training examples.
+
+If false positives dominate, raise `ScoreThreshold`, add hard-negative
+`background` labels, then continue training. If true objects are missed, lower
+`ScoreThreshold`, use a denser candidate mode or smaller `Stride`, and add more
+representative positive examples.
 
 ### Classifier Files
 
@@ -198,8 +272,8 @@ classifier_<name>_v001.mat
 
 The MAT-file contains a `ClassifierPackage` struct with the trained network,
 box size, training options, proposal defaults, the merged patch table, positive
-class name, creation time, optional source model, and notes. Companion CSV
-files are saved alongside the classifier:
+class name, creation time, optional source model, notes, and patch-store
+metadata. Companion CSV files are saved alongside the classifier:
 
 ```text
 patchTable_<name>_v001_project.csv
@@ -208,6 +282,29 @@ patchTable_<name>_v001_training.csv
 
 The `project` table records patches from the current project. The `training`
 table records the full table used to train that classifier version.
+
+New classifier packages also write a patch folder next to the classifier:
+
+```text
+classifier_<name>_v001_patches/
+```
+
+That folder contains cropped training patch TIFFs plus `patch_manifest.csv`.
+The package's training patch table includes `patchFilename`, so continued
+training can read those materialized patches instead of requiring the original
+training images. Applying a classifier only requires the classifier package and
+the images you want to analyze.
+
+Older classifier packages may only contain patch metadata that points back to
+the original source images. To materialize patches for an existing package from
+the MATLAB Command Window:
+
+```matlab
+desmostorm.ml.materializeClassifierPatches("assets/ml/classifier_name_v001.mat")
+```
+
+This updates the package with a patch store and writes the cropped training
+patches next to the classifier file.
 
 ## Setup Details
 

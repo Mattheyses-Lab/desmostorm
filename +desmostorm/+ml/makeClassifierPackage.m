@@ -16,6 +16,7 @@ function pkg = makeClassifierPackage(net, boxSize, trainOpts, propOpts, patchTab
         opts.SourceModel (1,1) string = ""
         opts.Notes (1,1) string = ""
         opts.Version (1,1) string = "1.0"
+        opts.PatchStore struct = struct()
     end
     
     % Keep top-level fields simple; packages are saved as a single struct so
@@ -27,6 +28,7 @@ function pkg = makeClassifierPackage(net, boxSize, trainOpts, propOpts, patchTab
     pkg.TrainOpts = trainOpts;
     pkg.PropOpts = propOpts;
     pkg.PatchTable = patchTable;
+    pkg.PatchStore = opts.PatchStore;
     pkg.PositiveClass = opts.PositiveClass;
     pkg.Created = datetime("now");
     pkg.SourceModel = opts.SourceModel;
