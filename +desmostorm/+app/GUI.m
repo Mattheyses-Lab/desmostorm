@@ -254,6 +254,9 @@ classdef GUI < handle
             obj.MenubarUI.File_Export_Measurements = uimenu(obj.MenubarUI.File_Export,'Text','Measurements (.xlsx)', 'MenuSelectedFcn',@(~,~) obj.onExportMeasurements());
             obj.MenubarUI.File_Export_SumaryPDF    = uimenu(obj.MenubarUI.File_Export,'Text','Summary PDF',          'MenuSelectedFcn',@(~,~) obj.onExportSummaryPDF());
             obj.MenubarUI.File_Export_RegionImages = uimenu(obj.MenubarUI.File_Export,'Text','Region Images (.tif)', 'MenuSelectedFcn',@(~,~) obj.onExportRegionImages());
+            obj.MenubarUI.File_Export_ImagesWithRegionBoxes = uimenu(obj.MenubarUI.File_Export, ...
+                'Text','Image + Region Boxes...', ...
+                'MenuSelectedFcn',@(~,~) obj.onExportImagesWithRegionBoxes());
 
             obj.MenubarUI.File_Export_LinescanPlot = uimenu(obj.MenubarUI.File_Export, ...
                 'Text','Linescan Plot...', ...
@@ -3209,6 +3212,24 @@ classdef GUI < handle
             try
                 [h,cleanupProgress] = obj.createExportProgressDialog("Preparing region image export..."); %#ok<ASGLU>
                 success = desmostorm.export.Exporter.exportRegionImages(obj.Project,obj.Settings, ...
+                    "ProgressDialog",h);
+                if success
+                    desmostorm.Log.INFO("Success.");
+                else
+                    desmostorm.Log.INFO("Export cancelled.");
+                end
+            catch ME
+                desmostorm.Log.EXCEPTION(ME);
+                obj.guialert("Title",'Error',"Message",ME.message,"Icon",'error');
+            end
+        end
+
+        function onExportImagesWithRegionBoxes(obj, ~, ~)
+
+            desmostorm.Log.INFO("Exporting images with region box overlays...");
+            try
+                [h,cleanupProgress] = obj.createExportProgressDialog("Preparing image region box overlay export..."); %#ok<ASGLU>
+                success = desmostorm.export.Exporter.exportImagesWithRegionBoxes(obj.Project,obj.Settings, ...
                     "ProgressDialog",h);
                 if success
                     desmostorm.Log.INFO("Success.");

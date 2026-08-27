@@ -36,6 +36,7 @@ classdef Exporter
             params = matlabx.app.ParamsDialog.prompt( ...
                 'Summary PDF export options', ...
                 {'ImageChannel','Image channel','choice',"1",cellstr(channelChoices)}, ...
+                {'ScalingMode','Image scaling','choice',"data",{"data","auto","user"}}, ...
                 {'ColorSource','Color source','choice',config.PeaksPlot.ColorSource,{"channel","manual"}}, ...
                 {'Color','Plot color','color',config.PeaksPlot.Color}, ...
                 {'AnnotationColorMode','Annotation color mode','choice',config.PeaksPlot.AnnotationColorMode,{"auto","manual"}}, ...
@@ -47,6 +48,8 @@ classdef Exporter
                 {'DistanceAnnotations','Distance annotations','choice',config.PeaksPlot.DistanceAnnotations,{"on","off"}}, ...
                 {'DistanceAnnotationsMode','Distance mode','choice',config.PeaksPlot.DistanceAnnotationsMode,{"lanes","data"}}, ...
                 {'WidthAnnotations','Width annotations','choice',config.PeaksPlot.WidthAnnotations,{"on","off"}}, ...
+                {'ROIFaceAlpha','ROI opacity','double',config.ROI.ROIFaceAlpha,@(x) x>=0 && x<=1,'ROI opacity must be between 0 and 1'}, ...
+                {'RotationAngleVisible','Angle label','choice',config.ROI.RotationAngleVisible,{"on","off"}}, ...
                 {'PageWidthInches','Page width (inches)','double',11,@(x) x>0,'PageWidthInches must be a positive number'}, ...
                 {'FontSizePoints','Font size (points)','double',8,@(x) x>0,'FontSizePoints must be a positive integer'}...
                 );
@@ -54,6 +57,8 @@ classdef Exporter
 
             if isempty(params), return; end
             params.WidthAnnotationsMode = "normal";
+            params.ScalingMode = string(params.ScalingMode);
+            params.RotationAngleVisible = matlab.lang.OnOffSwitchState(params.RotationAngleVisible);
 
             defaultName = fullfile(config.IO.DefaultFolder, [char(project.Name),'_summary.pdf']);
             [file, path] = uiputfile('*.pdf', ...
@@ -81,6 +86,16 @@ classdef Exporter
 
             result = false;
 
+            maxChannel = max(1,project.MaxSizeC);
+            channelChoices = cellstr(string(1:maxChannel));
+            options = matlabx.app.ParamsDialog.prompt( ...
+                'Region image export options', ...
+                {'Channel','Channel','choice','1',channelChoices}, ...
+                {'ScalingMode','Scaling mode','choice','data',{'data','auto','user'}});
+            desmostorm.app.focusMainFigure();
+
+            if isempty(options), return; end
+
             folderName = uigetdir(config.IO.DefaultFolder, 'Export region images');
             desmostorm.app.focusMainFigure();
 
@@ -88,7 +103,62 @@ classdef Exporter
 
             setProgressMessage(opts.ProgressDialog,'Writing region images...');
             desmostorm.export.regionImages(project, folderName, ...
+                "Channel",str2double(string(options.Channel)), ...
+                "ScalingMode",string(options.ScalingMode), ...
                 "ProgressDialog",opts.ProgressDialog);
+            result = true;
+        end
+
+        function result = exportImagesWithRegionBoxes(project,config,opts)
+            arguments
+                project (1,1) desmostorm.model.STORMProject
+                config  (1,1) desmostorm.config.Settings
+                opts.ProgressDialog = matlab.ui.dialog.ProgressDialog.empty()
+            end
+
+            result = false;
+
+            maxChannel = max(1,project.MaxSizeC);
+            channelChoices = cellstr(string(1:maxChannel));
+            options = matlabx.app.ParamsDialog.prompt( ...
+                'Image with region box overlay export options', ...
+                {'Scope','Images','choice',"active",{"active","all"}}, ...
+                {'Channel','Channel','choice',"1",channelChoices}, ...
+                {'ScalingMode','Scaling mode','choice',"data",{"data","auto","user"}}, ...
+                {'ColorMode','Box colors','choice',"label",{"label","manual"}}, ...
+                {'Color','Manual color','color',config.Box.EdgeColor}, ...
+                {'RegionNamesVisible','Region names','choice',matlab.lang.OnOffSwitchState(config.Box.ShowTitle),{"on","off"}}, ...
+                {'BoxLineWidth','Box line width','double',1,@(x) x>0,'Line width must be positive'}, ...
+                {'BoxFaceAlpha','Box opacity','double',0,@(x) x>=0 && x<=1,'Box opacity must be between 0 and 1'}, ...
+                {'Units','Units','choice',"inches",{"inches","points","pixels"}}, ...
+                {'Size','Long side size','double',7,@(x) x>0,'Size must be positive'}, ...
+                {'FontSize','Font size','double',10,@(x) x>0 && x==round(x),'FontSize must be a positive integer'}, ...
+                {'Resolution','Resolution (dpi)','double',600,@(x) x >= 150 && x <= 600,'Resolution must be between 150 and 600'});
+            desmostorm.app.focusMainFigure();
+
+            if isempty(options), return; end
+
+            options.Scope = string(options.Scope);
+            options.Channel = str2double(string(options.Channel));
+            options.ScalingMode = string(options.ScalingMode);
+            options.ColorMode = string(options.ColorMode);
+            options.RegionNamesVisible = matlab.lang.OnOffSwitchState(options.RegionNamesVisible);
+            options.Colormap = project.getChannelColormap(options.Channel);
+
+            folderName = uigetdir(config.IO.DefaultFolder, 'Export images with region box overlays');
+            desmostorm.app.focusMainFigure();
+
+            if ~isfolder(folderName), return; end
+
+            setProgressMessage(opts.ProgressDialog,'Writing image region box overlays...');
+            optionsCell = matlabx.struct.toKeyValueCell(options);
+            summary = desmostorm.export.imagesWithRegionBoxes(project,folderName, ...
+                "ProgressDialog",opts.ProgressDialog, ...
+                optionsCell{:});
+            desmostorm.Log.INFO(sprintf( ...
+                "Image + region box overlay export complete: %d exported, %d skipped.", ...
+                summary.Exported,summary.Skipped));
+
             result = true;
         end
 
@@ -181,45 +251,65 @@ classdef Exporter
             % export success indicator, false unless end of function is reached
             result = false;
 
-            % get active region
-            region = project.ActiveRegion;
-
-            % ensure project has active region
-            if isempty(region)
-                error('desmostorm:export:Exporter:NoActiveRegion','No active region')
-            end
-
             % --- get export/plot options ---
             % get options using ParamsDialog
+            maxChannel = max(1,project.MaxSizeC);
+            channelChoices = cellstr(string(1:maxChannel));
             options = matlabx.app.ParamsDialog.prompt( ...
                 'Region image with ROI overlay export options', ...
-                {'ROIFaceAlpha','ROI opacity','double',0,@(x) x>=0 && x<=1,'ROI opacity must be between 0 and 1'}, ...
+                {'Scope','Regions','choice',"active",{"active","all"}}, ...
+                {'Channel','Channel','choice',"1",channelChoices}, ...
+                {'ScalingMode','Scaling mode','choice',"data",{"data","auto","user"}}, ...
+                {'ROIFaceAlpha','ROI opacity','double',config.ROI.ROIFaceAlpha,@(x) x>=0 && x<=1,'ROI opacity must be between 0 and 1'}, ...
+                {'RotationAngleVisible','Angle label','choice',config.ROI.RotationAngleVisible,{"on","off"}}, ...
+                {'TiledSummary','Tiled summary','choice',"off",{"on","off"}}, ...
                 {'Units','Units','choice',"inches",{"inches","points","pixels"}}, ...
                 {'Size','Size','double',3,@(x) x>0,'Size must be positive'}, ...
-                {'FontSize','Font size','double',12,@(x) x>0 && x==round(x),'FontSize must be a positive integer'}, ...
+                {'FontSize','Font size','double',config.ROI.FontSize,@(x) x>0 && x==round(x),'FontSize must be a positive integer'}, ...
                 {'Resolution','Resolution (dpi)','double',600,@(x) x >= 150 && x <= 600,'Resolution must be between 150 and 600'});
 
             if isempty(options), return; end % return on cancel
 
             % get extra options (without dialog)
-            options.Colormap = config.Display.Colormap;
-            options.AutoScaleDisplayIntensity = config.Display.AutoScaleDisplayIntensity;
+            options.Channel = str2double(string(options.Channel));
+            options.Scope = string(options.Scope);
+            options.ScalingMode = string(options.ScalingMode);
+            options.RotationAngleVisible = matlab.lang.OnOffSwitchState(options.RotationAngleVisible);
+            options.TiledSummary = matlab.lang.OnOffSwitchState(options.TiledSummary);
+            options.Colormap = project.getChannelColormap(options.Channel);
+            options.ROIColor = config.ROI.ROIColor;
+            options.ROILineWidth = config.ROI.ROILineWidth;
+            options.ROIMarkerSize = config.ROI.ROIMarkerSize;
+            options.AnnotationLineColor = config.ROI.AnnotationLineColor;
+            options.AnnotationLineWidth = config.ROI.AnnotationLineWidth;
+            options.RotationAngleMode = config.ROI.RotationAngleMode;
+            options.FontColor = config.ROI.FontColor;
 
-            % --- get filename ---
-            name = region.getBaseExportName() + "_subimage-ROI-overlay";
-            defaultName = fullfile(config.IO.DefaultFolder, name);
-            [file, path] = uiputfile({'*.png'}, 'Export subimage with ROI overlay', defaultName);
+            if options.Scope == "active"
+                region = project.ActiveRegion;
+                if isempty(region)
+                    error('desmostorm:export:Exporter:NoActiveRegion','No active region')
+                end
+                exportSource = region;
+                folderTitle = 'Export active region image with ROI overlay';
+            else
+                exportSource = project;
+                folderTitle = 'Export region images with ROI overlays';
+            end
+
+            folderName = uigetdir(config.IO.DefaultFolder, folderTitle);
             desmostorm.app.focusMainFigure();
 
-            if isequal(file,0), return; end % return on cancel
-            filename = fullfile(path,file);            
+            if ~isfolder(folderName), return; end
 
-            % --- export ---
-            setProgressMessage(opts.ProgressDialog,'Writing region image...');
-            optionsCell = matlabx.struct.toKeyValueCell(options);
-            desmostorm.export.regionSubimageWithROI(region,filename, ...
+            setProgressMessage(opts.ProgressDialog,'Writing region images...');
+            optionsCell = matlabx.struct.toKeyValueCell(rmfield(options,"Scope"));
+            summary = desmostorm.export.regionSubimagesWithROI(exportSource,folderName, ...
                 "ProgressDialog",opts.ProgressDialog, ...
                 optionsCell{:});
+            desmostorm.Log.INFO(sprintf( ...
+                "Region image + ROI overlay export complete: %d exported, %d skipped.", ...
+                summary.Exported,summary.Skipped));
 
             result = true;
         end

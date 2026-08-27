@@ -7,6 +7,7 @@ arguments
     config (1,1) desmostorm.config.Settings
     opts.ProgressDialog = matlab.ui.dialog.ProgressDialog.empty()
     opts.ImageChannel (1,1) string = "1"
+    opts.ScalingMode (1,1) string {mustBeMember(opts.ScalingMode,["data","auto","user"])} = "data"
     opts.ColorSource (1,1) string {mustBeMember(opts.ColorSource,["channel","manual"])} = "channel"
     opts.Color (1,3) double = [0 0 0]
     opts.AnnotationColorMode (1,1) string {mustBeMember(opts.AnnotationColorMode,["auto","manual"])} = "auto"
@@ -17,6 +18,8 @@ arguments
     opts.DistanceAnnotationsMode (1,1) string {mustBeMember(opts.DistanceAnnotationsMode,["data","lanes"])} = "lanes"
     opts.WidthAnnotations (1,1) matlab.lang.OnOffSwitchState = "on"
     opts.WidthAnnotationsMode (1,1) string {mustBeMember(opts.WidthAnnotationsMode,["normal","hover"])} = "normal"
+    opts.ROIFaceAlpha (1,1) double = 0.1
+    opts.RotationAngleVisible (1,1) matlab.lang.OnOffSwitchState = "on"
     opts.RawLineWidth (1,1) double = 1
     opts.SmoothLineWidth (1,1) double = 2
     opts.PageWidthInches (1,1) double = 11
@@ -112,24 +115,18 @@ end
     p.Layout.Row = 1;
     p.Layout.Column = 1;
     
-    % ax = matlabx.ui.axes.ImageAxes(g, ...
-    %     'ImageData',regImageData, ...
-    %     'Name','RegionViewer', ...
-    %     'Tools',{'DrawRectangle'}, ...
-    %     'Colormap',config.Display.Colormap, ...
-    %     'FontSize', fontSizePx);
     ax = matlabx.ui.axes.ImageAxes(g, ...
         'ImageData',regImageData, ...
         'Name','RegionViewer', ...
         'Tools',{'DrawRectangle'}, ...
-        'Colormap',config.Display.Colormap, ...
+        'Colormap',project.getChannelColormap(channel), ...
         'ComponentColorMode',config.Display.ChannelColorMode, ...
         'FontSize', fontSizePx);
 
     ax.Layout.Row = 1;
     ax.Layout.Column = 2;
-    ax.Tools.DrawRectangle.RotationAngleMode = 'half-circle';
-    ax.Tools.DrawRectangle.FontSize = fontSizePx;
+    applyROISettings(ax.Tools.DrawRectangle,config.ROI,opts,fontSizePx);
+    ax.setComponentCLim(imageExportCLim(img,channel,opts.ScalingMode),channel);
 
     ax.Tools.DrawRectangle.setROIPosition(reg.ROI);
 
@@ -188,12 +185,7 @@ end
         ax.CData = Icell;
         ax.C = channel;
 
-        switch config.Display.AutoScaleDisplayIntensity
-            case true
-                ax.setComponentCLim(img.getAutoDisplayRange(channel),channel);
-            case false
-                ax.setComponentCLim(img.getDisplayRange(channel),channel);
-        end
+        ax.setComponentCLim(imageExportCLim(img,channel,opts.ScalingMode),channel);
 
         switch config.Display.ChannelColorMode
             case 'colors'
@@ -285,6 +277,38 @@ function color = resolvePlotColor(project,channel,manualColor,colorSource)
 
     colorName = project.getChannelColorName(channel);
     color = matlabx.colors.names.toRGB(char(colorName),"Palette","MATLAB");
+end
+
+function applyROISettings(tool,roiConfig,opts,fontSizePx)
+    tool.ROIColor = roiConfig.ROIColor;
+    tool.ROILineWidth = roiConfig.ROILineWidth;
+    tool.ROIFaceAlpha = opts.ROIFaceAlpha;
+    tool.ROIMarkerSize = roiConfig.ROIMarkerSize;
+    tool.AnnotationLineColor = roiConfig.AnnotationLineColor;
+    tool.AnnotationLineWidth = roiConfig.AnnotationLineWidth;
+    tool.RotationAngleMode = roiConfig.RotationAngleMode;
+    tool.RotationAngleVisible = opts.RotationAngleVisible;
+    tool.FontSize = fontSizePx;
+    tool.FontColor = roiConfig.FontColor;
+end
+
+function clim = imageExportCLim(img,channel,scalingMode)
+    switch string(scalingMode)
+        case "data"
+            clim = img.getDataRange(channel);
+        case "auto"
+            clim = img.getAutoDisplayRange(channel);
+        case "user"
+            clim = img.getDisplayRange(channel);
+    end
+
+    clim = double(clim);
+    if any(~isfinite(clim)) || clim(1) == clim(2)
+        v = clim(find(isfinite(clim),1,'first'));
+        if isempty(v), v = 0; end
+        clim = [v-0.5 v+0.5];
+    end
+    clim = sort(clim);
 end
 
 function deleteTempFiles(fileNames)
