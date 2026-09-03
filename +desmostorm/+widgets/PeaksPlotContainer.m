@@ -53,6 +53,19 @@ classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
         YLabel (1,:) char = 'Y'
     end
 
+    %% axes limits
+    properties(Dependent)
+        % x-axis limits used when XLimMode is manual
+        XLim (1,2) double
+        % x-axis limit mode; auto preserves the existing behavior
+        XLimMode (1,:) char
+    end
+
+    properties(Access=private)
+        XLim_ (1,2) double = [0 1]
+        XLimMode_ (1,:) char {mustBeMember(XLimMode_,{'auto','manual'})} = 'auto'
+    end
+
 
     %% PeaksPlot-specific appearance properties
     properties(AbortSet)
@@ -202,6 +215,7 @@ classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
             obj.MainAxes.YLabel.String  = obj.YLabel; % y-axis label text
             obj.MainAxes.FontSize       = obj.FontSize;
             obj.MainAxes.FontName       = obj.FontName;
+            obj.updateXLimits();
             obj.updateDistanceAnnotationAxes();
         end
     end
@@ -306,6 +320,14 @@ classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
 
             obj.MainAxes.YLim = lims.DisplayLim;
             obj.MainAxes.YTick = lims.Ticks;
+        end
+
+        function updateXLimits(obj)
+            if strcmp(obj.XLimMode_,'manual')
+                obj.MainAxes.XLim = obj.XLim_;
+            else
+                obj.MainAxes.XLimMode = "auto";
+            end
         end
 
         function lims = getDistanceAnnotationAxisLimits(obj)
@@ -522,6 +544,34 @@ classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
                 areaColor = color;
             else
                 areaColor = obj.PeakAreaColor;
+            end
+        end
+    end
+
+    %% x-limit accessors
+    methods
+        function v = get.XLim(obj)
+            v = obj.XLim_;
+        end
+
+        function set.XLim(obj,v)
+            validateattributes(v,{'numeric'},{'real','finite','size',[1 2],'increasing'});
+            obj.XLim_ = double(v);
+            obj.XLimMode_ = 'manual';
+            if ~isempty(obj.MainAxes) && isvalid(obj.MainAxes)
+                obj.updateXLimits();
+            end
+        end
+
+        function v = get.XLimMode(obj)
+            v = obj.XLimMode_;
+        end
+
+        function set.XLimMode(obj,v)
+            mustBeMember(v,{'auto','manual'});
+            obj.XLimMode_ = char(v);
+            if ~isempty(obj.MainAxes) && isvalid(obj.MainAxes)
+                obj.updateXLimits();
             end
         end
     end

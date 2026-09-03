@@ -2804,6 +2804,7 @@ classdef GUI < handle
             % get proposal options
             params = matlabx.app.ParamsDialog.prompt( ...
                 'Class proposal options', ...
+                {'Scope','Images','choice',"all",{"all","active"}},...
                 {'CandidateMode','CandidateMode','choice',propOpts.CandidateMode,{'grid','ClusterCentroid','ClusterArea'}},...
                 {'Stride','Stride','double',propOpts.Stride, @(x) x>=1, 'Stride must be >= 1'},...
                 {'ScoreThreshold','ScoreThreshold','double',propOpts.ScoreThreshold, @(x) x<=1 && x>=0, 'ScoreThreshold must be between 0 and 1'},...
@@ -2816,6 +2817,19 @@ classdef GUI < handle
 
             if isempty(params)
                 return
+            end
+
+            scope = string(params.Scope);
+            switch scope
+                case "active"
+                    img = obj.Project.ActiveImage;
+                    if isempty(img)
+                        desmostorm.Log.WARN("Classifier run cancelled: no active image.");
+                        return
+                    end
+                    imgs = img;
+                case "all"
+                    imgs = obj.Project.ImageArray;
             end
 
             propOpts.CandidateMode   = string(params.CandidateMode);
@@ -2846,9 +2860,11 @@ classdef GUI < handle
             % --- run ---
             N = numel(imgs);
             for i = 1:N
-                h.Message = sprintf("Running classifier on image %d/%d: %s",i,N,imgs(i).Name);
+                progressPrefix = sprintf("Image %d/%d: %s | ",i,N,imgs(i).Name);
+                h.Message = sprintf("%sRunning classifier...",progressPrefix);
                 h.Value = (i-1) / N;
                 propOpts.ProgressDialog = h;
+                propOpts.ProgressMessagePrefix = string(progressPrefix);
                 desmostorm.Log.INFO(sprintf("Running classifier on image (%i/%i): %s",i,N,imgs(i).Name));
                 imgs(i).runClassifier(net,propOpts);
             end
@@ -2979,9 +2995,13 @@ classdef GUI < handle
             % build full file path
             classifierFile = fullfile(path,file);
 
+            sourceBaseName = desmostorm.ml.classifierBaseNameFromFile(classifierFile);
+            defaultBaseName = sourceBaseName + "_scratch";
+
             % get fresh retraining options
             params = matlabx.app.ParamsDialog.prompt( ...
                 'Retrain from scratch options', ...
+                {'BaseName','New classifier name','char',char(defaultBaseName), @(x) ~contains(x,' '), 'Name cannot contain spaces'},...
                 {'MaxEpochs','MaxEpochs','double',15, @(x) x>=1, 'MaxEpochs must be >= 1'},...
                 {'InitialLearnRate','InitialLearnRate','double',0.0003, @(x) x>0, 'InitialLearnRate must be > 0'},...
                 {'ValidationFrequency','ValidationFrequency','double',50, @(x) x>=1, 'ValidationFrequency must be >= 1'},...
@@ -3003,6 +3023,7 @@ classdef GUI < handle
             % --- retrain classifier from accumulated package data ---
             desmostorm.Log.INFO(sprintf("Retraining classifier from scratch: %s",classifierFile));
             desmostorm.ml.retrainClassifierFromPackage(classifierFile, ...
+                "BaseName",             string(params.BaseName), ...
                 "MaxEpochs",            params.MaxEpochs, ...
                 "InitialLearnRate",     params.InitialLearnRate, ...
                 "ValidationFrequency",  params.ValidationFrequency, ...

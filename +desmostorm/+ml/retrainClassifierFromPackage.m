@@ -4,12 +4,14 @@ function [pkgNew,out] = retrainClassifierFromPackage(classifierFile, opts)
 %   RETRAINCLASSIFIERFROMPACKAGE(CLASSIFIERFILE) loads the accumulated patch
 %   table from an existing classifier package, initializes a fresh ResNet-18
 %   transfer-learning model, trains from that table, materializes the final
-%   patch table, and saves the result as the next package version.
+%   patch table, and saves the result as a new classifier lineage.
 %
 % This differs from continueClassifierTrainingFromProject:
 %   - no current project labels are added
 %   - the old network weights are not reused
 %   - the old package only provides the curated training dataset/provenance
+%   - BaseName defaults to "<source>_scratch", so numbering starts at v001
+%     unless that new lineage already exists in SaveDir
 
 arguments
     classifierFile (1,1) string
@@ -17,6 +19,7 @@ arguments
     opts.ValFrac (1,1) double {mustBeGreaterThan(opts.ValFrac,0), mustBeLessThan(opts.ValFrac,1)} = 0.2
 
     opts.SaveDir (1,1) string = ""
+    opts.BaseName (1,1) string = ""
     opts.MaxEpochs (1,1) double {mustBePositive} = 15
     opts.MiniBatchSize (1,1) double {mustBePositive} = 8
     opts.InitialLearnRate (1,1) double {mustBePositive} = 3e-4
@@ -49,12 +52,17 @@ else
 end
 matlabx.utils.files.ensureDir(saveDir);
 
-baseName = desmostorm.ml.classifierBaseNameFromFile(classifierFile);
+sourceBaseName = desmostorm.ml.classifierBaseNameFromFile(classifierFile);
+if strlength(opts.BaseName) == 0
+    baseName = sourceBaseName + "_scratch";
+else
+    baseName = opts.BaseName;
+end
 patchTableTraining = pkgOld.PatchTable;
 
 desmostorm.Log.INFO(sprintf( ...
-    "Retraining fresh classifier from %d accumulated patch(es).", ...
-    height(patchTableTraining)));
+    "Retraining fresh classifier '%s' from %d accumulated patch(es).", ...
+    baseName,height(patchTableTraining)));
 
 desmostorm.ml.updateProgressDialog(opts.ProgressDialog, ...
     "Splitting accumulated patches into training and validation sets...",0.10);

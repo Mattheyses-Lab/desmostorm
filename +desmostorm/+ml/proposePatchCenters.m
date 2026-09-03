@@ -21,10 +21,11 @@ function [centers, scores] = proposePatchCenters(imgOrPath, net, opts)
         opts.BatchSize (1,1) double {mustBePositive} = 64
         opts.PositiveClass (1,1) string = "object"
         opts.CandidateMode (1,1) string {mustBeMember(opts.CandidateMode,["grid","cluster","ClusterCentroid","ClusterArea"])} = "grid"
+        opts.ProgressMessagePrefix (1,1) string = ""
         opts.ProgressDialog = []
     end
 
-    desmostorm.ml.updateProgressDialog(opts.ProgressDialog, ...
+    updateProgress(opts.ProgressDialog,opts.ProgressMessagePrefix, ...
         "Preparing classifier proposal generation...");
 
     % Network input size (e.g. [224 224])
@@ -58,7 +59,7 @@ function [centers, scores] = proposePatchCenters(imgOrPath, net, opts)
     end
     
     candidateMode = normalizeCandidateMode(opts.CandidateMode);
-    desmostorm.ml.updateProgressDialog(opts.ProgressDialog, ...
+    updateProgress(opts.ProgressDialog,opts.ProgressMessagePrefix, ...
         "Finding classifier proposal candidates...");
     switch candidateMode
         case "grid"
@@ -96,7 +97,7 @@ function [centers, scores] = proposePatchCenters(imgOrPath, net, opts)
     
     scoresAll = zeros(M,1);
     
-    desmostorm.ml.updateProgressDialog(opts.ProgressDialog, ...
+    updateProgress(opts.ProgressDialog,opts.ProgressMessagePrefix, ...
         sprintf("Scoring %d classifier proposal candidate(s)...",M),0);
 
     bs = opts.BatchSize;
@@ -134,7 +135,7 @@ function [centers, scores] = proposePatchCenters(imgOrPath, net, opts)
             scoresAll(idx) = double(string(Y) == opts.PositiveClass);
         end
 
-        desmostorm.ml.updateProgressDialog(opts.ProgressDialog, ...
+        updateProgress(opts.ProgressDialog,opts.ProgressMessagePrefix, ...
             sprintf("Scoring classifier proposals (%d/%d)...",k2,M), ...
             k2 / M);
 
@@ -154,7 +155,7 @@ function [centers, scores] = proposePatchCenters(imgOrPath, net, opts)
     end
     
     B = centerToBBox(Ck, s);
-    desmostorm.ml.updateProgressDialog(opts.ProgressDialog, ...
+    updateProgress(opts.ProgressDialog,opts.ProgressMessagePrefix, ...
         "Suppressing overlapping classifier proposals...");
     keepIdx = nmsFixedBoxes(B, Sk, opts.NmsIoU);
     
@@ -191,6 +192,17 @@ function C = keepCentersInsideBounds(C,xMin,xMax,yMin,yMax)
         C(:,1) >= xMin & C(:,1) <= xMax & ...
         C(:,2) >= yMin & C(:,2) <= yMax;
     C = C(keep,:);
+end
+
+function updateProgress(h,prefix,msg,value)
+    arguments
+        h = []
+        prefix (1,1) string = ""
+        msg (1,1) string = ""
+        value = []
+    end
+
+    desmostorm.ml.updateProgressDialog(h,prefix + msg,value);
 end
 
 function keepIdx = nmsFixedBoxes(B, S, iouThr)
