@@ -321,7 +321,9 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
 
             total = 0;
             for i = 1:numel(arr)
-                total = total + numel(arr(i).RegionArray);
+                regs = arr(i).RegionArray;
+                valid = arrayfun(@(r) desmostorm.model.STORMRegion.hasValidROI(r.ROI),regs);
+                total = total + nnz(valid);
             end
             if total == 0, return; end
 
@@ -329,6 +331,8 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             n = 0;
             for i = 1:numel(arr)
                 regs = arr(i).RegionArray;
+                valid = arrayfun(@(r) desmostorm.model.STORMRegion.hasValidROI(r.ROI),regs);
+                regs = regs(valid);
                 for j = 1:numel(regs)
                     n = n + 1;
                     obj.updateAutofitProgress(opts.ProgressDialog, ...

@@ -364,9 +364,10 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
 
     end
 
-    methods (Static, Access=private)
+    methods (Static)
 
         function tf = hasValidROI(ROI)
+        %HASVALIDROI True when a saved linescan ROI has finite geometry.
             required = ["CenterX","CenterY","Width","Height","RotationAngle"];
             tf = isstruct(ROI) && all(isfield(ROI,cellstr(required)));
             if tf

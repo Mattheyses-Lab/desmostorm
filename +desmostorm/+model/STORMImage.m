@@ -532,6 +532,9 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
             arr = obj.RegionArray;
             % return if empty
             if isempty(arr), return; end
+            valid = arrayfun(@(r) desmostorm.model.STORMRegion.hasValidROI(r.ROI),arr);
+            arr = arr(valid);
+            if isempty(arr), return; end
 
             % otherwise, process each region
             for i = 1:numel(arr)
@@ -550,11 +553,14 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
             end
 
             if isempty(reg), return; end
+            data = reg.ROI;
+            if ~desmostorm.model.STORMRegion.hasValidROI(data)
+                reg.resetLinescanResults();
+                return
+            end
 
             % get region CData cell
             I = obj.regionSubimageCell(reg);
-            % get linescan info
-            data = reg.ROI;
 
             % run region analyzer
             LinescanResults = desmostorm.analysis.Analyzer.analyzeRegionLinescan(I,data,config, ...
