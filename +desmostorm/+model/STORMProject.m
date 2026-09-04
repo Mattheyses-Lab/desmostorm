@@ -302,14 +302,40 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
     methods
 
         % process all Regions (compute and analyze linescans from drawn ROIs)
-        function processAll(obj, config)
+        function processAll(obj, config, opts)
+            arguments
+                obj (1,1) desmostorm.model.STORMProject
+                config desmostorm.config.RunConfig
+                opts.ProgressDialog = []
+            end
+
             % get Image array
             arr = obj.ImageArray;
             % return if empty
             if isempty(arr), return; end
-            % otherwise, process each image
+
+            total = 0;
             for i = 1:numel(arr)
-                arr(i).processAll(config);
+                total = total + numel(arr(i).RegionArray);
+            end
+            if total == 0, return; end
+
+            % otherwise, process each image and region
+            n = 0;
+            for i = 1:numel(arr)
+                regs = arr(i).RegionArray;
+                for j = 1:numel(regs)
+                    n = n + 1;
+                    obj.updateAutofitProgress(opts.ProgressDialog, ...
+                        sprintf("Analyzing region %d/%d: %s",n,total,regs(j).Name), ...
+                        (n - 1) / total);
+                    arr(i).processRegionLinescan(regs(j),config, ...
+                        "ProgressDialog",opts.ProgressDialog, ...
+                        "ProgressMessagePrefix",sprintf("Region %d/%d: ",n,total));
+                    obj.updateAutofitProgress(opts.ProgressDialog, ...
+                        sprintf("Analyzed region %d/%d: %s",n,total,regs(j).Name), ...
+                        n / total);
+                end
             end
         end
 
@@ -340,19 +366,27 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
                 regs = arr(i).RegionArray;
                 for j = 1:numel(regs)
                     summary.Attempted = summary.Attempted + 1;
+                    progressPrefix = string(sprintf( ...
+                        "Region %d/%d: %s", ...
+                        summary.Attempted,total,regs(j).Name));
                     obj.updateAutofitProgress(opts.ProgressDialog, ...
-                        sprintf("Fitting ROI %d/%d: %s",summary.Attempted,total,regs(j).Name), ...
+                        progressPrefix + newline + "Starting ROI auto-fit...", ...
                         (summary.Attempted - 1) / total);
 
                     ok = arr(i).autofitRegionROI(regs(j),config, ...
-                        "DebugOutput",false);
+                        "DebugOutput",false, ...
+                        "ProgressDialog",opts.ProgressDialog, ...
+                        "ProgressMessagePrefix",progressPrefix, ...
+                        "ProgressValueMode","none");
                     if ok
                         summary.Succeeded = summary.Succeeded + 1;
+                        finalMessage = progressPrefix + newline + "ROI auto-fit complete.";
                     else
                         summary.Failed = summary.Failed + 1;
+                        finalMessage = progressPrefix + newline + "ROI auto-fit failed.";
                     end
                     obj.updateAutofitProgress(opts.ProgressDialog, ...
-                        sprintf("Fitting ROI %d/%d: %s",summary.Attempted,total,regs(j).Name), ...
+                        finalMessage, ...
                         summary.Attempted / total);
                 end
             end

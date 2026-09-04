@@ -1,6 +1,6 @@
 classdef Analyzer
     methods (Static)
-        function out = run(I, data, rc)
+        function out = analyzeRegionLinescan(I, data, rc, opts)
             arguments
                 % image to analyze
                 I cell
@@ -9,24 +9,39 @@ classdef Analyzer
                 data (1,1) struct
                 % Analysis settings snapshot
                 rc (1,1) desmostorm.config.RunConfig
+                opts.ProgressDialog = []
+                opts.ProgressMessagePrefix (1,1) string = ""
             end
-            % check for valid ROI input -> return if invalid (i.e. if any NaNs are found)
-            if any(isnan([data.CenterX,data.CenterY,data.Width,data.Height,data.RotationAngle])), out = []; return, end
 
+            % Return quietly for invalid ROI input. This usually means a
+            % region has not had a linescan ROI placed or fitted yet.
+            if any(isnan([data.CenterX,data.CenterY,data.Width,data.Height,data.RotationAngle]))
+                out = [];
+                return
+            end
 
             out = desmostorm.analysis.PeaksData.empty();
+            nChannels = numel(I);
 
-            for i = 1:numel(I)
-                % compute the linescan
-                linescanData = desmostorm.analysis.profile.measure2D(I{i},...
-                    data.CenterX,...
-                    data.CenterY,...
-                    data.Width,...
-                    data.Height,...
-                    data.RotationAngle,...
+            for i = 1:nChannels
+                desmostorm.analysis.Analyzer.updateProgress(opts.ProgressDialog, ...
+                    sprintf("%sAnalyzing channel %d/%d...", ...
+                    opts.ProgressMessagePrefix,i,nChannels));
+
+                % Compute the rectified ROI linescan for this channel.
+                linescanData = desmostorm.analysis.profile.measure2D(I{i}, ...
+                    data.CenterX, ...
+                    data.CenterY, ...
+                    data.Width, ...
+                    data.Height, ...
+                    data.RotationAngle, ...
                     'Interp','linear');
-                % detect the peaks and get annotation coordinates ("out" is an instance of model.PeaksData)
-                out(i) = desmostorm.analysis.PeaksData(linescanData.HeightProfile,linescanData.HeightDist,...
+
+                % Detect peaks from the height profile using the immutable
+                % run-config snapshot supplied by the GUI/model layer.
+                out(i) = desmostorm.analysis.PeaksData( ...
+                    linescanData.HeightProfile, ...
+                    linescanData.HeightDist, ...
                     "MinPeakDistance",      rc.MinPeakDistance, ...
                     "MinPeakHeight",        rc.MinPeakHeight, ...
                     "MinPeakProminence",    rc.MinPeakProminence, ...
@@ -35,7 +50,7 @@ classdef Analyzer
             end
         end
 
-        function out = autofitRegionROI(I, rc, opts)
+        function [out,diagnostics] = autofitRegionROI(I, rc, opts)
             arguments
                 % image to analyze
                 I (:,:) double
@@ -43,20 +58,38 @@ classdef Analyzer
                 rc (1,1) desmostorm.config.RunConfig
                 opts.DebugOutput = []
                 opts.ProgressDialog = []
+                opts.ProgressMessagePrefix (1,1) string = ""
+                opts.ProgressValueMode (1,1) string {mustBeMember(opts.ProgressValueMode,["stage","none"])} = "stage"
             end
-            % automatically fit rectangular ROI
-            if isempty(opts.DebugOutput) && isempty(opts.ProgressDialog)
-                out = desmostorm.analysis.image.autofitRegionROI(I,rc);
-            elseif isempty(opts.DebugOutput)
-                out = desmostorm.analysis.image.autofitRegionROI(I,rc, ...
-                    "ProgressDialog",opts.ProgressDialog);
-            elseif isempty(opts.ProgressDialog)
-                out = desmostorm.analysis.image.autofitRegionROI(I,rc, ...
-                    "DebugOutput",opts.DebugOutput);
-            else
-                out = desmostorm.analysis.image.autofitRegionROI(I,rc, ...
-                    "DebugOutput",opts.DebugOutput, ...
-                    "ProgressDialog",opts.ProgressDialog);
+
+            % Keep model classes pointed at the stable Analyzer facade while
+            % the experimental implementation evolves inside +image/+autofit.
+            args = {};
+            if ~isempty(opts.DebugOutput)
+                args = [args, {"DebugOutput",opts.DebugOutput}];
+            end
+            if ~isempty(opts.ProgressDialog)
+                args = [args, {"ProgressDialog",opts.ProgressDialog}];
+            end
+            if opts.ProgressMessagePrefix ~= ""
+                args = [args, {"ProgressMessagePrefix",opts.ProgressMessagePrefix}];
+            end
+            args = [args, {"ProgressValueMode",opts.ProgressValueMode}];
+
+            [out,diagnostics] = desmostorm.analysis.image.autofit.fitRegionROI(I,rc,args{:});
+        end
+
+    end
+
+    methods (Static, Access=private)
+        function updateProgress(h,msg)
+            %UPDATEPROGRESS Best-effort progress message update.
+            if isempty(h), return; end
+
+            try
+                h.Message = msg;
+                drawnow limitrate
+            catch
             end
         end
 

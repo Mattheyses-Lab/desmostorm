@@ -521,7 +521,13 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
 
         % --- process Region linescans ---
 
-        function processAll(obj, config)
+        function processAll(obj, config, opts)
+            arguments
+                obj desmostorm.model.STORMImage
+                config desmostorm.config.RunConfig
+                opts.ProgressDialog = []
+            end
+
             % get Region array
             arr = obj.RegionArray;
             % return if empty
@@ -529,15 +535,18 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
 
             % otherwise, process each region
             for i = 1:numel(arr)
-                obj.processRegionLinescan(arr(i),config);
+                obj.processRegionLinescan(arr(i),config, ...
+                    "ProgressDialog",opts.ProgressDialog);
             end
         end
 
-        function processRegionLinescan(obj, reg, config)
+        function processRegionLinescan(obj, reg, config, opts)
             arguments
                 obj desmostorm.model.STORMImage
                 reg desmostorm.model.STORMRegion
                 config desmostorm.config.RunConfig
+                opts.ProgressDialog = []
+                opts.ProgressMessagePrefix (1,1) string = ""
             end
 
             if isempty(reg), return; end
@@ -548,7 +557,9 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
             data = reg.ROI;
 
             % run region analyzer
-            LinescanResults = desmostorm.analysis.Analyzer.run(I,data,config);
+            LinescanResults = desmostorm.analysis.Analyzer.analyzeRegionLinescan(I,data,config, ...
+                "ProgressDialog",opts.ProgressDialog, ...
+                "ProgressMessagePrefix",opts.ProgressMessagePrefix);
 
             if isempty(LinescanResults)
                 return
@@ -597,6 +608,8 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
                 config desmostorm.config.RunConfig
                 opts.DebugOutput = []
                 opts.ProgressDialog = []
+                opts.ProgressMessagePrefix (1,1) string = ""
+                opts.ProgressValueMode (1,1) string {mustBeMember(opts.ProgressValueMode,["stage","none"])} = "stage"
             end
 
             ok = false;
@@ -607,19 +620,11 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
             % get region CData
             I = obj.regionSubimage(reg);
             % get linescan info
-            if isempty(opts.DebugOutput) && isempty(opts.ProgressDialog)
-                ROI = desmostorm.analysis.Analyzer.autofitRegionROI(I, config);
-            elseif isempty(opts.DebugOutput)
-                ROI = desmostorm.analysis.Analyzer.autofitRegionROI(I, config, ...
-                    "ProgressDialog",opts.ProgressDialog);
-            elseif isempty(opts.ProgressDialog)
-                ROI = desmostorm.analysis.Analyzer.autofitRegionROI(I, config, ...
-                    "DebugOutput",opts.DebugOutput);
-            else
-                ROI = desmostorm.analysis.Analyzer.autofitRegionROI(I, config, ...
-                    "DebugOutput",opts.DebugOutput, ...
-                    "ProgressDialog",opts.ProgressDialog);
-            end
+            ROI = desmostorm.analysis.Analyzer.autofitRegionROI(I,config, ...
+                "DebugOutput",opts.DebugOutput, ...
+                "ProgressDialog",opts.ProgressDialog, ...
+                "ProgressMessagePrefix",opts.ProgressMessagePrefix, ...
+                "ProgressValueMode",opts.ProgressValueMode);
 
             if isempty(ROI)
                 desmostorm.Log.WARN(sprintf("Auto-fit ROI failed for %s.",reg.Name));

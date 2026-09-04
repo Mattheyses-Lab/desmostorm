@@ -2702,10 +2702,10 @@ classdef GUI < handle
             % create progress dialog
             desmostorm.Log.INFO("Analyzing region measurements...");
             h = uiprogressdlg(obj.Fig,"Message",'Analyzing ROIs. Please wait...','Indeterminate','on');
+            cleanupProgress = onCleanup(@() closeProgressDialog(h));
             % re-process everything
-            obj.Project.processAll(obj.getRunConfig())
-            % close the progress dialog
-            close(h);
+            obj.Project.processAll(obj.getRunConfig(), ...
+                "ProgressDialog",h)
             % sync UI
             obj.syncActiveImageToView();
             obj.markProjectDirty();
