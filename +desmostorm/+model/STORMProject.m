@@ -56,6 +56,11 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
         ChannelColorNames (1,:) string = string.empty(1,0)
     end
 
+    properties (Access=private)
+        DefaultChannelColormapName (1,1) string = "gray"
+        DefaultChannelColormapCategory (1,1) string = "MATLAB"
+    end
+
     %% Events and listeners
 
     % (Project and GUI controller listen)
@@ -564,14 +569,29 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             end
 
             if numel(obj.ChannelColormapNames) < n
-                obj.ChannelColormapNames(end+1:n) = "gray";
+                obj.ChannelColormapNames(end+1:n) = obj.DefaultChannelColormapName;
             end
             if numel(obj.ChannelColormapCategories) < n
-                obj.ChannelColormapCategories(end+1:n) = "MATLAB";
+                obj.ChannelColormapCategories(end+1:n) = obj.DefaultChannelColormapCategory;
             end
             for c = numel(obj.ChannelColorNames)+1:n
                 obj.ChannelColorNames(c) = defaultColors(1 + mod(c-1,numel(defaultColors)));
             end
+        end
+
+        function setDefaultChannelColormap(obj,name,category)
+        %SETDEFAULTCHANNELCOLORMAP Set the colormap used for newly discovered channels.
+            arguments
+                obj
+                name (1,1) string
+                category (1,1) string
+            end
+
+            assert(matlabx.colors.maps.Registry.has(name, category), ...
+                'Colormap "%s" not found in category "%s".', name, category);
+
+            obj.DefaultChannelColormapName = name;
+            obj.DefaultChannelColormapCategory = category;
         end
 
         function setChannelColormap(obj,c,name,category)

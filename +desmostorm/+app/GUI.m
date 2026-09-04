@@ -2505,6 +2505,9 @@ classdef GUI < handle
             obj.Settings = desmostorm.config.Settings.load();
             % new Project
             obj.Project = desmostorm.model.STORMProject("untitled");
+            obj.Project.setDefaultChannelColormap( ...
+                obj.Settings.Display.ColormapName, ...
+                obj.Settings.Display.ColormapCategory);
             obj.Project.DefaultPixelSize = obj.Settings.Analysis.getDefaultPixelSize();
             obj.Project.markClean();
             % refresh hotkeys
