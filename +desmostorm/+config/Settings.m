@@ -51,7 +51,12 @@ classdef Settings < handle
                 file = desmostorm.config.Settings.defaultFile();
             end
 
-            S.Version  = char(desmostorm.Info.Version);
+            % Version is retained for older project/settings readers. The two
+            % explicit settings versions below are the authoritative values for
+            % migration decisions going forward.
+            S.Version = char(desmostorm.Info.Version);
+            S.SettingsSchemaVersion = char(desmostorm.Info.SettingsSchemaVersion);
+            S.FactoryDefaultsVersion = char(desmostorm.Info.FactoryDefaultsVersion);
             S.Analysis = this.Analysis.toStruct();
             S.Display  = this.Display.toStruct();
             S.IO       = this.IO.toStruct();
@@ -75,7 +80,9 @@ classdef Settings < handle
 
 
         function S = toStruct(obj)
-            S.Version   = char(desmostorm.Info.Version);
+            S.Version = char(desmostorm.Info.Version);
+            S.SettingsSchemaVersion = char(desmostorm.Info.SettingsSchemaVersion);
+            S.FactoryDefaultsVersion = char(desmostorm.Info.FactoryDefaultsVersion);
             S.Analysis  = obj.Analysis.toStruct();
             S.Display   = obj.Display.toStruct();
             S.IO        = obj.IO.toStruct();
@@ -85,7 +92,11 @@ classdef Settings < handle
         end
 
         function fromStruct(obj,S)
-            [S,~] = desmostorm.config.Settings.migrate(S);
+            % Project files carry a settings snapshot so old projects remain
+            % readable. Only schema migration is applied here; factory-default
+            % migration is intentionally limited to the app-level settings file.
+            [S,~] = desmostorm.config.Settings.migrate(S, ...
+                "ApplyFactoryDefaults",false);
             obj.Analysis.fromStruct(S.Analysis);
             obj.Display.fromStruct(S.Display);
             obj.IO.fromStruct(S.IO);
@@ -109,12 +120,12 @@ classdef Settings < handle
             if isfile(file)
                 txt = fileread(file);
                 S = jsondecode(txt);
-                if ~isfield(S,'Version')
-                    S.Version = '0.0.0';
-                end
 
-                % upgrade version if needed
-                [S,migrated] = desmostorm.config.Settings.migrate(S);
+                % App-level settings get both migrations:
+                %   - schema migration keeps old files readable
+                %   - factory-default migration may intentionally update defaults
+                [S,migrated] = desmostorm.config.Settings.migrate(S, ...
+                    "ApplyFactoryDefaults",true);
 
                 obj.Analysis.fromStruct(S.Analysis);
                 obj.Display.fromStruct(S.Display);
@@ -131,6 +142,8 @@ classdef Settings < handle
                 end
             else
                 % First run: create file with defaults
+                desmostorm.Log.INFO(sprintf( ...
+                    "Creating desmostorm settings file: %s",file));
                 obj.save(file);
             end
         end
@@ -140,51 +153,34 @@ classdef Settings < handle
             p = desmostorm.Paths.settingsFile();
         end
 
-        function [S, migrated] = migrate(S)
+        function [S, migrated] = migrate(S, opts)
+        %MIGRATE Update a saved settings struct to the versions required now.
+        %
+        % There are two deliberately separate migration concepts:
+        %
+        %   Schema migration:
+        %       Makes old settings readable by the current code. This should
+        %       preserve user intent whenever possible and is safe for both the
+        %       app-level settings file and settings embedded in project files.
+        %
+        %   Factory-default migration:
+        %       Refreshes the app-level settings file to a newer generation of
+        %       preferred defaults. This is useful during early development, but
+        %       it is more opinionated, so it is never applied to project files.
+            arguments
+                S
+                opts.ApplyFactoryDefaults (1,1) logical = false
+            end
+
             migrated = false;
 
-            old = string(S.Version);
+            [S,schemaMigrated] = desmostorm.config.Settings.migrateSchema_(S);
+            migrated = migrated || schemaMigrated;
 
-            if desmostorm.Version.compare(old, "1.1.0") < 0
-                desmostorm.Log.WARN("Migrating settings to v1.1.0")
-                % Box settings
-                defaultBox = desmostorm.config.Box;
-                S.Box.FaceColor     = S.Box.BoxFaceColor;       % property rename
-                S.Box.EdgeColor     = S.Box.BoxEdgeColor;       % property rename
-                S.Box.ShowTitle     = defaultBox.ShowTitle;     % new property
-                S.Box.TitleContent  = defaultBox.TitleContent;  % new property
-                % Analysis settings
-                defaultAnalysis = desmostorm.config.Analysis;
-                S.Analysis.Normalize            = defaultAnalysis.Normalize;            % new property
-                S.Analysis.MinPeakProminence    = defaultAnalysis.MinPeakProminence;    % new property
-                % Display settings
-                defaultDisplay = desmostorm.config.Display;
-                S.Display.AutoScaleDisplayIntensity = defaultDisplay.AutoScaleDisplayIntensity; % new property
-                S.Display.ChannelColorMode = defaultDisplay.ChannelColorMode;                   % new property
-                % PeaksPlot settings
-                defaultPeaksPlot = desmostorm.config.PeaksPlot;
-                S.PeaksPlot.ShownPlots = defaultPeaksPlot.ShownPlots; % new property
-                S.PeaksPlot.ColorSource = defaultPeaksPlot.ColorSource; % new property
-                S.PeaksPlot.Color = defaultPeaksPlot.Color;             % new property
-                S.PeaksPlot.AnnotationColorMode = defaultPeaksPlot.AnnotationColorMode; % new property
-                S.PeaksPlot.AnnotationColor = defaultPeaksPlot.AnnotationColor;         % new property
-                S.PeaksPlot.DistanceAnnotations = defaultPeaksPlot.DistanceAnnotations;         % new property
-                S.PeaksPlot.DistanceAnnotationsMode = defaultPeaksPlot.DistanceAnnotationsMode; % new property
-                S.PeaksPlot.WidthAnnotations = defaultPeaksPlot.WidthAnnotations;               % new property
-                S.PeaksPlot.WidthAnnotationsMode = defaultPeaksPlot.WidthAnnotationsMode;       % new property
-                % ROI settings
-                defaultROI = desmostorm.config.ROI;
-                S.ROI = defaultROI.toStruct(); % new settings category
-                % indicate migration has been performed
-                migrated = true;
+            if opts.ApplyFactoryDefaults
+                [S,defaultsMigrated] = desmostorm.config.Settings.migrateFactoryDefaults_(S);
+                migrated = migrated || defaultsMigrated;
             end
-
-            if ~isfield(S,'ROI') || isempty(S.ROI)
-                defaultROI = desmostorm.config.ROI;
-                S.ROI = defaultROI.toStruct();
-                migrated = true;
-            end
-
         end
 
         function restore()
@@ -196,5 +192,182 @@ classdef Settings < handle
             obj.save(file);
         end
         
+    end
+
+    methods (Static, Access=private)
+
+        function [S,migrated] = migrateSchema_(S)
+        %MIGRATESCHEMA_ Preserve old settings behavior under the current schema.
+            migrated = false;
+            old = desmostorm.config.Settings.schemaVersion_(S);
+            target = desmostorm.Info.SettingsSchemaVersion;
+
+            S = desmostorm.config.Settings.ensureVersionFields_(S);
+            S = desmostorm.config.Settings.ensureSettingCategories_(S);
+
+            if desmostorm.Version.compare(old, "1.1.0") < 0
+                desmostorm.Log.WARN(sprintf( ...
+                    "Migrating settings schema from %s to 1.1.0.",old));
+
+                % Box settings: old files used BoxFaceColor/BoxEdgeColor.
+                defaultBox = desmostorm.config.Box;
+                if isfield(S.Box,'BoxFaceColor') && ~isfield(S.Box,'FaceColor')
+                    S.Box.FaceColor = S.Box.BoxFaceColor;
+                end
+                if isfield(S.Box,'BoxEdgeColor') && ~isfield(S.Box,'EdgeColor')
+                    S.Box.EdgeColor = S.Box.BoxEdgeColor;
+                end
+                if ~isfield(S.Box,'ShowTitle'), S.Box.ShowTitle = defaultBox.ShowTitle; end
+                if ~isfield(S.Box,'TitleContent'), S.Box.TitleContent = defaultBox.TitleContent; end
+
+                % Analysis settings gained normalization and prominence fields.
+                defaultAnalysis = desmostorm.config.Analysis;
+                if ~isfield(S.Analysis,'Normalize')
+                    S.Analysis.Normalize = defaultAnalysis.Normalize;
+                end
+                if ~isfield(S.Analysis,'MinPeakProminence')
+                    S.Analysis.MinPeakProminence = defaultAnalysis.MinPeakProminence;
+                end
+
+                % Display settings gained intensity scaling and channel mode.
+                defaultDisplay = desmostorm.config.Display;
+                if ~isfield(S.Display,'AutoScaleDisplayIntensity')
+                    S.Display.AutoScaleDisplayIntensity = defaultDisplay.AutoScaleDisplayIntensity;
+                end
+                if ~isfield(S.Display,'ChannelColorMode')
+                    S.Display.ChannelColorMode = defaultDisplay.ChannelColorMode;
+                end
+
+                % PeaksPlot was expanded for multi-channel and annotation modes.
+                defaultPeaksPlot = desmostorm.config.PeaksPlot;
+                newPeaksPlotFields = [
+                    "ShownPlots"
+                    "ColorSource"
+                    "Color"
+                    "AnnotationColorMode"
+                    "AnnotationColor"
+                    "DistanceAnnotations"
+                    "DistanceAnnotationsMode"
+                    "WidthAnnotations"
+                    "WidthAnnotationsMode"];
+                for i = 1:numel(newPeaksPlotFields)
+                    f = char(newPeaksPlotFields(i));
+                    if ~isfield(S.PeaksPlot,f)
+                        S.PeaksPlot.(f) = defaultPeaksPlot.(f);
+                    end
+                end
+
+                % ROI is a new settings category for DrawRectangle appearance.
+                if ~isfield(S,'ROI') || isempty(S.ROI)
+                    defaultROI = desmostorm.config.ROI;
+                    S.ROI = defaultROI.toStruct();
+                end
+
+                migrated = true;
+            end
+
+            if ~isfield(S,'ROI') || isempty(S.ROI)
+                defaultROI = desmostorm.config.ROI;
+                S.ROI = defaultROI.toStruct();
+                migrated = true;
+            end
+
+            if string(S.SettingsSchemaVersion) ~= target
+                S.SettingsSchemaVersion = char(target);
+                migrated = true;
+            end
+        end
+
+        function [S,migrated] = migrateFactoryDefaults_(S)
+        %MIGRATEFACTORYDEFAULTS_ Apply intentional app-level default updates.
+        %
+        % Bump desmostorm.Info.FactoryDefaultsVersion when current installed app
+        % settings should adopt a newer default behavior. Unlike schema
+        % migration, this may overwrite existing app-level settings. It is not
+        % used for project-embedded settings snapshots.
+            migrated = false;
+            old = desmostorm.config.Settings.factoryDefaultsVersion_(S);
+            target = desmostorm.Info.FactoryDefaultsVersion;
+
+            if desmostorm.Version.compare(old,target) >= 0
+                return
+            end
+
+            defaults = desmostorm.config.Settings();
+            desmostorm.Log.WARN(sprintf( ...
+                "Updating app settings factory defaults from %s to %s.",old,target));
+
+            if desmostorm.Version.compare(old,"1.1.0") < 0
+                % First explicit factory-default generation. Refresh the app's
+                % tunable defaults to the current class defaults. Keep
+                % IO.DefaultFolder because it is a user/machine path, not really
+                % an analysis/display default.
+                oldDefaultFolder = "";
+                if isfield(S,'IO') && isfield(S.IO,'DefaultFolder')
+                    oldDefaultFolder = string(S.IO.DefaultFolder);
+                end
+
+                S.Analysis = defaults.Analysis.toStruct();
+                S.Display = defaults.Display.toStruct();
+                S.PeaksPlot = defaults.PeaksPlot.toStruct();
+                S.ROI = defaults.ROI.toStruct();
+                S.Box = defaults.Box.toStruct();
+                S.IO = defaults.IO.toStruct();
+
+                if oldDefaultFolder ~= ""
+                    S.IO.DefaultFolder = oldDefaultFolder;
+                end
+            end
+
+            S.FactoryDefaultsVersion = char(target);
+            migrated = true;
+        end
+
+        function S = ensureVersionFields_(S)
+        %ENSUREVERSIONFIELDS_ Normalize old single-version settings files.
+            if ~isfield(S,'Version') || isempty(S.Version)
+                S.Version = '0.0.0';
+            end
+            if ~isfield(S,'SettingsSchemaVersion') || isempty(S.SettingsSchemaVersion)
+                % Old files used Version for both app and settings layout.
+                S.SettingsSchemaVersion = S.Version;
+            end
+            if ~isfield(S,'FactoryDefaultsVersion') || isempty(S.FactoryDefaultsVersion)
+                S.FactoryDefaultsVersion = '0.0.0';
+            end
+        end
+
+        function S = ensureSettingCategories_(S)
+        %ENSURESETTINGCATEGORIES_ Add missing category structs before field migration.
+            defaults = desmostorm.config.Settings();
+            categories = ["Analysis","Display","IO","PeaksPlot","ROI","Box"];
+            for i = 1:numel(categories)
+                f = char(categories(i));
+                if ~isfield(S,f) || isempty(S.(f))
+                    defaultsCategory = defaults.(f);
+                    S.(f) = defaultsCategory.toStruct();
+                end
+            end
+        end
+
+        function v = schemaVersion_(S)
+        %SCHEMAVERSION_ Return the saved settings schema version.
+            if isfield(S,'SettingsSchemaVersion') && ~isempty(S.SettingsSchemaVersion)
+                v = string(S.SettingsSchemaVersion);
+            elseif isfield(S,'Version') && ~isempty(S.Version)
+                v = string(S.Version);
+            else
+                v = "0.0.0";
+            end
+        end
+
+        function v = factoryDefaultsVersion_(S)
+        %FACTORYDEFAULTSVERSION_ Return the saved factory-default generation.
+            if isfield(S,'FactoryDefaultsVersion') && ~isempty(S.FactoryDefaultsVersion)
+                v = string(S.FactoryDefaultsVersion);
+            else
+                v = "0.0.0";
+            end
+        end
     end
 end

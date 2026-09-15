@@ -348,6 +348,14 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             end
         end
 
+        function refreshRegionLinescanPixelSizes(obj)
+        %REFRESHREGIONLINESCANPIXELSIZES Apply current pixel size to stored measurements.
+            arr = obj.ImageArray;
+            for i = 1:numel(arr)
+                arr(i).refreshRegionLinescanPixelSizes();
+            end
+        end
+
         % process all Regions (compute and analyze linescans from drawn ROIs)
         function summary = autofitAllRegionROIs(obj, config, opts)
             arguments

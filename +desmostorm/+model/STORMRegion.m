@@ -97,6 +97,18 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
             obj.LinescanResults = data;
         end
 
+        function refreshLinescanPixelSize(obj)
+        %REFRESHLINESCANPIXELSIZE Update physical units without re-running peak detection.
+            data = obj.LinescanResults;
+            if isempty(data), return; end
+
+            for i = 1:numel(data)
+                data(i).DistanceScale = obj.PixelSize.Value;
+                data(i).DistanceUnit = obj.PixelSize.Unit;
+            end
+            obj.LinescanResults = data;
+        end
+
         function resetROI(obj)
             % reset the linescan ROI params
             obj.ROI = desmostorm.model.STORMRegion.ROITemplate();

@@ -574,6 +574,14 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
             reg.updateLinescanResults(LinescanResults);
         end
 
+        function refreshRegionLinescanPixelSizes(obj)
+        %REFRESHREGIONLINESCANPIXELSIZES Rescale existing linescan outputs only.
+            arr = obj.RegionArray;
+            for i = 1:numel(arr)
+                arr(i).refreshLinescanPixelSize();
+            end
+        end
+
         function resetRegionROI(~,reg)
             % reset ROI to default
             reg.resetROI();

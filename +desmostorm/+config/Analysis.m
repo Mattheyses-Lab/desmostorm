@@ -32,9 +32,9 @@ classdef Analysis < handle
         % Getters
         function v = get.MinPeakDistance(this),     v = this.MinPeakDistance_;      end
         function v = get.MinPeakHeight(this),       v = this.MinPeakHeight_;        end
-        function v = get.MinPeakProminence(this),   v = this.MinPeakProminence_;        end
+        function v = get.MinPeakProminence(this),   v = this.MinPeakProminence_;    end
         function v = get.BoxSize(this),             v = this.BoxSize_;              end
-        function v = get.Normalize(this),           v = this.Normalize_;    end
+        function v = get.Normalize(this),           v = this.Normalize_;            end
         function v = get.PeakSmoothing(this),       v = this.PeakSmoothing_;        end
         function v = get.PixelSizeValue(this),      v = this.PixelSizeValue_;       end
         function v = get.PixelSizeUnit(this),       v = this.PixelSizeUnit_;        end

@@ -2396,9 +2396,10 @@ classdef GUI < handle
                     obj.ImageViewer.Tools.Box.BoxSize = obj.Settings.Analysis.BoxSize;
                 case {"PixelSizeValue","PixelSizeUnit"}
                     obj.Project.setDefaultPixelSize(obj.Settings.Analysis.getDefaultPixelSize);
-                    % re-process all existing regions to reflect new pixel size
-                    obj.processAllRegions();
-                    % refresh the region linescan plot
+                    % Pixel size changes only rescale existing distance outputs.
+                    obj.Project.refreshRegionLinescanPixelSizes();
+                    % refresh displays that format distances or scaled plot axes
+                    obj.refreshRegionSummaryTable();
                     obj.refreshRegionLinescanPlot();
             end
             obj.markProjectDirty();

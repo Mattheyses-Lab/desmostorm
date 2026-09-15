@@ -3,7 +3,7 @@ function launch()
 
     % --- perform setup actions if necessary ---
 
-    requiredVersion = desmostorm.setup.requiredSetupVersion();
+    requiredVersion = desmostorm.Info.RequiredSetupVersion;
     currentVersion = desmostorm.Preferences.get("SetupVersion","0.0.0");
     
     if desmostorm.Version.compare(currentVersion,requiredVersion) < 0
