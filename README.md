@@ -3,8 +3,8 @@
 **DesmoSTORM** is a MATLAB application for viewing and analyzing reconstructed
 super-resolution images of desmosomal plaque proteins.
 
-The app supports multi-channel image display, region picking, ROI-based
-linescan analysis, classifier-assisted region detection, and export of
+The app supports multi-channel image display, region box editing, ROI-based
+linescan analysis, classifier-assisted region proposal generation, and export of
 measurements, images, summary PDFs, and linescan plots.
 
 ## Quick Start
@@ -48,7 +48,7 @@ package, navigate back to the project root and run the command again.
 1. Launch the app with `desmostorm.launch`.
 2. Create or open a project from the **File** menu.
 3. Load reconstructed image files with **File > Load Images...**.
-4. Pick regions in the main image viewer.
+4. Place region boxes in the main image viewer.
 5. Adjust region boxes and linescan ROIs as needed.
 6. Review measurements, linescan plots, and region summaries.
 7. Save the project or export measurements, images, plots, and summary PDFs.
@@ -62,7 +62,7 @@ exiting the GUI will prompt you to save or discard those changes.
 ## Image Viewer
 
 The main Image Viewer shows the active image and provides channel display,
-zooming, colorbar, and region-picking tools.
+zooming, colorbar, and region box tools.
 
 - Left/right arrow keys change the displayed channel.
 - Meta+Shift+M toggles the merged composite display. On macOS, Meta is Command; on Windows, use the Windows key.
@@ -77,10 +77,10 @@ To zoom, click the magnifying glass icon to enable zoom mode:
 - Scroll wheel or trackpad scroll also adjusts zoom.
 - Esc restores the full image view.
 
-## Region Picking And Labels
+## Region Boxes And Labels
 
-Use the Pick tool in the main image viewer to create and edit region boxes.
-Click the Pick tool icon to activate it. While the Pick tool is active:
+Use the Box tool in the main image viewer to create and edit region boxes.
+Click the Box tool icon to activate it. While the Box tool is active:
 
 - Click empty image area to create a new region.
 - Click and drag an existing box to move it.
@@ -88,18 +88,19 @@ Click the Pick tool icon to activate it. While the Pick tool is active:
 - Alt/Option-click a box to deactivate the active box.
 - Shift-click a box to add or remove it from the current selection; selected boxes remain shaded.
 - Control-click a box to delete that region.
+- Right-click or context-click in the image viewer to open Box commands such as
+  clear selection, select all boxes, and delete selected boxes.
 
 Region activation and selection are separate. The active region drives the
 Region Viewer, summary table, ROI editor, and linescan plot. The selected
-regions are the target for batch labeling with label hotkeys. There are
-currently no batch deselection or batch delete mouse actions; those are planned
-for a future context menu.
+regions are the target for batch labeling with label hotkeys and Box context
+menu actions.
 
 Labels are managed in the **Labels** accordion item. Each label can have a
 name, ID, color, and hotkey. Pressing a label hotkey makes that label active
 and applies it to the currently selected regions in the active image. New
 regions are assigned the currently active label when they are placed, so choose
-the active label before picking a batch of regions with the same class.
+the active label before placing a batch of regions with the same class.
 
 ## Multi-Channel Display And Linescans
 
@@ -158,8 +159,8 @@ The most effective workflow is iterative hard-negative mining:
 
 1. Open or create a project.
 2. Load training images.
-3. Pick and label representative `object` regions.
-4. Pick and label representative `background` regions, including hard negatives
+3. Place and label representative `object` regions.
+4. Place and label representative `background` regions, including hard negatives
    that resemble plaques but should not be detected.
 5. Select **Run > Train New Classifier...**.
 6. Choose training parameters and wait for training to finish.
@@ -335,7 +336,7 @@ Use **File > Save Settings** to save them as app defaults.
 Common panels:
 
 - **Images**: loaded images and active image selection.
-- **Regions**: picked regions for the active image.
+- **Regions**: region boxes for the active image.
 - **Analysis**: region box size, linescan normalization, peak detection, and pixel size.
 - **Channel Display**: channel color mode and per-channel colors.
 - **Colormap**: colormap for the active image channel.
