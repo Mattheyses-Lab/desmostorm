@@ -62,6 +62,19 @@ and display/analysis behavior. When a project has unsaved changes, an asterisk
 appears in the window title. Closing the project, opening another project, or
 exiting the GUI will prompt you to save or discard those changes.
 
+## Main Menus
+
+The top menu bar contains the main project, analysis, and export commands:
+
+- **File**: create, open, close, and save projects; save app settings; load
+  images; and access export commands.
+- **File > Export**: export measurements, summary PDFs, region images, images
+  with region boxes, linescan plots, and region images with ROI overlays.
+- **Run**: run classifier proposal generation, train or retrain classifiers,
+  and run experimental ROI auto-fitting for the active region or all regions.
+- **Test**: open development/testing utilities such as cluster parameter tuning
+  for the active image or active region.
+
 ## Image Viewer
 
 The main Image Viewer shows the active image and provides channel display,
@@ -74,11 +87,14 @@ zooming, colorbar, and region box tools.
 
 To zoom, click the magnifying glass icon to enable zoom mode:
 
-- Left-click zooms in.
-- Right-click zooms out.
-- Shift-click toggles cursor-follow zoom behavior.
+- Meta-click zooms in at the cursor.
+- Meta-right-click or Meta-context-click zooms out at the cursor.
+- Space toggles cursor-follow zoom behavior while Zoom is enabled.
 - Scroll wheel or trackpad scroll also adjusts zoom.
-- Esc restores the full image view.
+- Esc disables Zoom and restores the full image view.
+
+The Zoom context menu also provides fixed zoom levels, a Follow Cursor toggle,
+and a Help command contributed by the matlabx Zoom tool.
 
 ## Region Boxes And Labels
 
@@ -90,7 +106,7 @@ Click the Box tool icon to activate it. While the Box tool is active:
 - Click a box to make that region active in the GUI and Region Viewer.
 - Alt/Option-click a box to deactivate the active box.
 - Shift-click a box to add or remove it from the current selection; selected boxes remain shaded.
-- Control-click a box to delete that region.
+- Control-right-click or Control-context-click a box to delete that region.
 - Right-click or context-click in the image viewer to open Box commands such as
   clear selection, select all boxes, and delete selected boxes.
 
@@ -120,6 +136,29 @@ saved or auto-scaled display range.
 Linescan plots can show either the current channel or all channels for the
 active region, depending on **Peaks Plot > Shown Plots**. Plot colors can follow
 project channel colors or use a manual color from the Peaks Plot settings.
+
+## Exports
+
+Export commands are under **File > Export**. Most export dialogs ask for the
+target channel, intensity scaling mode, output format, and any appearance
+options relevant to that export.
+
+- **Measurements (.xlsx)**: writes region-level measurements and peak/linescan
+  results to spreadsheet tables.
+- **Summary PDF**: writes a multi-page region summary report. Each page combines
+  a region image, ROI overlay, measurement table, and linescan plot.
+  Multi-channel projects can export a selected channel or all channels.
+- **Region Images (.tif)**: writes raw region subimages. It can export grayscale
+  TIFFs or RGB PNG previews using project channel colors/LUTs, and can
+  optionally create a tiled summary image.
+- **Image + Region Boxes**: writes full-image exports with region box overlays.
+  Box colors can follow region labels or use one manual color, and region names
+  can be shown or hidden.
+- **Linescan Plot**: writes the active region's linescan plot to vector formats
+  such as SVG, EPS, or PDF.
+- **Region Image + ROI**: writes active-region or all-region subimages with the
+  linescan ROI overlay. It supports channel selection, scaling mode, ROI
+  appearance options, and an optional tiled summary image.
 
 ## Classifier Training And Detection
 
@@ -402,9 +441,12 @@ The generated contents of `user/`, `logs/`, `data/`, and `assets/` are ignored b
 
 ## License, Citation, And Contributing
 
-DesmoSTORM is licensed under GPL-2.0-or-later. See `LICENSE` for the license
-text and `NOTICE` for third-party notices, including the vendored matlabx tree
-under `external/matlabx/`.
+DesmoSTORM is licensed under the GNU General Public License v2.0 or later
+(`GPL-2.0-or-later`). See `LICENSE` for the full license text.
+
+Third-party notices are listed in `NOTICE`. DesmoSTORM vendors matlabx under
+`external/matlabx/`; matlabx carries its own `LICENSE` and `NOTICE`, including
+notices for dependencies bundled by matlabx such as Bio-Formats/bfmatlab.
 
 If you use DesmoSTORM in your work, citation metadata is provided in
 `CITATION.cff`.
@@ -435,7 +477,3 @@ Session logs are written under `logs/`. Developer mode increases log detail.
 
 This project is under active development; APIs, file formats, and behavior may
 change.
-
-## License
-
-To be added.
