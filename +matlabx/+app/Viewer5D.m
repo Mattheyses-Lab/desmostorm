@@ -1,3 +1,19 @@
+% matlabx - MATLAB utilities for app building, image display, and analysis.
+% Copyright (C) 2026 William Dean
+%
+% This program is free software; you can redistribute it and/or modify it
+% under the terms of the GNU General Public License as published by the Free
+% Software Foundation; either version 2 of the License, or (at your option)
+% any later version.
+%
+% This program is distributed in the hope that it will be useful, but WITHOUT
+% ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+% FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
+% details.
+%
+% You should have received a copy of the GNU General Public License along
+% with this program; if not, see <https://www.gnu.org/licenses/>.
+
 classdef Viewer5D < handle
 % matlabx.app.Viewer5D - Image Visualizer App
 
@@ -276,7 +292,7 @@ classdef Viewer5D < handle
         function setupViewer(obj)
             % ImageAxes object for the viewer
             obj.Viewer = matlabx.ui.axes.ImageAxes(obj.Grid,...
-                "Tools",     {'Zoom', 'Colorbar', 'ChooseColormap', 'Box', 'DrawRectangle'},...
+                "Tools",     {'Zoom', 'Colorbar', 'ChooseColormap', 'DisplayLimits', 'Box', 'DrawRectangle'},...
                 "ImageData",    obj.Image,...
                 "Name",         "Viewer",...
                 "FontSize",     obj.FontSize);
@@ -714,6 +730,7 @@ classdef Viewer5D < handle
         %ONLOAD Menubar callback for [File]->[Load...]
             % hide figure, show file selection dialog, show figure
             obj.Fig.Visible = 'off';
+            restoreVisibility = onCleanup(@() set(obj.Fig, "Visible", "on"));
             % update log
             matlabx.Log.DEBUG("Selecting image file...");
 
@@ -721,15 +738,18 @@ classdef Viewer5D < handle
                 % get Image5D using file dialog
                 I = matlabx.image.Image5D.fromFileDialog(...
                     "LoadOnCreate",true);
+                if isempty(I)
+                    matlabx.Log.DEBUG("Image file selection canceled.");
+                    return
+                end
                 % set as image
                 obj.Image = I;
             catch ME
-                matlabx.Log.ERROR(ME);
-                obj.guialert(ME);
+                matlabx.Log.EXCEPTION(ME);
+                obj.guialert("Title","Error","Message",ME.message,"Icon","error");
             end
 
             obj.refreshUI();
-            obj.Fig.Visible = 'on';
         end
 
         function onClose(obj)
@@ -766,6 +786,8 @@ classdef Viewer5D < handle
                 opts.Icon (1,:) char {mustBeMember(opts.Icon,{'error','warning','info','message','success',''})} = ''
             end
 
+            % give focus to figure
+            figure(obj.Fig);
             % uialert dialog, closing will resume interaction on main window
             uialert(obj.Fig,...
                 opts.Message,...

@@ -1,3 +1,19 @@
+% matlabx - MATLAB utilities for app building, image display, and analysis.
+% Copyright (C) 2026 William Dean
+%
+% This program is free software; you can redistribute it and/or modify it
+% under the terms of the GNU General Public License as published by the Free
+% Software Foundation; either version 2 of the License, or (at your option)
+% any later version.
+%
+% This program is distributed in the hope that it will be useful, but WITHOUT
+% ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+% FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
+% details.
+%
+% You should have received a copy of the GNU General Public License along
+% with this program; if not, see <https://www.gnu.org/licenses/>.
+
 classdef PointClusterTuner < handle
 %POINTCLUSTERTUNER App for tuning puncta detection and point clustering.
 %
@@ -470,7 +486,7 @@ classdef PointClusterTuner < handle
             obj.Ax = matlabx.ui.axes.ImageAxes(obj.ViewerGrid, ...
                 "Name", "PointClusterTuner", ...
                 "CData", [], ...
-                "Tools", {'Zoom','Colorbar','ChooseColormap'}, ...
+                "Tools", {'Zoom','Colorbar','ChooseColormap','DisplayLimits'}, ...
                 "Colormap", turbo, ...
                 "CLim", [0 1]);
         end
@@ -505,6 +521,10 @@ classdef PointClusterTuner < handle
         %ONLOADIMAGE Load an image through Image5D file selection.
             try
                 img = matlabx.image.Image5D.fromFileDialog("LoadOnCreate", true);
+                if isempty(img)
+                    obj.appendStatus("Image file selection canceled.");
+                    return
+                end
                 obj.setImage(img, "Loaded image");
             catch ME
                 obj.reportException(ME);
