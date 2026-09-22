@@ -1,5 +1,8 @@
 # DesmoSTORM
 
+[![Version](https://img.shields.io/badge/version-1.1.1-green.svg)](https://github.com/Mattheyses-Lab/desmostorm/releases)
+[![License: GPL v2 or later](https://img.shields.io/badge/license-GPL--2.0--or--later-blue.svg)](LICENSE)
+
 **DesmoSTORM** is a MATLAB application for viewing and analyzing reconstructed
 super-resolution images of desmosomal plaque proteins.
 
@@ -396,6 +399,17 @@ preferences override developer-mode defaults.
 - `external/`: bundled third-party dependencies. Do not edit this folder unless updating the dependency itself.
 
 The generated contents of `user/`, `logs/`, `data/`, and `assets/` are ignored by Git.
+
+## License, Citation, And Contributing
+
+DesmoSTORM is licensed under GPL-2.0-or-later. See `LICENSE` for the license
+text and `NOTICE` for third-party notices, including the vendored matlabx tree
+under `external/matlabx/`.
+
+If you use DesmoSTORM in your work, citation metadata is provided in
+`CITATION.cff`.
+
+Development guidelines are in `CONTRIBUTING.md`.
 
 ## Troubleshooting
 

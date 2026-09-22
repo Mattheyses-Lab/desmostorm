@@ -1,7 +1,7 @@
 classdef Info
     properties (Constant)
         Name    string = "desmostorm"   % name of the app
-        Version string = "1.1.0"        % application version, major.minor.patch
+        Version string = "1.1.1"        % application version, major.minor.patch
 
         % Setup version is intentionally separate from app version. Bump this
         % only when launch should rerun setup work such as path setup, matlabx

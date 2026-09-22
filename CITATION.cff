@@ -1,0 +1,12 @@
+cff-version: 1.2.0
+title: DesmoSTORM
+message: "If you use DesmoSTORM in your work, please cite this repository."
+type: software
+authors:
+  - family-names: Dean
+    given-names: William
+repository-code: "https://github.com/Mattheyses-Lab/desmostorm"
+url: "https://github.com/Mattheyses-Lab/desmostorm"
+license: GPL-2.0-or-later
+version: 1.1.1
+abstract: "MATLAB application for viewing and analyzing reconstructed super-resolution images of desmosomal plaque proteins."

@@ -1,0 +1,33 @@
+DesmoSTORM notices
+==================
+
+DesmoSTORM is licensed under the GNU General Public License, version 2 or
+later. See LICENSE for the full license text.
+
+
+Vendored matlabx
+----------------
+
+This repository vendors matlabx under:
+
+    external/matlabx/
+
+matlabx is licensed under the GNU General Public License, version 2 or later.
+See the bundled matlabx license and third-party notices:
+
+    external/matlabx/LICENSE
+    external/matlabx/NOTICE
+
+matlabx includes and documents additional bundled dependencies and data,
+including Bio-Formats / bfmatlab, bioformats_package.jar, colormap data, and
+other third-party materials. Those notices are intentionally kept with the
+vendored matlabx tree so downstream projects can preserve them without
+duplicating the full matlabx notice text.
+
+
+Generated and user data
+-----------------------
+
+The user/, data/, logs/, and assets/ directories may contain generated or
+user-created files during normal DesmoSTORM use. Those generated contents are
+not part of the distributed source unless explicitly committed.
