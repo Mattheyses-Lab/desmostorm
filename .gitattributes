@@ -31,3 +31,6 @@
 *.pdf binary
 *.png binary
 *.xlsx binary
+
+# Preserve vendored/external files exactly as provided
+external/** -text
