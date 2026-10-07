@@ -479,6 +479,48 @@ ax.ContextMenuItems = ["ResetView", "ComponentColor", "ViewportBox"];
 The order of `ContextMenuItems` is honored for top-level built-ins. Tool menus
 are contributed below the built-ins and separated from them automatically.
 
+### Display masking
+
+`Mask` is an optional logical Y-by-X array matching the image dimensions.
+`MaskEnabled` controls display only: false pixels reveal the black axes
+background, while image values, colormaps, and overlays remain unchanged.
+
+```matlab
+ax.Mask = mask;
+ax.MaskEnabled = "on";
+ax.toggleMask();                    % Flicker without recomputing the image
+```
+
+An empty mask leaves the image fully visible. Replacing `ImageData` or `CData`
+clears the mask. The same mask applies across C/Z/T views until your app replaces
+it; volume masks and segmentation-to-boundary conversion remain app-owned.
+The Display context menu also includes a **Mask Image** toggle. Install the
+`Mask` toolbar tool for one-click toggling; it is safe to enable without a mask:
+
+```matlab
+ax.loadTools({"Mask","Overlays"});
+ax.installTool("Mask");
+ax.installTool("Overlays");
+ax.OverlaysVisible = "off";         % Hide all registered overlays
+ax.toggleOverlays();               % Restore eligible overlays
+```
+
+The `Overlays` tool and **Display → Show Overlays** menu toggle
+`OverlaysVisible` (default `"on"`). This preserves each overlay's own `Visible`
+flag, C/Z/T applicability, and active/selected state. Newly added overlays also
+respect the global visibility setting. Both toolbar toggles stay synchronized
+with property and menu changes.
+
+Try the complete rice segmentation demo (requires Image Processing Toolbox):
+
+```matlab
+ax = matlabx.ui.axes.ImageAxes.demoSegmentation();
+```
+
+It displays `rice.png` through `quickshow`, with a background-corrected binary
+mask, one polygon per rice region, and Zoom, Mask, Overlays, Polygon, and
+RectangleSelect tools. Polygon deletion leaves the mask unchanged.
+
 ### Overlays
 
 `ImageAxes` owns an overlay manager available as `ax.Overlays`. Overlays are
@@ -533,13 +575,189 @@ First-party overlays currently include:
 - `matlabx.ui.axes.overlays.Point`
 - `matlabx.ui.axes.overlays.Line`
 - `matlabx.ui.axes.overlays.Rectangle`
+- `matlabx.ui.axes.overlays.Polygon`
 - `matlabx.ui.axes.overlays.PointSet`
 - `matlabx.ui.axes.overlays.PointClusters`
+
+Polygon regions accept finite image-space `[x y]` vertices for one closed loop.
+A single patch displays the coordinates unchanged and closes the boundary; the
+app is responsible for their order and correctness. No geometry repair or hole
+handling is performed. Rectangle selection uses the area-weighted centroid
+(with a bounding-box center fallback for zero-area loops):
+
+```matlab
+ax.loadTools({"Polygon","RectangleSelect"});
+ax.installTool("Polygon");
+ax.installTool("RectangleSelect");
+p = ax.Tools.Polygon.addPolygon("region-1", ...
+    [20 20; 80 20; 80 80; 20 80], "EdgeColor", [0 1 0]);
+ax.Tools.Polygon.selectAllPolygons();
+ax.Tools.Polygon.clearPolygonSelection();
+```
+
+The Polygon tool controls all Polygon overlays registered with the host,
+including those added directly through `ax.Overlays.add("Polygon",...)`.
+Click activates; shift-click toggles selection; alt-click clears activation;
+control-right-click deletes. Its context menu provides batch selection/deletion
+and help. Its toolbar button opens help; interactions work while installed.
+RectangleSelect uses each visible polygon's centroid as its selection point.
+Polygons have no drawing or dragging behavior yet.
+
+`PolygonDeletedFcn` receives `data.ID` for tool-requested deletions.
+`PolygonActivatedFcn` receives `data.ID`, and `PolygonSelectionChangedFcn`
+receives `data.IDs`, including changes made through rectangle selection or the
+manager. The app decides whether deletion should update a segmentation mask.
+Removing the tool preserves its overlays; `deleteAllPolygons()` removes them.
+
+For application-owned models, use one deletion request for the complete set:
+
+```matlab
+ax.Tools.Polygon.PolygonsDeleteRequestedFcn = ...
+    @(tool,event) deleteModelRegions(event.IDs);
+
+% Inside your application, after updating the model:
+ax.Overlays.removeMany(deletedIDs);
+```
+
+`PolygonsDeleteRequestedFcn` receives a stable, deduplicated row string array
+in `event.IDs`. Single, active, selected, and all-polygon deletion actions use
+this same path. Missing IDs and other overlay types are filtered out; an empty
+request does nothing. With this callback installed, the tool does not delete
+anything or change selection/activation first, and does not call the legacy
+`PolygonDeletedFcn`. Callback errors propagate without an optimistic fallback;
+changes the callback itself has already made are not rolled back.
+
+Without the new callback, deletion retains the existing sequence: remove one
+polygon, invoke `PolygonDeletedFcn` for that ID, and continue. Manager calls
+such as `removeMany` never invoke either tool deletion callback, so application
+reconciliation cannot recursively request deletion.
+
+`removeMany` ignores duplicate/missing IDs and preserves unrelated overlays and
+state. The whole batch is detached and deleted before manager notifications.
+For compatibility, `OverlayRemoved` still fires once per removed ID (in request
+order) with its existing empty payload, but each notification sees the final
+batch state. Affected `ActiveChanged`, `HoverChanged`, and `SelectionChanged`
+events fire at most once each, after the removal notifications. `remove(id)`
+and `clear()` use this same path. Listeners doing expensive reconciliation
+should not repeat it for every `OverlayRemoved` notification.
+
+`setSelected` updates only added/removed members and emits one event when
+membership changes. Reordering an unchanged set is a no-op. Surviving IDs keep
+their existing order; additions follow in request order. Type-filtered changes
+preserve selection in other overlay families. These manager improvements apply
+to all overlays, but tools such as Box/Rectangle still own additional local
+bookkeeping: continue using those tools' deletion APIs for their objects.
 
 The overlay base class is intentionally small. Custom overlays inherit from
 `matlabx.ui.axes.ImageAxesOverlay`, own their graphics handles, implement
 `updateGeometry` and `updateAppearance`, and call `registerGraphics` for
 hit-test ownership and manager lookup.
+
+### Passive Application Overlays
+
+Applications can mount derived graphics without adding interactive overlay types.
+Subclass `matlabx.ui.axes.ImageAxesOverlayContent` and implement just
+`attach(parent,context)` and `detach()`:
+
+```matlab
+field = MyOrientationField(); % Application-defined content class.
+mount = viewer.mountOverlay(field);
+field.setData(...);          % Application-defined data API.
+mount.Visible = false;
+mount.remove();              % Detach; field remains reusable.
+```
+
+`attach` receives a dedicated `hggroup` and a struct containing `context.Host`.
+Create or reparent primitives beneath that group with `HitTest="off"` and
+`PickableParts="none"`. Coordinates are image axes coordinates, so graphics
+follow zoom and pan automatically. The application updates its own content
+when image data or view-dependent quantities change; there are no context
+notifications in this initial API.
+
+`detach` must tolerate repeated calls and partial attachment. It should delete
+primitives or set their `Parent=[]` to preserve them for reuse. The mount deletes
+its group afterwards. The application owns the content and is responsible for
+finally disposing of any retained primitives when deleting the content.
+
+`viewer.unmountOverlay(field)` and deleting the mount also detach content.
+Deleting a viewer detaches content before its axes are destroyed. Mounting on
+the same viewer returns the existing mount; mounting on another viewer removes
+the old mount and creates a new one. Deleting content removes its mount.
+Use the viewer methods to mount/unmount rather than calling lifecycle hooks
+directly. Failed attachment cleans up the relationship and rethrows the error.
+
+Mounted graphics sit above the image and below interactive overlays. They
+participate in `OverlaysVisible` without losing their own `mount.Visible`
+setting, but do not participate in selection, tools, or event routing.
+
+## Transferable Plot Content
+
+`matlabx.ui.axes.PlotAxes` is a stable UI host, similar to `ImageAxes` in its
+separation of host and content. The host owns its layout and Cartesian UIAxes;
+renderers own their data, style, and graphics. Applications supply normalized
+values rather than passing model or settings objects into the plotting layer.
+
+```matlab
+fig = uifigure;
+grid = uigridlayout(fig,[1 2]);
+hostA = matlabx.ui.axes.PlotAxes(grid);
+hostB = matlabx.ui.axes.PlotAxes(grid);
+
+renderer = matlabx.ui.axes.plot.ScatterRenderer();
+data = matlabx.ui.axes.plot.ScatterData( ...
+    XData={[1 2 3]}, YData={[2 4 3]}, ...
+    SeriesNames="Samples", CData={[0.2 0.5 0.8]});
+style = matlabx.ui.axes.plot.ScatterStyle( ...
+    Title="Measurements", XLabel="X", YLabel="Y", LegendVisible=true);
+renderer.update(data,style);
+hostA.mount(renderer);
+hostB.mount(renderer);              % Same renderer and primitives; hosts stay put
+```
+
+Renderers expose read-only `Data` and `Style` properties and methods
+`setData(data)`, `setStyle(style)`, `update(data,style)`, and `refresh()`.
+`update` validates both values before assigning them and refreshes once.
+Detached renderers retain their values; rendering resumes when mounted.
+
+`ScatterData` contains X/Y cell arrays, `SeriesNames`, and `CData`.
+`ViolinData` contains a `Values` cell array, `SeriesNames`, and `CData`.
+Each cell is one logical group, with numeric vectors normalized to rows and
+one name/color entry required per group. Colors can be scalar, an RGB triplet,
+a point-aligned scalar vector, or an N-by-3 RGB array. As with MATLAB scatter,
+a three-element color vector is interpreted as RGB. Data values have private
+setters; construct a new value to change them. Style classes are ordinary value
+objects containing labels, colors, marker/hull/violin options, and visibility.
+They have no persistence, settings events, or application dependencies.
+
+`PlotContent` provides the shared attach/detach lifecycle. `host.clear()` hides
+and detaches content without destroying it. Detaching sets the owned primitives'
+parents to `[]`, so they do not affect another renderer's limits and survive
+closure of their former figure. The application owns renderer lifetime and
+should call `delete(renderer)` when finished; this also clears its host.
+Legends/proxies are recreated for the active axes. Host/content identities stay
+synchronized whether you use `mount`/`clear` or `attach`/`detach`.
+
+Before mounting different content, the host explicitly resets axes presentation
+(ticks, labels, scales, limits, aspect ratios, grids, view, legends, and colorbars).
+It never uses `cla reset` or reparents a ComponentContainer. Renderer Style
+supplies background/foreground colors through the host's presentation properties.
+The `routeEvent(kind,event)` / `handleEvent(kind,event)` seam is preserved for
+future integration; this version does not add FigureEventHub routing, tools,
+hotkeys, or polar axes.
+
+Low-level `matlabx.ui.axes.plot.Scatter` and `Violin` each own one logical dataset
+and several graphics primitives. `setParent(axes)` moves every owned primitive;
+`setParent([])` detaches them. Violin density estimation uses `ksdensity` from
+Statistics and Machine Learning Toolbox. Rendering algorithms otherwise follow
+the OOPS prototype, including mean ± standard deviation error bars.
+
+Try both renderers and transfer their content interactively:
+
+```matlab
+[hosts,renderers,fig] = matlabx.ui.axes.PlotAxes.demo();
+hosts.Second.mount(renderers.Scatter); % Displaces, but retains, Violin
+hosts.First.mount(renderers.Violin);
+```
 
 ## Reusable Components And Apps
 
@@ -579,6 +797,46 @@ Useful general apps and dialogs include:
 - `matlabx.app.TextWindow`: reusable formatted text/status window
 - `matlabx.app.SliderGroupDialog`: grouped slider dialog used by display
   limits controls
+
+## Cached SVG Icons
+
+Generate a transparent circle icon for UI components such as tree nodes:
+
+```matlab
+node.Icon = matlabx.ui.icon.get( ...
+    Shape="circle", Color=[0 0.4470 0.7410], Size=16);
+```
+
+`Color` is an RGB triplet in `[0,1]`, rounded to eight-bit RGB. `Size` is a
+positive integer specifying the square SVG canvas size. The filled circle
+has no border and occupies 75 percent of the canvas diameter.
+
+Identical rendering options reuse an SVG beneath
+`fullfile(prefdir,'matlabx','cache','icons')`. Missing files are regenerated
+on the next call, so the cache can be deleted. Store colors and other icon
+options in application data; generated paths are disposable runtime values.
+Currently, only `Shape="circle"` is supported.
+
+Encode or decode icon styles without reading or writing files:
+
+```matlab
+name = matlabx.ui.icon.encode(Color=[0 0.4470 0.7410], Size=16);
+% "v1-circle-0072BD-16.svg"
+style = matlabx.ui.icon.decode(name);
+file = matlabx.ui.icon.get(name); % Regenerate in the local cache if missing.
+```
+
+`decode` returns a struct with `Shape`, `Color`, and `Size`; `Color` contains
+quantized eight-bit RGB values divided by 255. Both `decode` and the encoded
+form of `get` accept a full path but use only its basename, including for
+paths from another platform. They do not read the supplied file. Names use
+uppercase hexadecimal colors and canonical positive integer sizes. Malformed
+names, unsupported versions, and unsupported shapes raise errors.
+
+Storing styles remains convenient for editing. Encoded basenames can also be
+stored as versioned icon descriptions; absolute cache paths are not portable.
+The encoded form of `get` does not accept additional style overrides.
+
 
 ## Colormaps And Colors
 
