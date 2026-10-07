@@ -125,6 +125,10 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
         C (1,1) double
         Z (1,1) double
         T (1,1) double
+        % Optional logical Y-by-X display mask; cleared when image data changes.
+        Mask
+        MaskEnabled         (1,1) matlab.lang.OnOffSwitchState
+        OverlaysVisible     (1,1) matlab.lang.OnOffSwitchState
         ShowComposite       (1,1) matlab.lang.OnOffSwitchState
         CLim                (1,2) double
         CLimMode            (1,:) char {mustBeMember(CLimMode,{'auto','manual'})}
@@ -156,6 +160,10 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
     properties (Access=private)
         % Current view coordinates and display modes.
         ViewState_ (1,1) matlabx.ui.axes.ImageAxesViewState = matlabx.ui.axes.ImageAxesViewState()
+
+        OverlaysVisible_ (1,1) matlab.lang.OnOffSwitchState = "on"
+        Mask_ = []
+        MaskEnabled_ (1,1) matlab.lang.OnOffSwitchState = "off"
 
         % Canonical Image5D data model.
         ImageData_ (1,1) matlabx.image.Image5D = matlabx.image.Image5D.fromComponents(zeros(256,256,3))
@@ -332,7 +340,8 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
                 'NextPlot','add', ...
                 'HitTest','on', ...
                 'PickableParts','all');
-            obj.mainAxes.Toolbar = axtoolbar(obj.mainAxes,{});
+            obj.mainAxes.Toolbar = axtoolbar(obj.mainAxes,{}, ...
+                "Expanded","on");
             obj.mainAxes.Interactions = [];
             disableDefaultInteractivity(obj.mainAxes);
 
@@ -352,7 +361,8 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
                 'PositionConstraint','innerposition', ...
                 'HitTest','off', ...
                 'PickableParts','none');
-            obj.staticAxes.Toolbar = axtoolbar(obj.staticAxes,{});
+            % obj.staticAxes.Toolbar = axtoolbar(obj.staticAxes,{});
+            obj.staticAxes.Toolbar = [];
             obj.staticAxes.Interactions = [];
             disableDefaultInteractivity(obj.staticAxes);
             obj.staticAxes.PlotBoxAspectRatio = [1 1 1];
@@ -375,6 +385,18 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
                 'CDataMapping','scaled',...
                 'HitTest','off',...
                 'PickableParts','none');
+
+            % This group is created immediately above the image and before
+            % interactive graphics. Child ordering keeps all mounted content
+            % below interactive overlays, including content mounted later.
+            obj.mainAxes.SortMethod = 'childorder';
+            obj.ApplicationOverlayLayer = hggroup(obj.mainAxes, ...
+                'Tag','ApplicationOverlayLayer','Visible',obj.OverlaysVisible, ...
+                'HitTest','off','PickableParts','none');
+            % Detach before axes children are destroyed (ComponentContainer
+            % teardown can precede the ImageAxes destructor).
+            obj.ApplicationOverlayLifetimeListener = addlistener(obj.mainAxes, ...
+                'ObjectBeingDestroyed',@(~,~) obj.detachApplicationOverlays());
 
             % Update CLim, PlotBoxAspectRatio, and DataAspectRatio *after* creating image object
             obj.mainAxes.CLim               = [0 1];
@@ -1884,6 +1906,15 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
         function updateImageCData(obj)
             matlabx.ui.axes.ImageAxesDisplayRenderer.updateImageCData( ...
                 obj.hImage, obj.DisplayCData);
+            obj.updateImageMask();
+        end
+
+        function updateImageMask(obj)
+            if isempty(obj.hImage) || ~isgraphics(obj.hImage)
+                return
+            end
+            matlabx.ui.axes.ImageAxesDisplayRenderer.updateImageMask( ...
+                obj.hImage, obj.Mask_, obj.MaskEnabled_);
         end
 
         function updateColorbar(obj)
@@ -2043,6 +2074,7 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
 
             oldSummary = obj.getImageDataEventSummary_();
             obj.ImageData_ = val;
+            obj.Mask_ = [];
             obj.syncViewStateToImageData();
             obj.syncSelfFromFirstLinkedPeer();
             obj.syncRenderSourceToView(ResetView=true);
@@ -2060,11 +2092,63 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
 
             oldSummary = obj.getImageDataEventSummary_();
             obj.ImageData_ = matlabx.image.Image5D.fromComponents(cdata);
+            obj.Mask_ = [];
 
             obj.syncViewStateToImageData();
             obj.syncSelfFromFirstLinkedPeer();
             obj.syncRenderSourceToView(ResetView=true);
             obj.notifyImageDataChanged_(oldSummary, obj.getImageDataEventSummary_());
+        end
+
+        function value = get.Mask(obj), value = obj.Mask_; end
+
+        function set.Mask(obj, value)
+            if ~isempty(value) && (~islogical(value) || ~ismatrix(value) || ...
+                    ~isequal(size(value), [obj.ImageData_.SizeY obj.ImageData_.SizeX]))
+                error('matlabx:ui:axes:ImageAxes:InvalidMask', ...
+                    'Mask must be empty or a logical array matching the image Y-by-X dimensions.');
+            end
+            if isempty(value), value = []; end
+            previous = obj.Mask_;
+            obj.Mask_ = value;
+            obj.updateImageMask();
+            obj.refreshContextMenu();
+            obj.notifyDisplayStateChanged_("Mask", [], previous, value);
+        end
+
+        function value = get.MaskEnabled(obj), value = obj.MaskEnabled_; end
+
+        function set.MaskEnabled(obj, value)
+            previous = obj.MaskEnabled_;
+            obj.MaskEnabled_ = value;
+            obj.updateImageMask();
+            obj.refreshContextMenu();
+            obj.notifyDisplayStateChanged_("MaskEnabled", [], previous, value);
+        end
+
+        function value = get.OverlaysVisible(obj), value = obj.OverlaysVisible_; end
+
+        function set.OverlaysVisible(obj, value)
+            previous = obj.OverlaysVisible_;
+            obj.OverlaysVisible_ = value;
+            if isgraphics(obj.ApplicationOverlayLayer)
+                obj.ApplicationOverlayLayer.Visible = value;
+            end
+            if ~isempty(obj.OverlayManager)
+                obj.OverlayManager.refreshVisibility();
+            end
+            obj.refreshContextMenu();
+            obj.notifyDisplayStateChanged_("OverlaysVisible", [], previous, value);
+        end
+
+        function toggleOverlays(obj)
+        %TOGGLEOVERLAYS Show/hide overlays without changing their own Visible flags.
+            obj.OverlaysVisible = ~obj.OverlaysVisible;
+        end
+
+        function toggleMask(obj)
+        %TOGGLEMASK Toggle display masking without changing the stored mask.
+            obj.MaskEnabled = ~obj.MaskEnabled;
         end
 
         % --- RenderSource: selected plane or computed composite ---
@@ -2817,6 +2901,9 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
                 "ZoomFactor", viewport.ZoomFactor, ...
                 "ZoomLevel", viewport.ZoomLevel);
             S.Display = struct( ...
+                "MaskEnabled", string(obj.MaskEnabled), ...
+                "HasMask", ~isempty(obj.Mask), ...
+                "OverlaysVisible", string(obj.OverlaysVisible), ...
                 "ColorbarVisible", string(obj.ColorbarVisible), ...
                 "ViewportBoxVisible", string(obj.ViewportBoxVisible), ...
                 "MaxRenderedResolution", obj.MaxRenderedResolution, ...
@@ -3269,6 +3356,7 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
 
         % toggle Enabled state of "state" tool specified by name (toolbar button ValueChangedFcn)
         function onToolToggle(obj,toolState,name)
+            focus(obj.ParentFig); % attempt to defocus the axes toolbar so that the axes can receive keyboard input
             obj.ToolManager.toggle(toolState, name);
         end
 
@@ -3812,12 +3900,146 @@ classdef ImageAxes < matlab.ui.componentcontainer.ComponentContainer
         end
 
 
+        function [ax,fig] = demoSegmentation(opts)
+        %DEMOSEGMENTATION Inspect segmented rice with a mask and polygon regions.
+        %
+        %   ax = matlabx.ui.axes.ImageAxes.demoSegmentation() displays rice.png.
+        %   Use Mask/Overlays to flicker the results, RectangleSelect for batch
+        %   selection, and the Polygon context menu to delete regions.
+        %   Deleting a polygon leaves the display mask unchanged.
+        %   Requires Image Processing Toolbox.
+            arguments
+                opts.Visible (1,1) matlab.lang.OnOffSwitchState = "on"
+            end
+
+            I = imread('rice.png');
+            % Remove slowly varying illumination before thresholding the grains.
+            background = imopen(I, strel('disk',15,0));
+            mask = imbinarize(I - background);
+            mask = bwareaopen(mask, 50, 8);
+            mask = imfill(mask, 'holes');
+            % Pixel-edge tracing avoids backtracking along thin pixel centers.
+            boundaries = bwboundaries(mask, 8, 'noholes', 'TraceStyle', 'pixeledge');
+
+            [ax,fig] = matlabx.app.quickshow(I, ...
+                "Title", "Rice Segmentation", ...
+                "Tools", {'Zoom','Mask','Overlays','Polygon','RectangleSelect'}, ...
+                "Visible", "off");
+            ax.Mask = mask;
+            ax.MaskEnabled = "on";
+            ax.Tools.RectangleSelect.TargetTypes = "Polygon";
+
+            for i = 1:numel(boundaries)
+                % bwboundaries returns [row column]; overlays use [x y].
+                vertices = boundaries{i}(:,[2 1]);
+                ax.Tools.Polygon.addPolygon("rice-" + i, vertices, ...
+                    "Label", "Grain " + i, ...
+                    "EdgeColor", [0 1 0], ...
+                    "FaceColor", [0 1 0]);
+            end
+
+            fig.Visible = opts.Visible;
+        end
+
+        function ax = demoOverlays()
+            I = matlabx.image.Image5D.demo();
+            ax = matlabx.app.quickshow(I,...
+                "Title","Overlay Demo", ...
+                "Tools",{'Zoom','Line','Point','Rectangle','Box','RectangleSelect'}, ...
+                "ComponentColorMode","colors", ...
+                "Location","center");
+        end
+
+
+
+
+    end
+
+    % Passive application content has its own lifetime registry. It does not
+    % participate in the interactive overlay manager's selection or tools.
+    properties (Access=private)
+        ApplicationOverlayLayer = []
+        ApplicationOverlayMounts = {}
+        ApplicationOverlayLifetimeListener = []
+    end
+
+    methods
+        function mount = mountOverlay(obj,content)
+        %MOUNTOVERLAY Attach application-owned passive content, or transfer it.
+            arguments
+                obj
+                content (1,1) matlabx.ui.axes.ImageAxesOverlayContent
+            end
+            if ~isvalid(content)
+                error('matlabx:ui:InvalidOverlayContent','Content has been deleted.');
+            end
+            previous = content.Mount;
+            if ~isempty(previous) && isvalid(previous)
+                if any(cellfun(@(m) m == previous,obj.ApplicationOverlayMounts))
+                    mount = previous;
+                    return;
+                end
+                previous.remove();
+            end
+            mount = matlabx.ui.axes.ImageAxesOverlayMount( ...
+                obj,content,obj.ApplicationOverlayLayer);
+            obj.ApplicationOverlayMounts{end+1} = mount;
+            content.Mount = mount;
+            try
+                mount.attachContent();
+            catch exception
+                % Detach partial graphics while preserving the attach error.
+                try
+                    mount.remove();
+                catch
+                    % The mount's cleanup still deletes its graphics group.
+                end
+                rethrow(exception);
+            end
+        end
+
+        function unmountOverlay(obj,content)
+        %UNMOUNTOVERLAY Remove only this host's relationship with content.
+            mounts = obj.ApplicationOverlayMounts;
+            for k = 1:numel(mounts)
+                if mounts{k}.Content == content
+                    mounts{k}.remove();
+                    return;
+                end
+            end
+        end
+    end
+
+    methods (Access=?matlabx.ui.axes.ImageAxesOverlayMount)
+        function releaseOverlayMount(obj,mount)
+            obj.ApplicationOverlayMounts = obj.ApplicationOverlayMounts( ...
+                ~cellfun(@(m) m == mount,obj.ApplicationOverlayMounts));
+        end
+    end
+
+    methods (Access=private)
+        function detachApplicationOverlays(obj)
+            % Snapshot because each removal unregisters itself. Continue even
+            % if application cleanup fails, so other content can survive.
+            mounts = obj.ApplicationOverlayMounts;
+            for k = 1:numel(mounts)
+                if isvalid(mounts{k})
+                    try
+                        mounts{k}.remove();
+                    catch exception
+                        warning('matlabx:ui:OverlayDetachFailed','%s',exception.message);
+                    end
+                end
+            end
+        end
     end
 
     %% Teardown
     methods
 
         function delete(obj)
+
+            obj.detachApplicationOverlays();
 
             % remove listeners first
             if ~isempty(obj.L), delete(obj.L(isvalid(obj.L))); end
