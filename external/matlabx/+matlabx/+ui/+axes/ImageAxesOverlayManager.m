@@ -1,3 +1,13 @@
+classdef ImageAxesOverlayManager < handle
+%IMAGEAXESOVERLAYMANAGER Registry and state manager for ImageAxes overlays.
+%
+%   The manager owns overlay lifetime and cross-overlay state. Active and
+%   hover state are global: at most one overlay of any type can be active and
+%   one can be hovered. Selection can contain overlays of multiple types.
+%   Type arguments filter these states; they do not create per-type active or
+%   hover slots. Tools remain controllers: they decide when to create, drag,
+%   select, activate, or delete overlays.
+
 % matlabx - MATLAB utilities for app building, image display, and analysis.
 % Copyright (C) 2026 William Dean
 %
@@ -14,19 +24,13 @@
 % You should have received a copy of the GNU General Public License along
 % with this program; if not, see <https://www.gnu.org/licenses/>.
 
-classdef ImageAxesOverlayManager < handle
-%IMAGEAXESOVERLAYMANAGER Registry and state manager for ImageAxes overlays.
-%
-%   The manager owns overlay lifetime and cross-overlay state such as active,
-%   hovered, and selected IDs. Tools remain controllers: they decide when to
-%   create, drag, select, activate, or delete overlays.
-
     properties (SetAccess=private)
         Host matlabx.ui.axes.ImageAxes
     end
 
     properties (Access=private)
         Registry
+        BoundaryCollections cell = {}
         ActiveID (1,1) string = ""
         HoverID (1,1) string = ""
         SelectedIDs (1,:) string = string.empty(1,0)
@@ -45,6 +49,78 @@ classdef ImageAxesOverlayManager < handle
         %IMAGEAXESOVERLAYMANAGER Create an overlay manager for one host.
             obj.Host = host;
             obj.Registry = containers.Map('KeyType', 'char', 'ValueType', 'any');
+        end
+
+        function delete(obj)
+        %DELETE Release shared renderers owned by this manager.
+            for i=numel(obj.BoundaryCollections):-1:1
+                collection=obj.BoundaryCollections{i};
+                if ~isempty(collection) && isvalid(collection), delete(collection); end
+            end
+            obj.BoundaryCollections={};
+        end
+
+        function collection = createBoundaryCollection(obj)
+        %CREATEBOUNDARYCOLLECTION Create and retain a shared boundary renderer.
+            collection=matlabx.ui.axes.BoundaryCollection(obj.Host);
+            obj.BoundaryCollections{end+1}=collection;
+        end
+
+        function collections = getBoundaryCollections(obj)
+        %GETBOUNDARYCOLLECTIONS Return valid shared boundary renderers.
+            keep=cellfun(@(x) ~isempty(x)&&isvalid(x),obj.BoundaryCollections);
+            obj.BoundaryCollections=obj.BoundaryCollections(keep);
+            collections=obj.BoundaryCollections;
+        end
+
+        function collection = boundaryCollectionForTarget(obj,target)
+        %BOUNDARYCOLLECTIONFORTARGET Resolve a shared patch target.
+            collection=[];
+            collections=obj.getBoundaryCollections();
+            for i=1:numel(collections)
+                if collections{i}.ownsTarget(target), collection=collections{i}; return; end
+            end
+        end
+
+        function setBoundaryCollectionsVisible(obj,value)
+        %SETBOUNDARYCOLLECTIONSVISIBLE Set independent collection visibility.
+            value=matlab.lang.OnOffSwitchState(value);
+            collections=obj.getBoundaryCollections();
+            for i=1:numel(collections), collections{i}.Visible=value; end
+        end
+
+        function cleanup = beginExportStyleScale(obj,scale)
+        %BEGINEXPORTSTYLESCALE Temporarily scale native overlay primitives.
+        %
+        %   CLEANUP = beginExportStyleScale(SCALE) changes only rendered
+        %   graphics properties. Overlay model/style properties are untouched.
+        %   Deleting CLEANUP restores every surviving primitive.
+            arguments
+                obj (1,1) matlabx.ui.axes.ImageAxesOverlayManager
+                scale (1,1) double {mustBePositive,mustBeFinite}
+            end
+
+            handles = matlab.graphics.Graphics.empty();
+            overlays = obj.all();
+            for i = 1:numel(overlays)
+                overlay = overlays{i};
+                if ~isempty(overlay) && isvalid(overlay)
+                    graphics = overlay.exportGraphics();
+                    handles = [handles;graphics(:)]; %#ok<AGROW>
+                end
+            end
+            collections = obj.getBoundaryCollections();
+            for i = 1:numel(collections)
+                graphics = collections{i}.exportGraphics();
+                handles = [handles;graphics(:)]; %#ok<AGROW>
+            end
+            % Each native overlay owns its primitives, while each shared
+            % collection is visited once. Avoid UNIQUE here because MATLAB
+            % graphics arrays can contain heterogeneous handle classes.
+            handles = handles(isgraphics(handles));
+
+            state = obj.captureScaledGraphics_(handles,scale);
+            cleanup = onCleanup(@() obj.restoreScaledGraphics_(state));
         end
 
         function overlay = add(obj, typeOrOverlay, varargin)
@@ -215,7 +291,7 @@ classdef ImageAxesOverlayManager < handle
         end
 
         function setActive(obj, id)
-        %SETACTIVE Make one overlay active and clear prior active state.
+        %SETACTIVE Make one overlay globally active and clear the prior active overlay.
             id = obj.normalizeId(id);
             if strlength(id) > 0 && ~obj.has(id)
                 return
@@ -310,7 +386,7 @@ classdef ImageAxesOverlayManager < handle
             arguments
                 obj
                 ids
-                opts.Type (1,1) string = ""
+                opts.Type (1,:) string = ""
             end
 
             ids = unique(obj.normalizeIds(ids), "stable");
@@ -355,32 +431,33 @@ classdef ImageAxesOverlayManager < handle
             notify(obj, 'SelectionChanged');
         end
 
-        function deselect(obj, id)
-        %DESELECT Remove one overlay from the selected set.
-            id = obj.normalizeId(id);
-            obj.SelectedIDs(obj.SelectedIDs == id) = [];
-            if obj.has(id)
-                overlay = obj.get(id);
-                overlay.Selected = false;
-            end
-            notify(obj, 'SelectionChanged');
+        function deselect(obj, ids)
+        %DESELECT Remove one or more overlays in one selection transaction.
+        %   Missing, duplicate, and already-unselected IDs are harmless. The
+        %   differential setSelected path updates visuals once per affected
+        %   overlay and emits at most one SelectionChanged notification.
+            ids = unique(obj.normalizeIds(ids), "stable");
+            final = obj.SelectedIDs(~ismember(obj.SelectedIDs, ids));
+            obj.setSelected(final);
         end
 
-        function toggleSelected(obj, id)
-        %TOGGLESELECTED Toggle selected state for one overlay.
-            id = obj.normalizeId(id);
-            if any(obj.SelectedIDs == id)
-                obj.deselect(id);
-            else
-                obj.select(id);
-            end
+        function toggleSelected(obj, ids)
+        %TOGGLESELECTED Toggle one or more overlays in one transaction.
+        %   Surviving selections retain their order. Newly selected IDs are
+        %   appended in stable request order. Each valid ID is toggled once.
+            ids = unique(obj.normalizeIds(ids), "stable");
+            ids = ids(arrayfun(@(id) obj.has(id), ids));
+            remove = ids(ismember(ids, obj.SelectedIDs));
+            add = ids(~ismember(ids, obj.SelectedIDs));
+            final = [obj.SelectedIDs(~ismember(obj.SelectedIDs, remove)), add];
+            obj.setSelected(final);
         end
 
         function clearSelection(obj, opts)
         %CLEARSELECTION Clear selected overlays, optionally filtered by Type.
             arguments
                 obj
-                opts.Type (1,1) string = ""
+                opts.Type (1,:) string = ""
             end
 
             obj.setSelected(string.empty(1,0), Type=opts.Type);
@@ -390,7 +467,7 @@ classdef ImageAxesOverlayManager < handle
         %GETSELECTEDIDS Return selected overlay IDs, optionally filtered by Type.
             arguments
                 obj
-                opts.Type (1,1) string = ""
+                opts.Type (1,:) string = ""
             end
 
             ids = obj.filterIDsByType(obj.SelectedIDs, opts.Type);
@@ -423,6 +500,33 @@ classdef ImageAxesOverlayManager < handle
             ids = candidateIDs(keep);
         end
 
+        function selectInsideRectangle(obj, rect, opts)
+        %SELECTINSIDERECTANGLE Apply one batched rectangle-selection update.
+        %   Mode is "replace", "toggle", or "remove". Type accepts the same
+        %   scalar/vector filters as idsInsideRectangle. Restricted replace
+        %   preserves selected overlays outside the requested types.
+            arguments
+                obj
+                rect (1,4) double
+                opts.Mode (1,1) string {mustBeMember(opts.Mode, ...
+                    ["replace","toggle","remove"])} = "replace"
+                opts.Type (1,:) string = ""
+            end
+
+            enclosed = obj.idsInsideRectangle(rect, Type=opts.Type);
+            switch opts.Mode
+                case "toggle"
+                    obj.toggleSelected(enclosed);
+                case "remove"
+                    obj.deselect(enclosed);
+                case "replace"
+                    current = obj.getSelectedIDs();
+                    targeted = obj.filterIDsByType(current, opts.Type);
+                    survivors = current(~ismember(current, targeted));
+                    obj.setSelected([survivors, enclosed]);
+            end
+        end
+
         function refreshVisibility(obj)
         %REFRESHVISIBILITY Combine host visibility with current C/Z/T applicability.
             vals = obj.Registry.values;
@@ -435,6 +539,37 @@ classdef ImageAxesOverlayManager < handle
                 visible = obj.Host.OverlaysVisible == "on" && overlay.appliesToView( ...
                     obj.Host.C, obj.Host.Z, obj.Host.T, obj.Host.ShowComposite);
                 overlay.setViewVisible(matlab.lang.OnOffSwitchState(visible));
+            end
+        end
+    end
+
+    methods (Static, Access=private)
+        function state = captureScaledGraphics_(handles,scale)
+        %CAPTURESCALEDGRAPHICS_ Snapshot and scale supported size properties.
+            names = ["LineWidth","MarkerSize","FontSize","SizeData"];
+            powers = [1 1 1 2];
+            state = struct('Handle',{},'Property',{},'Value',{});
+            for i = 1:numel(handles)
+                h = handles(i);
+                for j = 1:numel(names)
+                    name = names(j);
+                    if ~isprop(h,name), continue; end
+                    value = h.(name);
+                    if ~isnumeric(value) || isempty(value), continue; end
+                    state(end+1) = struct( ... %#ok<AGROW>
+                        'Handle',h,'Property',name,'Value',value);
+                    h.(name) = value .* scale.^powers(j);
+                end
+            end
+        end
+
+        function restoreScaledGraphics_(state)
+        %RESTORESCALEDGRAPHICS_ Restore surviving primitives after export.
+            for i = numel(state):-1:1
+                h = state(i).Handle;
+                if isgraphics(h) && isprop(h,state(i).Property)
+                    h.(state(i).Property) = state(i).Value;
+                end
             end
         end
     end

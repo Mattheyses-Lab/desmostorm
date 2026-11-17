@@ -1,19 +1,3 @@
-% matlabx - MATLAB utilities for app building, image display, and analysis.
-% Copyright (C) 2026 William Dean
-%
-% This program is free software; you can redistribute it and/or modify it
-% under the terms of the GNU General Public License as published by the Free
-% Software Foundation; either version 2 of the License, or (at your option)
-% any later version.
-%
-% This program is distributed in the hope that it will be useful, but WITHOUT
-% ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-% FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
-% details.
-%
-% You should have received a copy of the GNU General Public License along
-% with this program; if not, see <https://www.gnu.org/licenses/>.
-
 classdef ImageAxesToolManager < handle
 %IMAGEAXESTOOLMANAGER Tool loading, installation, toolbar, and routing helper.
 %
@@ -31,7 +15,23 @@ classdef ImageAxesToolManager < handle
 %
 %   The manager keeps lifecycle bookkeeping, toolbar wiring, and event-routing
 %   lookup out of ImageAxes while preserving the tool-owned install/uninstall
-%   hooks in AxesTool subclasses.
+%   hooks in ImageAxesTool subclasses.
+
+% matlabx - MATLAB utilities for app building, image display, and analysis.
+% Copyright (C) 2026 William Dean
+%
+% This program is free software; you can redistribute it and/or modify it
+% under the terms of the GNU General Public License as published by the Free
+% Software Foundation; either version 2 of the License, or (at your option)
+% any later version.
+%
+% This program is distributed in the hope that it will be useful, but WITHOUT
+% ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+% FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
+% details.
+%
+% You should have received a copy of the GNU General Public License along
+% with this program; if not, see <https://www.gnu.org/licenses/>.
 
     properties (SetAccess=private)
         Host matlabx.ui.axes.ImageAxes
@@ -53,25 +53,40 @@ classdef ImageAxesToolManager < handle
 
         function register(obj, tool)
         %REGISTER Add an installed tool to manager and host state.
-            if ~isvalid(tool)
-                warning('Failed to register tool. Invalid handle.')
-                return
+            obj.validateTool(tool);
+            existing = obj.getInstalled(tool.Name);
+            if ~isempty(existing)
+                if existing == tool
+                    return;
+                end
+                error('matlabx:ui:ToolNameConflict', ...
+                    'A different tool named "%s" is already installed.',tool.Name);
             end
 
-            obj.addToolbarButton(tool);
+            % Publish identity before contributions so failure cleanup can
+            % remove everything through the ordinary unregister path.
             obj.Tools.(char(tool.Name)) = tool;
             obj.InstalledTools(char(tool.Name)) = tool;
-            obj.Host.registerToolHotkeys(tool);
-            obj.contributeContextMenu(tool);
+            try
+                if tool.ContributeToolbar
+                    obj.addToolbarButton(tool);
+                end
+                obj.Host.registerToolHotkeys(tool);
+                if tool.ContributeContextMenu
+                    obj.contributeContextMenu(tool);
+                end
+            catch exception
+                obj.unregister(tool);
+                rethrow(exception);
+            end
         end
 
         function unregister(obj, tool)
-        %UNREGISTER Remove an installed tool while keeping it loaded.
-            if ~obj.InstalledTools.isKey(char(tool.Name))
-                warning('Failed to unregister tool. "%s" tool is not currently registered.', tool.Name)
-                return
+        %UNREGISTER Remove this exact installation without deleting its owner.
+            existing = obj.getInstalled(tool.Name);
+            if isempty(existing) || existing ~= tool
+                return;
             end
-
             obj.Host.HotkeyRegistry.removeOwner(tool);
             obj.removeContextMenuContributions(tool);
             obj.removeToolbarButton(tool);
@@ -79,8 +94,24 @@ classdef ImageAxesToolManager < handle
             obj.InstalledTools.remove(char(tool.Name));
         end
 
+        function uninstallAll(obj)
+        %UNINSTALLALL Release contributions while host graphics still exist.
+        %   Only LoadedTools owns objects. InstalledTools also holds borrowed
+        %   application objects, which must never be deleted by this manager.
+            tools = obj.installedToolValues();
+            for k = 1:numel(tools)
+                if isvalid(tools{k})
+                    try
+                        tools{k}.uninstall();
+                    catch exception
+                        warning('matlabx:ui:ToolUninstallFailed','%s',exception.message);
+                    end
+                end
+            end
+        end
+
         function loadAll(obj)
-        %LOADALL Load every concrete tool class in matlabx.ui.axes.tools.
+        %LOADALL Load every concrete tool class in matlabx.ui.axes.tools.image.
             obj.loadMany(obj.Host.getToolNames());
         end
 
@@ -127,7 +158,7 @@ classdef ImageAxesToolManager < handle
                 return
             end
 
-            obj.LoadedTools(name) = matlabx.ui.axes.tools.(name)(obj.Host);
+            obj.LoadedTools(name) = matlabx.ui.axes.tools.image.(name)(obj.Host);
         end
 
         function unload(obj, name)
@@ -161,43 +192,44 @@ classdef ImageAxesToolManager < handle
         end
 
         function install(obj, name)
-        %INSTALL Make a loaded tool active in the host.
-            tool = obj.getLoaded(name);
-
-            if isempty(tool)
-                warning('Failed to install tool. "%s" tool is not loaded.', name)
-                return
+        %INSTALL Install a loaded built-in name or an application-owned object.
+            if isa(name,'matlabx.ui.axes.ImageAxesTool')
+                tool = name;
+                obj.validateTool(tool);
+            else
+                mustBeTextScalar(name);
+                tool = obj.getLoaded(name);
+                if isempty(tool)
+                    warning('Failed to install tool. "%s" tool is not loaded.', name)
+                    return;
+                end
             end
-
-            if obj.InstalledTools.isKey(char(tool.Name))
-                warning('Failed to install tool. "%s" tool is already installed.', name)
-                return
-            end
-
-            if ~ismember(tool.AxesType, ["image", "both"])
-                warning('Failed to install tool. "%s" tool is for "%s" axes, not image axes.', ...
-                    char(name), char(tool.AxesType))
-                return
-            end
-
+            % ImageAxesTool.install calls register for both ownership cases. Object
+            % inputs are deliberately never added to the owning LoadedTools map.
             tool.install();
         end
 
         function uninstall(obj, name)
-        %UNINSTALL Remove a tool from active host registries.
-            tool = obj.getLoaded(name);
-
-            if isempty(tool)
-                warning('Failed to uninstall tool. "%s" tool is not loaded.', name)
-                return
+        %UNINSTALL Accept an installed name or the exact supplied instance.
+            if isa(name,'matlabx.ui.axes.ImageAxesTool')
+                if ~isscalar(name)
+                    error('matlabx:ui:InvalidTool','Tool must be scalar.');
+                end
+                if ~isvalid(name)
+                    return;
+                end
+                obj.validateTool(name);
+                tool = obj.getInstalled(name.Name);
+                if isempty(tool) || tool ~= name
+                    return;
+                end
+            else
+                mustBeTextScalar(name);
+                tool = obj.getInstalled(name);
             end
-
-            if ~obj.InstalledTools.isKey(char(tool.Name))
-                warning('Failed to uninstall tool. "%s" tool is already uninstalled.', name)
-                return
+            if ~isempty(tool)
+                tool.uninstall();
             end
-
-            tool.uninstall();
         end
 
         function uninstallMany(obj, toolNames)
@@ -395,6 +427,7 @@ classdef ImageAxesToolManager < handle
                     host.ToolbarButtons.(tool.Name) = axtoolbarbtn(host.mainAxes.Toolbar, 'state', ...
                         'Tooltip', tool.Tooltip, ...
                         'Icon', tool.Icon, ...
+                        'Value', tool.Enabled, ...
                         'ValueChangedFcn', @(btn,~) host.onToolToggle(btn.Value, tool.Name));
             end
 
@@ -412,11 +445,9 @@ classdef ImageAxesToolManager < handle
 
             tbButton = host.ToolbarButtons.(tool.Name);
 
-            if ~isvalid(tbButton)
-                return
+            if isvalid(tbButton)
+                delete(tbButton);
             end
-
-            delete(tbButton)
             host.ToolbarButtons = rmfield(host.ToolbarButtons, tool.Name);
             % below commented - errors in R2026
             %host.mainAxes.Toolbar.reset;
@@ -443,6 +474,20 @@ classdef ImageAxesToolManager < handle
     end
 
     methods (Access=private)
+        function validateTool(obj,tool)
+        %VALIDATETOOL Keep host identity and installed-name ownership explicit.
+            if ~isa(tool,'matlabx.ui.axes.ImageAxesTool') || ~isscalar(tool) || ~isvalid(tool)
+                error('matlabx:ui:InvalidTool','Expected a valid scalar ImageAxesTool.');
+            end
+            if isempty(tool.Host) || ~isvalid(tool.Host) || tool.Host ~= obj.Host
+                error('matlabx:ui:ToolHostMismatch', ...
+                    'Tool must be constructed for the receiving ImageAxes.');
+            end
+            if ~isvarname(char(tool.Name))
+                error('matlabx:ui:InvalidToolName','Tool Name must be a valid MATLAB identifier.');
+            end
+        end
+
         function notifyHostBoundary(obj, methodName, E)
         %NOTIFYHOSTBOUNDARY Call a host-boundary hook on installed tools.
             toolsCell = obj.prioritySort();

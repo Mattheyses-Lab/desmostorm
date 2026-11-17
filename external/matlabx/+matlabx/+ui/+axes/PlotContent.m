@@ -1,3 +1,27 @@
+classdef PlotContent < handle
+%PLOTCONTENT Base lifecycle for graphics transferable between PlotAxes hosts.
+%
+% PlotContent defines the ownership boundary between a stable PlotAxes host
+% and application-owned renderer state. Subclasses override attachGraphics,
+% hideGraphics, and refresh while this base class coordinates transfer,
+% detachment, and host identity.
+%
+% A content object can be mounted, cleared, and mounted again without being
+% deleted:
+%
+%   content = matlabx.ui.axes.plot.ScatterRenderer;
+%   host.mount(content);
+%   host.clear;
+%   otherHost.mount(content);
+%
+% Subclasses may also override contributeContextMenu to add commands that
+% make sense only while that content is mounted. PlotAxes owns the resulting
+% menu graphics and removes them automatically when the content is detached.
+%
+% See also matlabx.ui.axes.PlotAxes,
+% matlabx.ui.axes.plot.ScatterRenderer,
+% matlabx.ui.axes.plot.ViolinRenderer
+
 % matlabx - MATLAB utilities for app building, image display, and analysis.
 % Copyright (C) 2026 William Dean
 %
@@ -14,10 +38,9 @@
 % You should have received a copy of the GNU General Public License along
 % with this program; if not, see <https://www.gnu.org/licenses/>.
 
-classdef PlotContent < handle
-%PLOTCONTENT Base lifecycle for graphics transferable between PlotAxes hosts.
-
+    % Current attachment identity managed jointly with PlotAxes.
     properties (SetAccess=private)
+        % PlotAxes currently hosting this content, or empty while detached.
         Host (:,1) matlabx.ui.axes.PlotAxes = matlabx.ui.axes.PlotAxes.empty(0,1)
     end
 
@@ -82,6 +105,14 @@ classdef PlotContent < handle
 
         function handleEvent(~,~,~)
         %HANDLEEVENT Future FigureEventHub routing hook; subclasses may override.
+        end
+
+        function contributeContextMenu(~,~)
+        %CONTRIBUTECONTEXTMENU Add optional content-specific menu commands.
+        %
+        % Subclasses receive the host's PlotAxesContextMenuManager after a
+        % successful attachment. Contributions should set Owner to the content
+        % object so PlotAxes can remove them as one lifecycle-owned group.
         end
 
     end

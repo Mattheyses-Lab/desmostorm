@@ -1,3 +1,14 @@
+classdef ImageAxesOverlay < handle & matlab.mixin.SetGetExactNames
+%IMAGEAXESOVERLAY Base class for graphics overlays hosted by ImageAxes.
+%
+%   ImageAxesOverlay is intentionally small. It owns identity, host/axes
+%   attachment, C/Z/T applicability, common state flags, and graphics lifetime.
+%   Concrete subclasses own geometry and appearance policy.
+%
+%   State flags such as Hovered, Selected, and Active are descriptive state.
+%   Subclasses decide how those flags change graphics appearance in
+%   updateAppearance().
+
 % matlabx - MATLAB utilities for app building, image display, and analysis.
 % Copyright (C) 2026 William Dean
 %
@@ -13,17 +24,6 @@
 %
 % You should have received a copy of the GNU General Public License along
 % with this program; if not, see <https://www.gnu.org/licenses/>.
-
-classdef ImageAxesOverlay < handle & matlab.mixin.SetGetExactNames
-%IMAGEAXESOVERLAY Base class for graphics overlays hosted by ImageAxes.
-%
-%   ImageAxesOverlay is intentionally small. It owns identity, host/axes
-%   attachment, C/Z/T applicability, common state flags, and graphics lifetime.
-%   Concrete subclasses own geometry and appearance policy.
-%
-%   State flags such as Hovered, Selected, and Active are descriptive state.
-%   Subclasses decide how those flags change graphics appearance in
-%   updateAppearance().
 
     properties (SetAccess=protected)
         Host matlabx.ui.axes.ImageAxes
@@ -207,6 +207,13 @@ classdef ImageAxesOverlay < handle & matlab.mixin.SetGetExactNames
                 effectiveVisible = obj.Visible == "on" && obj.ViewVisible == "on";
                 set(h, "Visible", matlab.lang.OnOffSwitchState(effectiveVisible));
             end
+        end
+    end
+
+    methods (Access=?matlabx.ui.axes.ImageAxesOverlayManager)
+        function h = exportGraphics(obj)
+        %EXPORTGRAPHICS Return valid primitives for scoped export styling.
+            h = obj.Graphics(isgraphics(obj.Graphics));
         end
     end
 

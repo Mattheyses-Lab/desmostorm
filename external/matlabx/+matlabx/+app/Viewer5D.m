@@ -1,3 +1,7 @@
+classdef Viewer5D < handle
+%VIEWER5D Display and navigate multidimensional image data.
+% matlabx.app.Viewer5D - Image Visualizer App
+
 % matlabx - MATLAB utilities for app building, image display, and analysis.
 % Copyright (C) 2026 William Dean
 %
@@ -14,9 +18,6 @@
 % You should have received a copy of the GNU General Public License along
 % with this program; if not, see <https://www.gnu.org/licenses/>.
 
-classdef Viewer5D < handle
-% matlabx.app.Viewer5D - Image Visualizer App
-
     properties (Access=private,Transient,NonCopyable)
         % --- window and main grid ---
         Fig matlab.ui.Figure
@@ -29,7 +30,7 @@ classdef Viewer5D < handle
 
     % Priavte UI helpers
     properties (Access=private)
-        % status flag for SizeChangedFcn 
+        % status flag for SizeChangedFcn
         isResizingFigure (1,1) logical = false
         % One-shot timer used to fit tight/square windows after live resize settles.
         ResizeSettleTimer
@@ -241,7 +242,13 @@ classdef Viewer5D < handle
             % --- File ---
             obj.MenubarUI.File       = uimenu(obj.Fig,'Text','File');
             obj.MenubarUI.File_Load  = uimenu(obj.MenubarUI.File,'Text','Load...', 'MenuSelectedFcn',@(~,~) obj.onLoad(),'Accelerator','O');
-            obj.MenubarUI.File_Close = uimenu(obj.MenubarUI.File,'Text','Close','MenuSelectedFcn',@(~,~) obj.onClose(),'Accelerator','X');
+            obj.MenubarUI.File_SaveAs = uimenu(obj.MenubarUI.File, ...
+                'Text','Save As OME-TIFF...', ...
+                'MenuSelectedFcn',@(~,~) obj.onSaveAs(), ...
+                'Accelerator','S');
+            obj.MenubarUI.File_Close = uimenu(obj.MenubarUI.File, ...
+                'Text','Close','Separator','on', ...
+                'MenuSelectedFcn',@(~,~) obj.onClose(),'Accelerator','X');
 
             % --- Window ---
             obj.MenubarUI.Window = uimenu(obj.Fig,'Text','Window');
@@ -276,9 +283,9 @@ classdef Viewer5D < handle
                 'MenuSelectedFcn',@(o,~) obj.onWindowShapeMenuSelected(o),'Checked','off');
             S.square = uimenu(obj.MenubarUI.Window,'Text','square','Tag','square',...
                 'MenuSelectedFcn',@(o,~) obj.onWindowShapeMenuSelected(o),'Checked','off');
-            obj.MenubarUI.Window_Shape = S;    
+            obj.MenubarUI.Window_Shape = S;
 
-        end 
+        end
 
         function setupGrids(obj)
             % Main Grid
@@ -753,7 +760,7 @@ classdef Viewer5D < handle
         end
 
         function onClose(obj)
-        %ONCLOSE Menubar callback for [File]->[Close]    
+        %ONCLOSE Menubar callback for [File]->[Close]
             % no image -> return
             if isempty(obj.Image), return; end
             % --- delete project, detach listeners, refresh UI ---
@@ -761,6 +768,79 @@ classdef Viewer5D < handle
             obj.Image.delete();
             obj.Image = matlabx.app.Viewer5D.getDemoImage();
             obj.refreshUI();
+        end
+
+        function onSaveAs(obj)
+        %ONSAVEAS Save the current Image5D through the MATLABX OME-TIFF writer.
+            if isempty(obj.Image)
+                return
+            end
+
+            % ParamsDialog is a separate modal figure. Temporarily lower an
+            % always-on-top viewer so the export options remain accessible.
+            previousWindowStyle = obj.Fig.WindowStyle;
+            obj.Fig.WindowStyle = 'normal';
+            restoreWindowStyle = onCleanup( ...
+                @() set(obj.Fig,'WindowStyle',previousWindowStyle));
+            options = matlabx.app.ParamsDialog.prompt( ...
+                'OME-TIFF Export Options', ...
+                {'ImageName','Image name (optional)','string', ...
+                    obj.Image.Metadata.ImageName}, ...
+                {'EmbedLUTs','Embed channel lookup tables','logical',false});
+            if isempty(options)
+                matlabx.Log.DEBUG("OME-TIFF save canceled.");
+                return
+            end
+            clear restoreWindowStyle
+            obj.Fig.WindowStyle = previousWindowStyle;
+
+            % Hide always-on-top viewer windows while the native save dialog
+            % is open so the dialog cannot become inaccessible behind them.
+            previousVisibility = obj.Fig.Visible;
+            obj.Fig.Visible = 'off';
+            restoreVisibility = onCleanup( ...
+                @() set(obj.Fig,'Visible',previousVisibility));
+            [file,folder] = uiputfile( ...
+                {'*.ome.tiff;*.ome.tif','OME-TIFF (*.ome.tiff, *.ome.tif)'}, ...
+                'Save Image as OME-TIFF',obj.defaultSaveName_());
+            if isequal(file,0) || isequal(folder,0)
+                matlabx.Log.DEBUG("OME-TIFF save canceled.");
+                return
+            end
+            clear restoreVisibility
+            obj.Fig.Visible = previousVisibility;
+
+            file = normalizeOmeTiffName_(string(file));
+            destination = fullfile(string(folder),file);
+            previousPointer = obj.Fig.Pointer;
+            obj.Fig.Pointer = 'watch';
+            restorePointer = onCleanup( ...
+                @() set(obj.Fig,'Pointer',previousPointer));
+            drawnow;
+
+            try
+                matlabx.Log.DEBUG("Saving OME-TIFF: " + destination);
+                matlabx.image.io.writeOmeTiff( ...
+                    destination,obj.Image,Overwrite=true, ...
+                    ImageName=options.ImageName, ...
+                    EmbedLUTs=options.EmbedLUTs);
+                matlabx.Log.DEBUG("Saved OME-TIFF: " + destination);
+            catch ME
+                matlabx.Log.EXCEPTION(ME);
+                clear restorePointer
+                obj.Fig.Pointer = previousPointer;
+                obj.guialert( ...
+                    "Title","OME-TIFF Save Failed", ...
+                    "Message",ME.message, ...
+                    "Icon","error");
+                return
+            end
+
+            clear restorePointer
+            obj.Fig.Pointer = previousPointer;
+            uialert(obj.Fig, ...
+                "Saved image to:" + newline + destination, ...
+                'OME-TIFF Saved','Icon','success');
         end
 
 
@@ -777,6 +857,23 @@ classdef Viewer5D < handle
 
     %% Other helpers
     methods (Access=private)
+
+        function name = defaultSaveName_(obj)
+            %DEFAULTSAVENAME_ Derive a filesystem-safe name from image metadata.
+            name = obj.Image.Metadata.ImageName;
+            if strlength(name) == 0
+                core = obj.Image.CoreMetadata;
+                if isstruct(core) && isfield(core,'FilePath') && strlength(string(core.FilePath)) > 0
+                    [~,name] = fileparts(string(core.FilePath));
+                end
+            end
+            if strlength(name) == 0
+                name = "image";
+            end
+            name = regexprep(name,'[\\/:*?"<>|]','_');
+            name = regexprep(name,'(?i)(\.ome)?\.tiff?$','');
+            name = name + ".ome.tiff";
+        end
 
         function guialert(obj,opts)
             arguments
@@ -810,4 +907,16 @@ classdef Viewer5D < handle
 
     end
 
+end
+
+
+function name = normalizeOmeTiffName_(name)
+    if endsWith(lower(name),[".ome.tif",".ome.tiff"])
+        return
+    end
+    if endsWith(lower(name),[".tif",".tiff"])
+        name = regexprep(name,'(?i)\.tiff?$','.ome.tiff');
+    else
+        name = name + ".ome.tiff";
+    end
 end
