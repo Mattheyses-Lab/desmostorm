@@ -1,3 +1,36 @@
+classdef PlotAxes < matlab.ui.componentcontainer.ComponentContainer
+%PLOTAXES Stable axes host for transferable plot-content renderers.
+%
+% PlotAxes mirrors the host/content boundary and pluggable-tool conventions
+% used by ImageAxes while retaining plot-specific collaborators. The host owns
+% the axes, layout, presentation, toolbar, and context menu. A PlotContent
+% object owns plot primitives and can move between PlotAxes hosts without
+% reparenting this container.
+%
+% PlotAxes registers once with FigureEventHub and forwards normalized events
+% to its mounted content. Keeping the axes stable gives the hub one durable
+% registrant per panel, independent of the currently mounted renderer.
+%
+% Create a host, prepare renderer data and style, then mount the renderer:
+%
+%   fig = uifigure;
+%   host = matlabx.ui.axes.PlotAxes(fig);
+%   renderer = matlabx.ui.axes.plot.ScatterRenderer;
+%   data = matlabx.ui.axes.plot.ScatterData( ...
+%       XData={[1 2 3]}, YData={[2 1 4]}, SeriesNames="Samples", ...
+%       CData={[0.2 0.5 0.8]});
+%   renderer.update(data,matlabx.ui.axes.plot.ScatterStyle(Title="Example"));
+%   host.mount(renderer);
+%
+% Content remains application-owned and reusable. clear detaches it without
+% deleting it, and mounting the same content in another PlotAxes transfers it.
+%
+% See also matlabx.ui.axes.PlotContent, matlabx.ui.axes.PlotAxesTool,
+% matlabx.ui.axes.PlotAxesToolManager,
+% matlabx.ui.axes.PlotAxesContextMenuManager,
+% matlabx.ui.axes.plot.ScatterRenderer,
+% matlabx.ui.axes.plot.ViolinRenderer
+
 % matlabx - MATLAB utilities for app building, image display, and analysis.
 % Copyright (C) 2026 William Dean
 %
@@ -14,41 +47,114 @@
 % You should have received a copy of the GNU General Public License along
 % with this program; if not, see <https://www.gnu.org/licenses/>.
 
-classdef PlotAxes < matlab.ui.componentcontainer.ComponentContainer
-%PLOTAXES Stable axes host for transferable plot-content renderers.
-%
-% PlotAxes mirrors the host/content boundary used by ImageAxes without yet
-% reproducing its complete event and tool systems. The host owns the axes,
-% layout, and presentation state. A PlotContent object owns plot primitives
-% and can move between PlotAxes hosts without reparenting this container.
-%
-% Event routing and pluggable tools should attach here in the future. Keeping
-% the axes stable gives FigureEventHub one durable registrant per panel and
-% gives tools a host identity independent of the currently mounted renderer.
-
+    % Public host identity and appearance applied to the stable UIAxes.
     properties (AbortSet)
+        % Identifier assigned to the underlying axes Tag.
         Name (1,1) string = ""
-        ForegroundColor (1,3) double = [0 0 0]
-        FontSize (1,1) double {mustBePositive} = 12
+        % Foreground color used for rulers, labels, title, and subtitle.
+        ForegroundColor (1,3) double {mustBeBetween(ForegroundColor,0,1)} = [0 0 0]
+        % Plotting-area color, or "none" for a transparent axes background.
+        Color = [1 1 1]
+        % Font family applied to axes text.
+        FontName (1,1) string = "Helvetica"
+        % Units used for tick-label, title, subtitle, and axes-label font sizes.
+        FontUnits (1,1) string {mustBeMember(FontUnits,["points","pixels"])} = "points"
+        % Base axes font size used by tick labels.
+        FontSize (1,1) double {mustBePositive,mustBeFinite} = 9
+        % Native multiplier used by MATLAB for axes-label font sizes.
+        LabelFontSizeMultiplier (1,1) double {mustBePositive,mustBeFinite} = 1
+        % Native multiplier used by MATLAB for title font size.
+        TitleFontSizeMultiplier (1,1) double {mustBePositive,mustBeFinite} = 1
     end
 
+    % Configurable host UI and installed-tool state.
+    properties (Dependent)
+        % Installed PlotAxesTool objects; assignment replaces built-in tools.
+        Tools
+        % Built-in context-menu entries shown by the host.
+        ContextMenuItems
+        % Requested visibility of the axes toolbar.
+        ToolbarVisible (1,1) matlab.lang.OnOffSwitchState
+        % Expanded or collapsed state of the axes toolbar.
+        ToolbarExpanded (1,1) matlab.lang.OnOffSwitchState
+        % Visibility of the major Cartesian grid.
+        GridVisible (1,1) matlab.lang.OnOffSwitchState
+        % Visibility of the Cartesian axes box.
+        BoxVisible (1,1) matlab.lang.OnOffSwitchState
+        % Visibility of the axes title.
+        TitleVisible (1,1) matlab.lang.OnOffSwitchState
+    end
+
+    % Read-only access to the mounted renderer and stable UIAxes.
     properties (Dependent, SetAccess=private)
+        % Application-owned PlotContent currently mounted in this host.
         Content
+        % Stable UIAxes used by renderers and future tools.
         Axes
     end
 
-    properties (Access=private, Transient, NonCopyable)
+    % Graphics, listener, and content references owned by the host lifecycle.
+    properties (Access={?matlabx.ui.axes.PlotAxesTool, ...
+            ?matlabx.ui.axes.PlotAxesToolManager}, Transient, NonCopyable)
+        % Grid containing the stable axes.
         Grid matlab.ui.container.GridLayout
+        % UIAxes retained while renderer content changes.
         MainAxes matlab.ui.control.UIAxes
+        % Listener that detaches content before axes graphics are destroyed.
         AxesLifetimeListener event.listener = event.listener.empty()
+        % One-shot listener used when toolbar buttons are created while hidden.
+        InitialToolbarFocusListener event.listener = event.listener.empty()
+        % Backing reference for the currently mounted content.
         Content_ (:,1) matlabx.ui.axes.PlotContent = matlabx.ui.axes.PlotContent.empty(0,1)
+        % Shared figure event router used by this stable host.
+        Hub matlabx.ui.interaction.FigureEventHub
+        % Registration identifier assigned by FigureEventHub.
+        RouterId double = NaN
+        % Tool lifecycle, toolbar, context-menu, and hotkey collaborators.
+        ToolManager matlabx.ui.axes.PlotAxesToolManager
+        HotkeyRegistry matlabx.ui.axes.PlotAxesHotkeyRegistry
+        ContextMenuManager matlabx.ui.axes.PlotAxesContextMenuManager
+        % Toolbar buttons keyed by installed tool name.
+        ToolbarButtons struct = struct()
+        % Currently enabled exclusive tool, when present.
+        ActiveExclusiveTool = []
+        % Status report window owned by this host.
+        StatusWindow matlabx.app.TextWindow
     end
 
+    properties (Access=private, AbortSet)
+        % Backing built-in context-menu configuration.
+        ContextMenuItems_ (1,:) string = ["Display","ResetView","Status"]
+        % Backing requested toolbar visibility.
+        ToolbarVisible_ (1,1) matlab.lang.OnOffSwitchState = "on"
+        % Backing expanded or collapsed toolbar state.
+        ToolbarExpanded_ (1,1) matlab.lang.OnOffSwitchState = "on"
+        % Backing major-grid visibility.
+        GridVisible_ (1,1) matlab.lang.OnOffSwitchState = "off"
+        % Backing axes-box visibility.
+        BoxVisible_ (1,1) matlab.lang.OnOffSwitchState = "off"
+        % Backing axes-title visibility.
+        TitleVisible_ (1,1) matlab.lang.OnOffSwitchState = "off"
+        % Whether the status report window is currently open.
+        StatusWindowOpen_ (1,1) logical = false
+        % Whether tool teardown has already run for this host.
+        ToolsTornDown_ (1,1) logical = false
+        % Whether the ComponentContainer still has its first update pending.
+        FirstUpdatePending_ (1,1) logical = true
+    end
+
+    % Notifications emitted when the mounted content relationship changes.
     events
+        % Emitted after content is mounted, transferred, or cleared.
         ContentChanged
     end
 
     methods
+
+        function set.Color(obj,value)
+        %SET.COLOR Validate and normalize the plotting-area color.
+            obj.Color = normalizeAxesColor_(value,'Color');
+        end
 
         function content = get.Content(obj)
         %GET.CONTENT Return the renderer currently mounted in this host.
@@ -60,6 +166,384 @@ classdef PlotAxes < matlab.ui.componentcontainer.ComponentContainer
         %GET.AXES Expose the stable target axes to renderers and future tools.
 
             axes = obj.MainAxes;
+        end
+
+        function tools = get.Tools(obj)
+        %GET.TOOLS Return installed PlotAxesTool objects keyed by name.
+            tools = obj.ToolManager.Tools;
+        end
+
+        function set.Tools(obj,toolNames)
+        %SET.TOOLS Replace the installed set of manager-owned built-in tools.
+            obj.ToolManager.setInstalledNames(toolNames);
+        end
+
+        function items = get.ContextMenuItems(obj)
+        %GET.CONTEXTMENUITEMS Return configured built-in menu tokens.
+            items = obj.ContextMenuItems_;
+        end
+
+        function set.ContextMenuItems(obj,items)
+        %SET.CONTEXTMENUITEMS Validate and rebuild the built-in context menu.
+            items = matlabx.ui.axes.PlotAxesContextMenuManager.validateBuiltinItems(items);
+            obj.ContextMenuItems_ = items;
+            if ~isempty(obj.ContextMenuManager) && isvalid(obj.ContextMenuManager)
+                obj.ContextMenuManager.setBuiltinItems(items);
+            end
+        end
+
+        function value = get.ToolbarVisible(obj)
+        %GET.TOOLBARVISIBLE Return requested toolbar visibility.
+            value = obj.ToolbarVisible_;
+        end
+
+        function set.ToolbarVisible(obj,value)
+        %SET.TOOLBARVISIBLE Show or hide the hosted axes toolbar.
+            obj.ToolbarVisible_ = value;
+            if ~isempty(obj.MainAxes) && isvalid(obj.MainAxes) && ...
+                    ~isempty(obj.MainAxes.Toolbar) && isvalid(obj.MainAxes.Toolbar) && ...
+                    ~obj.FirstUpdatePending_
+                obj.MainAxes.Toolbar.Visible = value;
+            end
+            obj.refreshContextMenu();
+        end
+
+        function value = get.ToolbarExpanded(obj)
+        %GET.TOOLBAREXPANDED Return the native toolbar expansion state.
+            value = obj.ToolbarExpanded_;
+            if ~isempty(obj.MainAxes) && isvalid(obj.MainAxes) && ...
+                    ~isempty(obj.MainAxes.Toolbar) && isvalid(obj.MainAxes.Toolbar)
+                value = obj.MainAxes.Toolbar.Expanded;
+            end
+        end
+
+        function set.ToolbarExpanded(obj,value)
+        %SET.TOOLBAREXPANDED Expand or collapse the hosted axes toolbar.
+            obj.ToolbarExpanded_ = value;
+            if ~isempty(obj.MainAxes) && isvalid(obj.MainAxes) && ...
+                    ~isempty(obj.MainAxes.Toolbar) && isvalid(obj.MainAxes.Toolbar)
+                obj.MainAxes.Toolbar.Expanded = value;
+            end
+        end
+
+        function value = get.GridVisible(obj)
+        %GET.GRIDVISIBLE Return major-grid visibility.
+            value = obj.GridVisible_;
+        end
+
+        function set.GridVisible(obj,value)
+        %SET.GRIDVISIBLE Show or hide both major Cartesian grid directions.
+            obj.GridVisible_ = value;
+            if ~isempty(obj.MainAxes) && isvalid(obj.MainAxes)
+                obj.MainAxes.XGrid = value;
+                obj.MainAxes.YGrid = value;
+            end
+            obj.refreshContextMenu();
+        end
+
+        function value = get.BoxVisible(obj)
+        %GET.BOXVISIBLE Return axes-box visibility.
+            value = obj.BoxVisible_;
+        end
+
+        function set.BoxVisible(obj,value)
+        %SET.BOXVISIBLE Show or hide the Cartesian axes box.
+            obj.BoxVisible_ = value;
+            if ~isempty(obj.MainAxes) && isvalid(obj.MainAxes)
+                obj.MainAxes.Box = value;
+            end
+            obj.refreshContextMenu();
+        end
+
+        function value = get.TitleVisible(obj)
+        %GET.TITLEVISIBLE Return requested axes-title visibility.
+            value = obj.TitleVisible_;
+        end
+
+        function set.TitleVisible(obj,value)
+        %SET.TITLEVISIBLE Show or hide the hosted axes title.
+            obj.TitleVisible_ = value;
+            if ~isempty(obj.MainAxes) && isvalid(obj.MainAxes)
+                obj.MainAxes.Title.Visible = value;
+            end
+            obj.refreshContextMenu();
+        end
+
+        function installTool(obj,toolOrName)
+        %INSTALLTOOL Install a built-in name or application-owned PlotAxesTool.
+            if ~(isa(toolOrName,'matlabx.ui.axes.PlotAxesTool'))
+                name = string(toolOrName);
+                if isempty(obj.ToolManager.getLoaded(name))
+                    obj.ToolManager.load(name);
+                end
+            end
+            obj.ToolManager.install(toolOrName);
+        end
+
+        function uninstallTool(obj,toolOrName)
+        %UNINSTALLTOOL Remove tool contributions without deleting borrowed tools.
+            obj.ToolManager.uninstall(toolOrName);
+        end
+
+        function tool = getInstalledTool(obj,name)
+        %GETINSTALLEDTOOL Return an installed PlotAxesTool by name.
+            tool = obj.ToolManager.getInstalled(name);
+        end
+
+        function registerTool(obj,tool)
+        %REGISTERTOOL Register a PlotAxesTool and construct its contributions.
+            obj.ToolManager.register(tool);
+        end
+
+        function unregisterTool(obj,tool)
+        %UNREGISTERTOOL Remove one tool's host-owned contributions.
+            obj.ToolManager.unregister(tool);
+        end
+
+        function registerToolHotkeys(obj,tool)
+        %REGISTERTOOLHOTKEYS Register one tool's optional toggle hotkey.
+            if strlength(tool.ToggleHotkey) == 0, return; end
+            obj.HotkeyRegistry.add(tool.ToggleHotkey, ...
+                @(E) obj.onToolToggleHotkey(tool.Name,E), ...
+                Owner=tool,Description=tool.Name + " toggle", ...
+                Priority=tool.Priority);
+        end
+
+        function disableActiveExclusive(obj)
+        %DISABLEACTIVEEXCLUSIVE Disable the currently enabled exclusive tool.
+            obj.ToolManager.disableActiveExclusive();
+        end
+
+        function onToolPush(obj,name)
+        %ONTOOLPUSH Run the push tool associated with a toolbar button.
+            obj.releaseToolbarFocus_();
+            obj.ToolManager.push(name);
+        end
+
+        function onToolToggle(obj,value,name)
+        %ONTOOLTOGGLE Apply a toolbar state-button change to its tool.
+            obj.releaseToolbarFocus_();
+            obj.ToolManager.toggle(logical(value),name);
+        end
+
+        function onToolToggleHotkey(obj,name,event)
+        %ONTOOLTOGGLEHOTKEY Run or toggle a tool from its registered hotkey.
+            tool = obj.getInstalledTool(name);
+            if isempty(tool), return; end
+            event.stop();
+            if strcmp(tool.Style,'push')
+                obj.ToolManager.run(name);
+            elseif tool.Enabled
+                obj.ToolManager.disable(name);
+            else
+                obj.ToolManager.enable(name);
+            end
+        end
+
+        function resetView(obj)
+        %RESETVIEW Restore the mounted renderer's intended presentation.
+        %   The host baseline is restored first so presentation left by user
+        %   navigation or axes interaction cannot leak into the refreshed
+        %   renderer. The renderer then reapplies its stored data and style,
+        %   including deliberate limits such as violin category margins.
+            obj.resetAxes();
+            if ~isempty(obj.Content_) && isvalid(obj.Content_)
+                obj.Content_.refresh();
+            end
+        end
+
+        function toggleToolbar(obj)
+        %TOGGLETOOLBAR Toggle the requested toolbar visibility.
+            obj.ToolbarVisible = ~logical(obj.ToolbarVisible);
+        end
+
+        function toggleGrid(obj)
+        %TOGGLEGRID Toggle both major Cartesian grid directions.
+            obj.GridVisible = ~logical(obj.GridVisible);
+        end
+
+        function toggleBox(obj)
+        %TOGGLEBOX Toggle the axes box.
+            obj.BoxVisible = ~logical(obj.BoxVisible);
+        end
+
+        function toggleTitle(obj)
+        %TOGGLETITLE Toggle axes-title visibility.
+            obj.TitleVisible = ~logical(obj.TitleVisible);
+        end
+
+        function S = getStatusSummary(obj)
+        %GETSTATUSSUMMARY Return a compact host/content/tool status report.
+            contentClass = "";
+            if ~isempty(obj.Content_), contentClass = string(class(obj.Content_)); end
+            S = struct( ...
+                "Name",obj.Name, ...
+                "ContentClass",contentClass, ...
+                "XLim",obj.MainAxes.XLim, ...
+                "YLim",obj.MainAxes.YLim, ...
+                "XScale",string(obj.MainAxes.XScale), ...
+                "YScale",string(obj.MainAxes.YScale), ...
+                "Color",obj.Color, ...
+                "FontName",obj.FontName, ...
+                "FontUnits",obj.FontUnits, ...
+                "FontSize",obj.FontSize, ...
+                "LabelFontSizeMultiplier",obj.LabelFontSizeMultiplier, ...
+                "TitleFontSizeMultiplier",obj.TitleFontSizeMultiplier, ...
+                "TitleVisible",string(obj.TitleVisible), ...
+                "ToolbarVisible",string(obj.ToolbarVisible), ...
+                "ToolbarExpanded",string(obj.ToolbarExpanded), ...
+                "GridVisible",string(obj.GridVisible), ...
+                "BoxVisible",string(obj.BoxVisible), ...
+                "Tools",string(fieldnames(obj.Tools)).');
+        end
+
+        function openStatusWindow(obj)
+        %OPENSTATUSWINDOW Open the PlotAxes operational status report.
+            if obj.StatusWindowOpen_ && ~isempty(obj.StatusWindow) && ...
+                    isvalid(obj.StatusWindow)
+                return
+            end
+            lines = cellstr(matlabx.struct.prettyPrint( ...
+                obj.getStatusSummary(),StringArrayStyle="lines"));
+            obj.StatusWindow = matlabx.app.TextWindow( ...
+                Title="PlotAxes Status",Text=lines, ...
+                ClosedFcn=@(~,~) obj.onStatusWindowClosed_());
+            obj.StatusWindowOpen_ = true;
+        end
+
+        function exportPlot(obj,filename,opts)
+        %EXPORTPLOT Export the assembled plot axes as vector or raster graphics.
+        %   Units, dimensions, background, and aspect-ratio settings apply to
+        %   both output types. Resolution controls raster output and embedded
+        %   raster content in otherwise vector-capable formats.
+            arguments
+                obj (1,1) matlabx.ui.axes.PlotAxes
+                filename (1,1) string {mustBeNonzeroLengthText}
+                opts.ContentType (1,1) string {mustBeMember(opts.ContentType, ...
+                    ["auto","vector","image"])} = "auto"
+                opts.Units (1,1) string {mustBeMember(opts.Units, ...
+                    ["inches","centimeters","pixels","points"])} = "inches"
+                opts.Width (1,1) double {mustBePositive,mustBeFinite} = 7
+                opts.Height (1,1) double {mustBePositive,mustBeFinite} = 5
+                opts.BackgroundColor {mustBeAxesColor_(opts.BackgroundColor)} = "none"
+                opts.Color {mustBeAxesColor_(opts.Color)} = "none"
+                opts.ForegroundColor (1,3) double ...
+                    {mustBeBetween(opts.ForegroundColor,0,1)} = obj.ForegroundColor
+                opts.FontName (1,1) string = obj.FontName
+                opts.FontUnits (1,1) string {mustBeMember(opts.FontUnits, ...
+                    ["points","pixels"])} = obj.FontUnits
+                opts.FontSize (1,1) double {mustBePositive,mustBeFinite} = obj.FontSize
+                opts.LabelFontSizeMultiplier (1,1) double ...
+                    {mustBePositive,mustBeFinite} = obj.LabelFontSizeMultiplier
+                opts.TitleFontSizeMultiplier (1,1) double ...
+                    {mustBePositive,mustBeFinite} = obj.TitleFontSizeMultiplier
+                opts.GridVisible (1,1) matlab.lang.OnOffSwitchState = obj.GridVisible
+                opts.BoxVisible (1,1) matlab.lang.OnOffSwitchState = obj.BoxVisible
+                opts.TitleVisible (1,1) matlab.lang.OnOffSwitchState = obj.TitleVisible
+                opts.PreserveAspectRatio (1,1) matlab.lang.OnOffSwitchState = "off"
+                opts.Resolution (1,1) double {mustBePositive} = 300
+                opts.HideToolbar (1,1) logical = true
+            end
+
+            appearance = struct( ...
+                "Color",obj.Color, ...
+                "ForegroundColor",obj.ForegroundColor, ...
+                "FontName",obj.FontName, ...
+                "FontUnits",obj.FontUnits, ...
+                "FontSize",obj.FontSize, ...
+                "LabelFontSizeMultiplier",obj.LabelFontSizeMultiplier, ...
+                "TitleFontSizeMultiplier",obj.TitleFontSizeMultiplier, ...
+                "GridVisible",obj.GridVisible, ...
+                "BoxVisible",obj.BoxVisible, ...
+                "TitleVisible",obj.TitleVisible);
+            appearanceCleanup = onCleanup( ...
+                @() restorePlotAppearance_(obj,appearance));
+            obj.Color = opts.Color;
+            obj.ForegroundColor = opts.ForegroundColor;
+            obj.FontName = opts.FontName;
+            obj.FontUnits = opts.FontUnits;
+            obj.FontSize = opts.FontSize;
+            obj.LabelFontSizeMultiplier = opts.LabelFontSizeMultiplier;
+            obj.TitleFontSizeMultiplier = opts.TitleFontSizeMultiplier;
+            obj.GridVisible = opts.GridVisible;
+            obj.BoxVisible = opts.BoxVisible;
+            obj.TitleVisible = opts.TitleVisible;
+            drawnow;
+
+            toolbar = obj.MainAxes.Toolbar;
+            if opts.HideToolbar && ~isempty(toolbar) && isvalid(toolbar)
+                toolbarVisible = toolbar.Visible;
+                toolbarCleanup = onCleanup( ...
+                    @() restoreToolbar_(toolbar,toolbarVisible));
+                toolbar.Visible = 'off';
+            end
+            exportgraphics(obj.MainAxes,filename, ...
+                ContentType=opts.ContentType, ...
+                Units=opts.Units,Width=opts.Width,Height=opts.Height, ...
+                Colorspace="rgb",Padding=0, ...
+                PreserveAspectRatio=char(opts.PreserveAspectRatio), ...
+                BackgroundColor=opts.BackgroundColor, ...
+                Resolution=opts.Resolution);
+        end
+
+        function filename = chooseExportPlot(obj)
+        %CHOOSEEXPORTPLOT Choose plot export options and an output file.
+        %   Returns the absolute filename, or an empty string when either
+        %   dialog is cancelled. Interactive exports always omit the toolbar.
+            filename = "";
+
+            % Keep modal option/file dialogs in front of an always-on-top host.
+            fig = ancestor(obj.Parent,'figure');
+            previousWindowStyle = fig.WindowStyle;
+            if strcmp(previousWindowStyle,'alwaysontop')
+                fig.WindowStyle = 'normal';
+            end
+            windowStyleCleanup = onCleanup( ...
+                @() restoreFigureWindowStyle_(fig,previousWindowStyle));
+
+            options = matlabx.ui.axes.PlotAxesExportDialog.prompt(obj);
+            if isempty(options), return; end
+
+            pattern = "*" + options.Extension;
+            description = options.Format + " (" + pattern + ")";
+            [file,path] = uiputfile( ...
+                {char(pattern),char(description)}, ...
+                'Export Plot',char("plot" + options.Extension));
+            if isequal(file,0), return; end
+            [~,~,extension] = fileparts(file);
+            if isempty(extension)
+                file = char(string(file) + options.Extension);
+            elseif ~strcmpi(extension,options.Extension)
+                [~,name] = fileparts(file);
+                file = char(string(name) + options.Extension);
+            end
+            filename = string(fullfile(path,file));
+            obj.exportPlot(filename,ContentType=options.ContentType, ...
+                Units=options.Units,Width=options.Width, ...
+                Height=options.Height, ...
+                BackgroundColor=options.BackgroundColor, ...
+                Color=options.Color, ...
+                ForegroundColor=options.ForegroundColor, ...
+                FontName=options.FontName,FontUnits=options.FontUnits, ...
+                FontSize=options.FontSize, ...
+                LabelFontSizeMultiplier=options.LabelFontSizeMultiplier, ...
+                TitleFontSizeMultiplier=options.TitleFontSizeMultiplier, ...
+                GridVisible=options.GridVisible,BoxVisible=options.BoxVisible, ...
+                TitleVisible=options.TitleVisible, ...
+                PreserveAspectRatio=options.PreserveAspectRatio, ...
+                Resolution=options.Resolution,HideToolbar=true);
+        end
+
+        function copyPlot(obj,opts)
+        %COPYPLOT Copy the assembled plot to the system clipboard.
+            arguments
+                obj (1,1) matlabx.ui.axes.PlotAxes
+                opts.ContentType (1,1) string {mustBeMember(opts.ContentType, ...
+                    ["auto","vector","image"])} = "vector"
+                opts.BackgroundColor = obj.BackgroundColor
+            end
+            copygraphics(obj.MainAxes,ContentType=opts.ContentType, ...
+                BackgroundColor=opts.BackgroundColor);
         end
 
         function mount(obj,content)
@@ -89,8 +573,12 @@ classdef PlotAxes < matlab.ui.componentcontainer.ComponentContainer
 
             try
                 content.attach(obj);
+                % Content-specific commands share the host menu but remain
+                % scoped to the mounted content's lifecycle.
+                content.contributeContextMenu(obj.ContextMenuManager);
             catch ME
                 % A failed refresh must not leave a half-mounted host/content pair.
+                obj.ContextMenuManager.removeOwner(content);
                 obj.clear(content);
                 rethrow(ME);
             end
@@ -110,18 +598,106 @@ classdef PlotAxes < matlab.ui.componentcontainer.ComponentContainer
 
             mounted = obj.Content_;
             obj.Content_ = matlabx.ui.axes.PlotContent.empty(0,1);
+            % Remove callbacks which retain the content before detaching it.
+            obj.ContextMenuManager.removeOwner(mounted);
             mounted.detach(obj);
             obj.resetAxes();
             notify(obj,'ContentChanged');
         end
 
         function routeEvent(obj,kind,event)
-        %ROUTEEVENT Forward a normalized future hub event to mounted content.
-        % FigureEventHub registration is intentionally deferred. This method is
-        % the stable routing seam that PlotAxes tools and content can share.
+        %ROUTEEVENT Route tools first, then unconsumed events to content.
+            kind = string(kind);
+            if kind == "KeyPress"
+                obj.HotkeyRegistry.dispatch(event);
+                if event.StopPropagation, return; end
+            end
 
-            if ~isempty(obj.Content_)
+            passive = obj.ToolManager.getPriorityPassiveInterceptors(kind);
+            for i = 1:numel(passive)
+                passive{i}.("onPassive" + kind)(event);
+                if event.StopPropagation, return; end
+            end
+
+            tool = obj.ToolManager.getPriorityInterceptor(kind);
+            if ~isempty(tool)
+                tool.("on" + kind)(event);
+                if event.StopPropagation, return; end
+            end
+
+            if ~isempty(obj.Content_) && isvalid(obj.Content_)
                 obj.Content_.handleEvent(string(kind),event);
+            end
+        end
+
+        function tf = matches(obj,event)
+        %MATCHES Return whether a routed event belongs to the stable UIAxes.
+            tf = false;
+            target = event.Target;
+            if isempty(target)
+                return;
+            end
+
+            % Data-tip interaction can make hittest return internal opaque
+            % graphics objects. They support neither isvalid nor every normal
+            % handle operation, so keep the entire ancestry query guarded.
+            try
+                if isequal(target,obj.MainAxes)
+                    tf = true;
+                    return;
+                end
+                axes = ancestor(target,'matlab.ui.control.UIAxes');
+                tf = ~isempty(axes) && isequal(axes,obj.MainAxes);
+            catch
+            end
+        end
+
+        function onDown(obj,event)
+        %ONDOWN Route a pointer-down event and open an unclaimed host menu.
+            obj.routeEvent("Down",event);
+            if ~event.StopPropagation && event.MouseChord == "contextclick"
+                obj.ContextMenuManager.openAt(event.CurrentPointFigure);
+            end
+        end
+
+        function onMove(obj,event)
+        %ONMOVE Forward a routed pointer-move event to mounted content.
+            obj.routeEvent("Move",event);
+        end
+
+        function onUp(obj,event)
+        %ONUP Forward a routed pointer-up event to mounted content.
+            obj.routeEvent("Up",event);
+        end
+
+        function onScroll(obj,event)
+        %ONSCROLL Forward a routed scroll event to mounted content.
+            obj.routeEvent("Scroll",event);
+        end
+
+        function onKeyPress(obj,event)
+        %ONKEYPRESS Forward a routed key-press event to mounted content.
+            obj.routeEvent("KeyPress",event);
+        end
+
+        function onKeyRelease(obj,event)
+        %ONKEYRELEASE Forward a routed key-release event to mounted content.
+            obj.routeEvent("KeyRelease",event);
+        end
+
+        function onEnter(obj,event)
+        %ONENTER Notify installed tools and mounted content.
+            obj.ToolManager.notifyHostEnter(event);
+            if ~isempty(obj.Content_) && isvalid(obj.Content_)
+                obj.Content_.handleEvent("Enter",event);
+            end
+        end
+
+        function onLeave(obj,event)
+        %ONLEAVE Notify installed tools and mounted content.
+            obj.ToolManager.notifyHostLeave(event);
+            if ~isempty(obj.Content_) && isvalid(obj.Content_)
+                obj.Content_.handleEvent("Leave",event);
             end
         end
 
@@ -163,13 +739,16 @@ classdef PlotAxes < matlab.ui.componentcontainer.ComponentContainer
             axes.XTickLabelMode = 'auto';
             axes.YTickLabelMode = 'auto';
             axes.ZTickLabelMode = 'auto';
+            axes.XAxis.Visible = 'on';
+            axes.YAxis.Visible = 'on';
+            axes.ZAxis.Visible = 'off';
 
             % Restore general layout properties that plot types commonly alter.
             axes.DataAspectRatioMode = 'auto';
             axes.PlotBoxAspectRatioMode = 'auto';
             axes.CLimMode = 'auto';
-            axes.XGrid = 'off';
-            axes.YGrid = 'off';
+            axes.XGrid = obj.GridVisible_;
+            axes.YGrid = obj.GridVisible_;
             axes.ZGrid = 'off';
             axes.XMinorGrid = 'off';
             axes.YMinorGrid = 'off';
@@ -179,16 +758,30 @@ classdef PlotAxes < matlab.ui.componentcontainer.ComponentContainer
             axes.ZMinorTick = 'off';
             axes.XAxisLocation = 'bottom';
             axes.YAxisLocation = 'left';
-            axes.Box = 'off';
+            axes.Box = obj.BoxVisible_;
             axes.TickDir = 'in';
             axes.View = [0 90];
             axes.NextPlot = 'add';
+            axes.ColorOrderIndex = 1;
+
+            obj.applyHostAppearance();
         end
 
         function delete(obj)
-        %DELETE Detach content before MATLAB destroys the host axes.
+        %DELETE Unregister event routing and detach content before teardown.
 
             for k = 1:numel(obj)
+
+                obj(k).clearInitialToolbarFocusListener_();
+                obj(k).teardownTools_();
+
+                try
+                    if ~isempty(obj(k).Hub) && isvalid(obj(k).Hub) && ...
+                            ~isnan(obj(k).RouterId)
+                        obj(k).Hub.unregister(obj(k).RouterId);
+                    end
+                catch
+                end
 
                 if ~isempty(obj(k).Content_)
                     obj(k).clear();
@@ -200,6 +793,27 @@ classdef PlotAxes < matlab.ui.componentcontainer.ComponentContainer
     end
 
     methods (Static)
+
+        function names = getToolNames()
+        %GETTOOLNAMES Return short names of built-in PlotAxes tools.
+            namespace = matlab.metadata.Namespace.fromName( ...
+                "matlabx.ui.axes.tools.plot");
+            if isempty(namespace)
+                names = {};
+                return
+            end
+            classes = {namespace.ClassList.Name};
+            names = cell(size(classes));
+            for i = 1:numel(classes)
+                parts = split(string(classes{i}),'.');
+                names{i} = char(parts(end));
+            end
+        end
+
+        function names = getDefaultTools()
+        %GETDEFAULTTOOLS Return built-in tools installed on new PlotAxes hosts.
+            names = {'Export','CopyGraphics'};
+        end
 
         function [hosts,renderers,fig] = demo(opts)
         %DEMO Show transferable scatter and violin content in two stable hosts.
@@ -227,6 +841,7 @@ classdef PlotAxes < matlab.ui.componentcontainer.ComponentContainer
                 matlabx.ui.axes.plot.ViolinStyle(Title="Distributions",YLabel="Value"));
             hosts.First.mount(renderers.Scatter);
             hosts.Second.mount(renderers.Violin);
+            movegui(fig,"center");
             fig.Visible = opts.Visible;
         end
 
@@ -243,19 +858,35 @@ classdef PlotAxes < matlab.ui.componentcontainer.ComponentContainer
 
             obj.MainAxes = uiaxes(obj.Grid, ...
                 'Box','off','NextPlot','add','TickDir','in', ...
-                'FontSize',obj.FontSize,'Color',obj.BackgroundColor, ...
+                'FontSize',obj.FontSize,'Color',obj.Color, ...
                 'XColor',obj.ForegroundColor,'YColor',obj.ForegroundColor);
             obj.MainAxes.Layout.Row = 1;
             obj.MainAxes.Layout.Column = 1;
             obj.MainAxes.Interactions = dataTipInteraction;
-            obj.MainAxes.Toolbar = axtoolbar(obj.MainAxes,{});
+            obj.MainAxes.ToolbarLocation = 'inside';
+            obj.MainAxes.Toolbar = axtoolbar(obj.MainAxes,{}, ...
+                'Expanded',obj.ToolbarExpanded_);
+            obj.MainAxes.Toolbar.Visible = 'off';
             obj.MainAxes.Tag = char(obj.Name);
+
+            obj.ToolManager = matlabx.ui.axes.PlotAxesToolManager(obj);
+            obj.HotkeyRegistry = matlabx.ui.axes.PlotAxesHotkeyRegistry();
+
+            fig = ancestor(obj.Parent,'figure');
+            obj.ContextMenuManager = ...
+                matlabx.ui.axes.PlotAxesContextMenuManager(obj,fig);
+            obj.ContextMenuManager.setBuiltinItems(obj.ContextMenuItems_);
+            obj.MainAxes.ContextMenu = obj.ContextMenuManager.Menu;
+            obj.ToolManager.setInstalledNames(obj.getDefaultTools());
+
+            obj.Hub = matlabx.ui.interaction.FigureEventHub.ensure(fig);
+            obj.RouterId = obj.Hub.register(obj,'Priority',10);
 
             % ComponentContainer can destroy children before the subclass delete
             % method runs. Detach at the axes destruction event while its owned
             % primitives can still be moved out of the graphics hierarchy.
             obj.AxesLifetimeListener = addlistener(obj.MainAxes, ...
-                'ObjectBeingDestroyed', @(~,~) obj.clear());
+                'ObjectBeingDestroyed', @(~,~) obj.teardownAxes_());
         end
 
         function update(obj)
@@ -265,17 +896,175 @@ classdef PlotAxes < matlab.ui.componentcontainer.ComponentContainer
                 return;
             end
 
-            obj.Grid.BackgroundColor = obj.BackgroundColor;
-            obj.MainAxes.Color = obj.BackgroundColor;
-            obj.MainAxes.XColor = obj.ForegroundColor;
-            obj.MainAxes.YColor = obj.ForegroundColor;
-            obj.MainAxes.XLabel.Color = obj.ForegroundColor;
-            obj.MainAxes.YLabel.Color = obj.ForegroundColor;
-            obj.MainAxes.Title.Color = obj.ForegroundColor;
-            obj.MainAxes.FontSize = obj.FontSize;
+            isFirstUpdate = obj.FirstUpdatePending_;
+            obj.applyHostAppearance();
             obj.MainAxes.Tag = char(obj.Name);
+
+            % Buttons created while a figure is hidden can retain the toolbar's
+            % keyboard focus when the figure first appears. Keep the toolbar
+            % hidden until that transition, reveal it, then focus the figure.
+            if isFirstUpdate
+                obj.FirstUpdatePending_ = false;
+                if isempty(fieldnames(obj.ToolbarButtons))
+                    obj.MainAxes.Toolbar.Visible = obj.ToolbarVisible_;
+                else
+                    obj.MainAxes.Toolbar.Visible = 'off';
+                    obj.showInitialToolbar_();
+                end
+            end
         end
 
     end
 
+    methods (Access=private)
+
+        function showInitialToolbar_(obj)
+        %SHOWINITIALTOOLBAR_ Reveal the constructed toolbar and release focus.
+            fig = ancestor(obj.MainAxes,'figure');
+            if isempty(fig) || ~isvalid(fig), return; end
+
+            if strcmp(fig.Visible,'on')
+                obj.clearInitialToolbarFocusListener_();
+                obj.MainAxes.Toolbar.Visible = obj.ToolbarVisible_;
+                if strcmp(obj.ToolbarVisible_,'on')
+                    obj.releaseToolbarFocus_();
+                end
+            elseif isempty(obj.InitialToolbarFocusListener) || ...
+                    ~isvalid(obj.InitialToolbarFocusListener)
+                obj.InitialToolbarFocusListener = addlistener(fig, ...
+                    'Visible','PostSet',@(~,~) obj.showInitialToolbar_());
+            end
+        end
+
+        function releaseToolbarFocus_(obj)
+        %RELEASETOOLBARFOCUS_ Return keyboard focus to the visible host figure.
+            fig = ancestor(obj.MainAxes,'figure');
+            if ~isempty(fig) && isvalid(fig) && strcmp(fig.Visible,'on')
+                focus(fig);
+            end
+        end
+
+        function clearInitialToolbarFocusListener_(obj)
+        %CLEARINITIALTOOLBARFOCUSLISTENER_ Remove the pending visibility listener.
+            if ~isempty(obj.InitialToolbarFocusListener)
+                delete(obj.InitialToolbarFocusListener( ...
+                    isvalid(obj.InitialToolbarFocusListener)));
+            end
+            obj.InitialToolbarFocusListener = event.listener.empty;
+        end
+
+        function applyHostAppearance(obj)
+        %APPLYHOSTAPPEARANCE Restore colors and typography owned by PlotAxes.
+            if isempty(obj.MainAxes) || ~isvalid(obj.MainAxes) || ...
+                    obj.MainAxes.BeingDeleted == "on"
+                return;
+            end
+
+            obj.Grid.BackgroundColor = obj.BackgroundColor;
+            obj.MainAxes.Color = obj.Color;
+            obj.MainAxes.XColor = obj.ForegroundColor;
+            obj.MainAxes.YColor = obj.ForegroundColor;
+            obj.MainAxes.ZColor = obj.ForegroundColor;
+            obj.MainAxes.XLabel.Color = obj.ForegroundColor;
+            obj.MainAxes.YLabel.Color = obj.ForegroundColor;
+            obj.MainAxes.ZLabel.Color = obj.ForegroundColor;
+            obj.MainAxes.Title.Color = obj.ForegroundColor;
+            obj.MainAxes.Subtitle.Color = obj.ForegroundColor;
+            obj.MainAxes.FontName = char(obj.FontName);
+            obj.MainAxes.FontUnits = char(obj.FontUnits);
+            textObjects = [obj.MainAxes.Title,obj.MainAxes.Subtitle, ...
+                obj.MainAxes.XLabel,obj.MainAxes.YLabel,obj.MainAxes.ZLabel];
+            set(textObjects,'FontUnits',char(obj.FontUnits));
+            obj.MainAxes.FontSize = obj.FontSize;
+            obj.MainAxes.LabelFontSizeMultiplier = obj.LabelFontSizeMultiplier;
+            obj.MainAxes.TitleFontSizeMultiplier = obj.TitleFontSizeMultiplier;
+            obj.MainAxes.Title.Visible = obj.TitleVisible_;
+            obj.MainAxes.ToolbarLocation = 'inside';
+            obj.MainAxes.XGrid = obj.GridVisible_;
+            obj.MainAxes.YGrid = obj.GridVisible_;
+            obj.MainAxes.Box = obj.BoxVisible_;
+            if ~isempty(obj.MainAxes.Toolbar) && isvalid(obj.MainAxes.Toolbar) && ...
+                    ~obj.FirstUpdatePending_
+                obj.MainAxes.Toolbar.Visible = obj.ToolbarVisible_;
+            end
+        end
+
+        function refreshContextMenu(obj)
+        %REFRESHCONTEXTMENU Refresh dynamic menu state when available.
+            if ~isempty(obj.ContextMenuManager) && isvalid(obj.ContextMenuManager)
+                obj.ContextMenuManager.refresh();
+            end
+        end
+
+        function onStatusWindowClosed_(obj)
+        %ONSTATUSWINDOWCLOSED_ Clear status-window ownership state.
+            obj.StatusWindowOpen_ = false;
+        end
+
+        function teardownAxes_(obj)
+        %TEARDOWNAXES_ Detach content and tools before axes graphics disappear.
+            if ~isempty(obj.Content_)
+                obj.clear();
+            end
+            obj.teardownTools_();
+        end
+
+        function teardownTools_(obj)
+        %TEARDOWNTOOLS_ Uninstall borrowed tools and delete manager-owned tools.
+            if obj.ToolsTornDown_, return; end
+            obj.ToolsTornDown_ = true;
+            if isempty(obj.ToolManager) || ~isvalid(obj.ToolManager), return; end
+            obj.ToolManager.uninstallAll();
+            obj.ToolManager.unloadAll();
+        end
+
+    end
+
+end
+
+function restoreFigureWindowStyle_(fig,windowStyle)
+%RESTOREFIGUREWINDOWSTYLE_ Restore a valid host figure after modal dialogs.
+    if ~isempty(fig) && isvalid(fig)
+        fig.WindowStyle = windowStyle;
+    end
+end
+
+function restoreToolbar_(toolbar,visible)
+%RESTORETOOLBAR_ Restore toolbar visibility after scoped plot export.
+    if ~isempty(toolbar) && isvalid(toolbar)
+        toolbar.Visible = visible;
+    end
+end
+
+function restorePlotAppearance_(host,appearance)
+%RESTOREPLOTAPPEARANCE_ Restore host styling after scoped plot export.
+    if isempty(host) || ~isvalid(host), return; end
+    host.Color = appearance.Color;
+    host.ForegroundColor = appearance.ForegroundColor;
+    host.FontName = appearance.FontName;
+    host.FontUnits = appearance.FontUnits;
+    host.FontSize = appearance.FontSize;
+    host.LabelFontSizeMultiplier = appearance.LabelFontSizeMultiplier;
+    host.TitleFontSizeMultiplier = appearance.TitleFontSizeMultiplier;
+    host.GridVisible = appearance.GridVisible;
+    host.BoxVisible = appearance.BoxVisible;
+    host.TitleVisible = appearance.TitleVisible;
+    drawnow;
+end
+
+function mustBeAxesColor_(value)
+%MUSTBEAXESCOLOR_ Require an RGB triplet or the string "none".
+    normalizeAxesColor_(value,'color');
+end
+
+function value = normalizeAxesColor_(value,name)
+%NORMALIZEAXESCOLOR_ Normalize an RGB triplet or transparent color token.
+    if (ischar(value) || (isstring(value) && isscalar(value))) && ...
+            strcmpi(string(value),"none")
+        value = "none";
+        return;
+    end
+    validateattributes(value,{'numeric'}, ...
+        {'real','finite','size',[1 3],'>=',0,'<=',1},mfilename,name);
+    value = double(value);
 end

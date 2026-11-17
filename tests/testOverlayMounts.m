@@ -1,3 +1,6 @@
+function tests = testOverlayMounts
+%TESTOVERLAYMOUNTS Test application overlay mount lifecycle behavior.
+
 % matlabx - MATLAB utilities for app building, image display, and analysis.
 % Copyright (C) 2026 William Dean
 %
@@ -14,7 +17,6 @@
 % You should have received a copy of the GNU General Public License along
 % with this program; if not, see <https://www.gnu.org/licenses/>.
 
-function tests = testOverlayMounts
     tests = functiontests(localfunctions);
 end
 function setup(t)
@@ -30,16 +32,31 @@ end
 function testMountRemoveAndVisibility(t)
     ax = t.TestData.Axes; c = t.TestData.Content;
     m = ax.mountOverlay(c);
+    ax.Overlays.add('Polygon','ID','native', ...
+        'Vertices',[1 1;3 1;3 3;1 3]);
     t.verifyEqual(m.Content,c);
     t.verifyEqual(ax.mountOverlay(c),m);
     t.verifyEqual(c.AttachCount,1);
     group = c.Graphic.Parent;
     layer = group.Parent;
+    native = findobj(ax.getAxes(),'Tag','OverlayPolygon');
+
+    % Native and application overlays occupy independent visibility domains.
+    t.verifyEqual(string(group.Visible),"on");
+    t.verifyEqual(string(layer.Visible),"on");
+    t.verifyEqual(string(native.Visible),"on");
+    ax.OverlaysVisible = 'off';
+    t.verifyEqual(string(native.Visible),"off");
+    t.verifyEqual(string(layer.Visible),"on");
+    t.verifyEqual(string(group.Visible),"on");
+
     m.Visible = false;
     t.verifyEqual(string(group.Visible),"off");
-    ax.OverlaysVisible = 'off';
-    t.verifyEqual(string(layer.Visible),"off");
+    t.verifyEqual(string(native.Visible),"off");
     ax.OverlaysVisible = 'on';
+    t.verifyEqual(string(native.Visible),"on");
+    t.verifyEqual(string(layer.Visible),"on");
+    t.verifyEqual(string(group.Visible),"off");
     t.verifyEqual(m.Visible,matlab.lang.OnOffSwitchState.off);
     m.remove();
     t.verifyFalse(isvalid(m));

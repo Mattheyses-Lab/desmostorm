@@ -1,3 +1,11 @@
+classdef InMemoryImageSource < matlabx.image.ImageSource
+    %INMEMORYIMAGESOURCE ImageSource implementation backed by MATLAB arrays.
+    %
+    %   This source normalizes one or more in-memory component arrays into
+    %   ImageComponent objects. It mirrors the role of BioFormatsImageSource
+    %   for file-backed images: the source owns source-specific setup, while
+    %   Image5D remains a small public wrapper around any ImageSource.
+
 % matlabx - MATLAB utilities for app building, image display, and analysis.
 % Copyright (C) 2026 William Dean
 %
@@ -14,17 +22,10 @@
 % You should have received a copy of the GNU General Public License along
 % with this program; if not, see <https://www.gnu.org/licenses/>.
 
-classdef InMemoryImageSource < matlabx.image.ImageSource
-    %INMEMORYIMAGESOURCE ImageSource implementation backed by MATLAB arrays.
-    %
-    %   This source normalizes one or more in-memory component arrays into
-    %   ImageComponent objects. It mirrors the role of BioFormatsImageSource
-    %   for file-backed images: the source owns source-specific setup, while
-    %   Image5D remains a small public wrapper around any ImageSource.
-
     properties (Access = private)
         Components_ (1,:) matlabx.image.ImageComponent = matlabx.image.ImageComponent.empty(1,0)
         Source_ string = ""
+        Metadata_ (1,1) matlabx.image.ImageMetadata = matlabx.image.ImageMetadata()
     end
 
     methods
@@ -37,23 +38,27 @@ classdef InMemoryImageSource < matlabx.image.ImageSource
             %   [Y X C Z T], where C is 1 for scalar components and 3 for RGB.
             %
             %   SRC = matlabx.image.InMemoryImageSource(DATA, Names=NAMES,
-            %   Kinds=KINDS, Source=SOURCE) applies optional component names,
-            %   component kinds, and source description.
+            %   Kinds=KINDS, Colors=COLORS, Source=SOURCE) applies optional
+            %   component names, kinds, display colors, and source description.
             arguments
                 data
                 opts.Names string = matlabx.string.empty()
                 opts.Kinds string = matlabx.string.empty()
+                opts.Colors = []
                 opts.Source string = ""
+                opts.Metadata (1,1) matlabx.image.ImageMetadata = matlabx.image.ImageMetadata()
             end
 
             if isa(data, 'matlabx.image.ImageComponent')
                 obj.Components_ = reshape(data, 1, []);
                 obj.Source_ = opts.Source;
+                obj.Metadata_ = opts.Metadata;
                 return
             end
 
-            obj.Components_ = obj.createComponents_(data, opts.Names, opts.Kinds);
+            obj.Components_ = obj.createComponents_(data, opts.Names, opts.Kinds, opts.Colors);
             obj.Source_ = opts.Source;
+            obj.Metadata_ = opts.Metadata;
         end
 
         function comps = getComponents(obj)
@@ -86,6 +91,17 @@ classdef InMemoryImageSource < matlabx.image.ImageSource
             I = obj.Components_(idx).getPlane(z, t);
         end
 
+        function reader = openPlaneReader(obj)
+            %OPENPLANEREADER Open a reusable in-memory plane reader.
+            reader = matlabx.image.ImagePlaneReader( ...
+                @(idx,z,t) obj.getPlane(idx,z,t));
+        end
+
+        function md = getMetadata(obj)
+            %GETMETADATA Return normalized source-independent metadata.
+            md = obj.Metadata_;
+        end
+
         function md = getOriginalMetadata(~)
             %GETORIGINALMETADATA Return empty metadata for in-memory data.
             md = struct();
@@ -108,7 +124,7 @@ classdef InMemoryImageSource < matlabx.image.ImageSource
     end
 
     methods (Static, Access = private)
-        function comps = createComponents_(data, names, kinds)
+        function comps = createComponents_(data, names, kinds, colors)
             %CREATECOMPONENTS_ Convert component arrays into ImageComponent objects.
             if ~iscell(data)
                 data = {data};
@@ -150,6 +166,7 @@ classdef InMemoryImageSource < matlabx.image.ImageSource
 
             kinds = matlabx.image.InMemoryImageSource.normalizeKinds_(kinds, inferredKinds, n);
             names = matlabx.image.InMemoryImageSource.normalizeNames_(names, kinds, n);
+            colors = matlabx.image.InMemoryImageSource.normalizeColors_(colors, n);
 
             comps(1, n) = matlabx.image.ImageComponent();
             for k = 1:n
@@ -158,11 +175,49 @@ classdef InMemoryImageSource < matlabx.image.ImageSource
                     [], ...
                     Name=names(k), ...
                     Kind=kinds(k), ...
+                    Color=colors{k}, ...
                     Class=string(class(A)), ...
                     Size=sizes(k, :), ...
                     NativeDisplayRange=getrangefromclass(A), ...
                     DataRange=[double(min(A(:))), double(max(A(:)))]);
                 comps(k).Data = A;
+            end
+        end
+
+        function colors = normalizeColors_(colors, n)
+            %NORMALIZECOLORS_ Normalize optional names or RGB rows per component.
+            if isempty(colors)
+                colors = repmat({[]}, 1, n);
+                return
+            end
+
+            if isnumeric(colors)
+                if size(colors,2) ~= 3 || size(colors,1) ~= n
+                    error('matlabx:image:InMemoryImageSource:InvalidColors', ...
+                        'Numeric Colors must contain one RGB row per component.');
+                end
+                colors = mat2cell(double(colors), ones(1,n), 3).';
+            elseif iscell(colors)
+                colors = reshape(colors, 1, []);
+                if numel(colors) ~= n
+                    error('matlabx:image:InMemoryImageSource:InvalidColors', ...
+                        'Colors must contain one entry per component.');
+                end
+            else
+                colors = cellstr(reshape(string(colors), 1, []));
+                if numel(colors) ~= n
+                    error('matlabx:image:InMemoryImageSource:InvalidColors', ...
+                        'Colors must contain one entry per component.');
+                end
+            end
+
+            for k = 1:n
+                [name, rgb] = matlabx.image.normalizeComponentColor(colors{k});
+                if ischar(colors{k}) || isstring(colors{k})
+                    colors{k} = name;
+                else
+                    colors{k} = rgb;
+                end
             end
         end
 

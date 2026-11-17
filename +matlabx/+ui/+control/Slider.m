@@ -1,19 +1,3 @@
-% matlabx - MATLAB utilities for app building, image display, and analysis.
-% Copyright (C) 2026 William Dean
-%
-% This program is free software; you can redistribute it and/or modify it
-% under the terms of the GNU General Public License as published by the Free
-% Software Foundation; either version 2 of the License, or (at your option)
-% any later version.
-%
-% This program is distributed in the hope that it will be useful, but WITHOUT
-% ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-% FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
-% details.
-%
-% You should have received a copy of the GNU General Public License along
-% with this program; if not, see <https://www.gnu.org/licenses/>.
-
 classdef Slider < matlab.ui.componentcontainer.ComponentContainer
 %SLIDER Custom scalar/range slider with optional numeric edit fields.
 %
@@ -47,6 +31,22 @@ classdef Slider < matlab.ui.componentcontainer.ComponentContainer
 %       "Value", 5);
 %
 %   See also matlabx.ui.control.internal.SliderThumb
+
+% matlabx - MATLAB utilities for app building, image display, and analysis.
+% Copyright (C) 2026 William Dean
+%
+% This program is free software; you can redistribute it and/or modify it
+% under the terms of the GNU General Public License as published by the Free
+% Software Foundation; either version 2 of the License, or (at your option)
+% any later version.
+%
+% This program is distributed in the hope that it will be useful, but WITHOUT
+% ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+% FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
+% details.
+%
+% You should have received a copy of the GNU General Public License along
+% with this program; if not, see <https://www.gnu.org/licenses/>.
 
     %% Public API
 
@@ -100,9 +100,9 @@ classdef Slider < matlab.ui.componentcontainer.ComponentContainer
         Limits double = [0,1]
 
         % color of the thumb faces
-        ThumbFaceColor (1,3) double {mustBeInRange(ThumbFaceColor,0,1)} = [1 1 1]
+        ThumbFaceColor (1,3) double {mustBeBetween(ThumbFaceColor,0,1)} = [1 1 1]
         % color of the thumb edges
-        ThumbEdgeColor (1,3) double {mustBeInRange(ThumbEdgeColor,0,1)} = [0 0 0]
+        ThumbEdgeColor (1,3) double {mustBeBetween(ThumbEdgeColor,0,1)} = [0 0 0]
 
         % overall height of the slider component (excluding labels)
         Height (1,1) double = 20

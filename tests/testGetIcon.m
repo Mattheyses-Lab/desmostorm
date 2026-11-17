@@ -1,3 +1,6 @@
+function tests = testGetIcon
+%TESTGETICON Exercise generated SVG content and disposable cache behavior.
+
 % matlabx - MATLAB utilities for app building, image display, and analysis.
 % Copyright (C) 2026 William Dean
 %
@@ -14,8 +17,6 @@
 % You should have received a copy of the GNU General Public License along
 % with this program; if not, see <https://www.gnu.org/licenses/>.
 
-function tests = testGetIcon
-%TESTGETICON Exercise generated SVG content and disposable cache behavior.
     tests = functiontests(localfunctions);
 end
 
@@ -62,7 +63,8 @@ end
 function testInvalidOptions(t)
     t.verifyError(@() matlabx.ui.icon.get(Shape="square"),'MATLAB:validators:mustBeMember');
     t.verifyError(@() matlabx.ui.icon.get(Color=[0 NaN 0]),'MATLAB:validators:mustBeFinite');
-    t.verifyError(@() matlabx.ui.icon.get(Color=[0 2 0]),'MATLAB:validators:mustBeInRange');
+    t.verifyError(@() matlabx.ui.icon.get(Color=[0 2 0]), ...
+        'MATLAB:validators:mustBeBetweenScalarBounds');
     t.verifyError(@() matlabx.ui.icon.get(Color=[0 1i 0]),'MATLAB:validators:mustBeReal');
     t.verifyError(@() matlabx.ui.icon.get(Size=0),'MATLAB:validators:mustBePositive');
     t.verifyError(@() matlabx.ui.icon.get(Size=1.5),'MATLAB:validators:mustBeInteger');
