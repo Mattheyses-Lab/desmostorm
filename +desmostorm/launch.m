@@ -17,6 +17,11 @@
 function launch()
 %LAUNCH  Launches the desmostorm GUI
 
+    if isMATLABReleaseOlderThan("R2026b")
+        error('desmostorm:launch:UnsupportedMATLABRelease', ...
+            'DesmoSTORM requires MATLAB R2026b or later.');
+    end
+
     % --- perform setup actions if necessary ---
 
     requiredVersion = desmostorm.Info.RequiredSetupVersion;

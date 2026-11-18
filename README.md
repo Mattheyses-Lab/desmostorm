@@ -36,7 +36,7 @@ package, navigate back to the project root and run the command again.
 
 ## Requirements
 
-- MATLAB R2025b
+- MATLAB R2026b or later
 - Image Processing Toolbox
 - Curve Fitting Toolbox
 - Signal Processing Toolbox

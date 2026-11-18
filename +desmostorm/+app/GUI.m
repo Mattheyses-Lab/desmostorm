@@ -1081,23 +1081,13 @@ classdef GUI < handle
         end
 
         function refreshMenubar(obj)
-
-            if isempty(obj.Project)
-                % disable all menubar options
-                names = fieldnames(obj.MenubarUI);
-                for i = 1:numel(names)
-                    obj.MenubarUI.(names{i}).Enable = "off";
-                end
-                % re-enable only File, File->New, and File->Open
-                set([obj.MenubarUI.File,obj.MenubarUI.File_New,obj.MenubarUI.File_Open],'Enable','on');
-            else
-                % enable all menubar options
-                names = fieldnames(obj.MenubarUI);
-                for i = 1:numel(names)
-                    obj.MenubarUI.(names{i}).Enable = "on";
-                end
+            % File, New, and Open must stay available without a project.
+            projectMenus = setdiff(fieldnames(obj.MenubarUI), ...
+                {'File','File_New','File_Open'});
+            hasProject = ~isempty(obj.Project);
+            for i = 1:numel(projectMenus)
+                obj.MenubarUI.(projectMenus{i}).Enable = hasProject;
             end
-
         end
 
         function refreshWindowName(obj)
@@ -1472,14 +1462,11 @@ classdef GUI < handle
 
             % give focus to figure
             figure(obj.Fig);
-            % uialert dialog, closing will resume interaction on main window
+            % The alert itself blocks interaction until it is dismissed.
             uialert(obj.Fig,...
                 opts.Message,...
                 opts.Title,...
-                'Icon',opts.Icon,...
-                'CloseFcn',@(o,e) uiresume(obj.Fig));
-            % prevent interaction with the main window until we finish
-            uiwait(obj.Fig);
+                'Icon',opts.Icon);
         end
 
 
@@ -2562,7 +2549,8 @@ classdef GUI < handle
             obj.detatchListeners(); % detach listeners
             % load Project and Settings
             [proj,stgs] = desmostorm.model.STORMProject.load(fname, ...
-                "MissingImageResolver", @desmostorm.app.promptMissingImageRoot);
+                "MissingImageResolver", @(names,folder) resolveMissingImages(h,names,folder));
+            clear cleanupProgress
             % valid output from load -> assign and process
             if ~isempty(proj) && ~isempty(stgs)
                 obj.Project = proj;
@@ -3223,6 +3211,7 @@ classdef GUI < handle
                     desmostorm.Log.INFO("Export cancelled.");
                 end
             catch ME
+                clear cleanupProgress
                 desmostorm.Log.EXCEPTION(ME);
                 obj.guialert("Title",'Error',"Message",ME.message,"Icon",'error');
             end
@@ -3241,6 +3230,7 @@ classdef GUI < handle
                     desmostorm.Log.INFO("Export cancelled.");
                 end
             catch ME
+                clear cleanupProgress
                 desmostorm.Log.EXCEPTION(ME);
                 obj.guialert("Title",'Error',"Message",ME.message,"Icon",'error');
             end
@@ -3260,6 +3250,7 @@ classdef GUI < handle
                     desmostorm.Log.INFO("Export cancelled.");
                 end
             catch ME
+                clear cleanupProgress
                 desmostorm.Log.EXCEPTION(ME);
                 obj.guialert("Title",'Error',"Message",ME.message,"Icon",'error');
             end
@@ -3278,6 +3269,7 @@ classdef GUI < handle
                     desmostorm.Log.INFO("Export cancelled.");
                 end
             catch ME
+                clear cleanupProgress
                 desmostorm.Log.EXCEPTION(ME);
                 obj.guialert("Title",'Error',"Message",ME.message,"Icon",'error');
             end
@@ -3297,6 +3289,7 @@ classdef GUI < handle
                     desmostorm.Log.INFO("Export cancelled.");
                 end
             catch ME
+                clear cleanupProgress
                 desmostorm.Log.EXCEPTION(ME);
                 obj.guialert("Title",'Error',"Message",ME.message,"Icon",'error');
             end
@@ -3315,6 +3308,7 @@ classdef GUI < handle
                     desmostorm.Log.INFO("Export cancelled.");
                 end
             catch ME
+                clear cleanupProgress
                 desmostorm.Log.EXCEPTION(ME);
                 obj.guialert("Title",'Error',"Message",ME.message,"Icon",'error');
             end
@@ -3356,4 +3350,9 @@ function closeProgressDialog(h)
     if ~isempty(h) && isvalid(h)
         close(h);
     end
+end
+
+function searchRoot = resolveMissingImages(progress, names, folder)
+    closeProgressDialog(progress);
+    searchRoot = desmostorm.app.promptMissingImageRoot(names, folder);
 end
