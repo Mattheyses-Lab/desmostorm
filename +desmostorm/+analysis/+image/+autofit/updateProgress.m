@@ -29,19 +29,12 @@ arguments
     opts.UpdateValue (1,1) logical = true
 end
 
-if isempty(h), return; end
-
-try
-    if opts.Prefix == ""
-        h.Message = msg;
-    else
-        h.Message = opts.Prefix + newline + msg;
-    end
-    if opts.UpdateValue && ~isempty(value)
-        h.Indeterminate = "off";
-        h.Value = value;
-    end
-    drawnow limitrate
-catch
+if opts.Prefix ~= ""
+    msg = opts.Prefix + newline + msg;
+end
+if opts.UpdateValue && ~isempty(value)
+    desmostorm.runtime.updateProgress(h,msg,value);
+else
+    desmostorm.runtime.updateProgress(h,msg);
 end
 end

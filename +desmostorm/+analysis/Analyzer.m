@@ -40,7 +40,7 @@ classdef Analyzer
             nChannels = numel(I);
 
             for i = 1:nChannels
-                desmostorm.analysis.Analyzer.updateProgress(opts.ProgressDialog, ...
+                desmostorm.runtime.updateProgress(opts.ProgressDialog, ...
                     sprintf("%sAnalyzing channel %d/%d...", ...
                     opts.ProgressMessagePrefix,i,nChannels));
 
@@ -97,17 +97,4 @@ classdef Analyzer
 
     end
 
-    methods (Static, Access=private)
-        function updateProgress(h,msg)
-            %UPDATEPROGRESS Best-effort progress message update.
-            if isempty(h), return; end
-
-            try
-                h.Message = msg;
-                drawnow limitrate
-            catch
-            end
-        end
-
-    end
 end
