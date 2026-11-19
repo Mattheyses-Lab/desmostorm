@@ -22,6 +22,12 @@ function launch()
             'DesmoSTORM requires MATLAB R2026b or later.');
     end
 
+    % Reuse the existing app window if DesmoSTORM is already open.
+    if desmostorm.app.hasMainFigure()
+        desmostorm.app.focusMainFigure();
+        return
+    end
+
     % --- perform setup actions if necessary ---
 
     requiredVersion = desmostorm.Info.RequiredSetupVersion;
@@ -30,12 +36,10 @@ function launch()
     if desmostorm.Version.compare(currentVersion,requiredVersion) < 0
         desmostorm.setup.run();
         desmostorm.Preferences.set("SetupVersion",requiredVersion);
-    end
-
-    % Reuse the existing app window if DesmoSTORM is already open.
-    if desmostorm.app.hasMainFigure()
-        desmostorm.app.focusMainFigure();
-        return
+    else
+        % The Java class path and Bio-Formats logger state are session-local.
+        addpath(desmostorm.Paths.external('matlabx'));
+        matlabx.setup.bioFormats();
     end
 
     % start the GUI
