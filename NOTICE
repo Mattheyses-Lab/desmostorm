@@ -25,6 +25,14 @@ vendored matlabx tree so downstream projects can preserve them without
 duplicating the full matlabx notice text.
 
 
+Apache PDFBox
+-------------
+
+Summary PDF export uses Apache PDFBox 3.0.8, distributed under the Apache
+License, Version 2.0. The standalone JAR and its license and notices are
+bundled in external/pdfbox/.
+
+
 Generated and user data
 -----------------------
 
