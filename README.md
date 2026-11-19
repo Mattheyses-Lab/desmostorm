@@ -1,6 +1,6 @@
 # DesmoSTORM
 
-[![Version](https://img.shields.io/badge/version-1.1.1-green.svg)](https://github.com/Mattheyses-Lab/desmostorm/releases)
+[![Version](https://img.shields.io/badge/version-1.2.0-green.svg)](https://github.com/Mattheyses-Lab/desmostorm/releases)
 [![License: GPL v2 or later](https://img.shields.io/badge/license-GPL--2.0--or--later-blue.svg)](LICENSE)
 
 **DesmoSTORM** is a MATLAB application for viewing and analyzing reconstructed
@@ -50,11 +50,15 @@ package, navigate back to the project root and run the command again.
 
 1. Launch the app with `desmostorm.launch`.
 2. Create or open a project from the **File** menu.
-3. Load reconstructed image files with **File > Load Images...**.
+3. Import reconstructed image files with **File > Import Images...**.
+   Map each source channel to an existing project channel or give it a new name
+   and color. All channels are imported in source order.
 4. Place region boxes in the main image viewer.
 5. Adjust region boxes and linescan ROIs as needed.
 6. Review measurements, linescan plots, and region summaries.
-7. Save the project or export measurements, images, plots, and summary PDFs.
+7. Use **File > Save...** to save the project or **Save As...** to choose a
+   different destination. **File > Export** offers measurements, images,
+   plots, and summary PDFs.
 
 Projects store images, regions, labels, per-image display ranges, project-wide
 channel display choices, and analysis results. App settings control defaults
@@ -96,6 +100,13 @@ To zoom, click the magnifying glass icon to enable zoom mode:
 The Zoom context menu also provides fixed zoom levels, a Follow Cursor toggle,
 and a Help command contributed by the matlabx Zoom tool.
 
+## Channels
+
+Use **Edit > Channels...** to rename or recolor project channels. The same
+project channel can have a different source position in each image. Older
+projects open with channels named **Channel 1**, **Channel 2**, and so on, based
+on their original indices.
+
 ## Region Boxes And Labels
 
 Use the Box tool in the main image viewer to create and edit region boxes.
@@ -110,31 +121,36 @@ Click the Box tool icon to activate it. While the Box tool is active:
 - Right-click or context-click in the image viewer to open Box commands such as
   clear selection, select all boxes, and delete selected boxes.
 
-Region activation and selection are separate. The active region drives the
-Region Viewer, summary table, ROI editor, and linescan plot. The selected
-regions are the target for batch labeling with label hotkeys and Box context
-menu actions.
+Highlight a node in the **Images** or **Regions** tree to make it active. Check
+nodes to select them for batch actions. The active region drives the Region
+Viewer, summary table, ROI editor, and linescan plot. Right-click either tree
+for selection and deletion commands. Region checks stay in sync with the
+boxes in the viewer.
 
-Labels are managed in the **Labels** accordion item. Each label can have a
-name, ID, color, and hotkey. Pressing a label hotkey makes that label active
-and applies it to the currently selected regions in the active image. New
-regions are assigned the currently active label when they are placed, so choose
-the active label before placing a batch of regions with the same class.
+Use **Edit > Labels...** to manage label names, IDs, colors, and hotkeys. The
+**Labels** tree shows the active label and lets you check labels for merging.
+Its context menu can select or delete regions with a label across the project,
+or apply a label to checked regions. Pressing a label hotkey makes it active
+and applies it to checked regions. New regions use the active label.
+**Unlabeled** is the permanent fallback and defaults to white.
 
 ## Multi-Channel Display And Linescans
 
 The main image viewer and Region Viewer support multi-channel images. Changing
-the active channel in the image viewer updates channel-aware controls such as
-the colormap selector and current-channel linescan display. Channel colormaps
-and channel colors are stored with the project so they persist across save/load.
+the active channel in the image viewer updates the current-channel linescan.
+Use **Image Display > Channel** to choose which project channel to recolor or
+assign a LUT. This selection is independent of the channel shown in the viewer.
+Channel colors and LUTs are saved with the project.
 
-Intensity sliders are created dynamically from the maximum channel count in the
-project and collapse to the channels present in the active image. Slider limits
-come from each image channel's data range, while slider values come from the
-saved or auto-scaled display range.
+**Display Limits** shows a named range slider for each channel in the active
+image. **Reset** restores the image data range and **Auto** applies the chosen
+scaling method once. **Keep Auto** recalculates limits when you switch images.
+**Lock** carries the current range across images that share the channel.
+Dragging a slider turns off Keep Auto for that channel and updates its locked
+range if Lock is enabled.
 
 Linescan plots can show either the current channel or all channels for the
-active region, depending on **Peaks Plot > Shown Plots**. Plot colors can follow
+active region, depending on **Peaks Plot > Channel**. Plot colors can follow
 project channel colors or use a manual color from the Peaks Plot settings.
 
 ## Exports
@@ -373,16 +389,16 @@ desmostorm.setup.run()
 ## Settings
 
 Settings in the left-side accordion panels apply to the current app session.
-Use **File > Save Settings** to save them as app defaults.
+Use **Settings > Save as app defaults** to save them for future projects and
+**Settings > Load app defaults** to apply saved defaults to the current session.
 
 Common panels:
 
 - **Images**: loaded images and active image selection.
 - **Regions**: region boxes for the active image.
 - **Analysis**: region box size, linescan normalization, peak detection, and pixel size.
-- **Channel Display**: channel color mode and per-channel colors.
-- **Colormap**: colormap for the active image channel.
-- **Image Display**: intensity auto-scaling and per-channel display limits.
+- **Display Limits**: per-channel ranges, scaling methods, Keep Auto, and Lock.
+- **Image Display**: color mode, channel picker, and color or LUT for that channel.
 - **Peaks Plot**: linescan plot visibility, colors, annotations, and line widths.
 - **Linescan ROI**: ROI overlay, rotation annotation, and label appearance.
 - **Labels**: region label definitions and active label selection.

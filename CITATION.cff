@@ -8,5 +8,5 @@ authors:
 repository-code: "https://github.com/Mattheyses-Lab/desmostorm"
 url: "https://github.com/Mattheyses-Lab/desmostorm"
 license: GPL-2.0-or-later
-version: 1.1.1
+version: 1.2.0
 abstract: "MATLAB application for viewing and analyzing reconstructed super-resolution images of desmosomal plaque proteins."
