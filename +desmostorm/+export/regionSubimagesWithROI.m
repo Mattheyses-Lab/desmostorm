@@ -26,8 +26,14 @@ arguments
     source
     folderName                      {mustBeTextScalar}
     opts.Channel                    (1,1) double {mustBeInteger,mustBePositive} = 1
+    opts.DisplaySettings (1,1) desmostorm.config.Display = desmostorm.config.Display()
     opts.ScalingMode                (1,1) string {mustBeMember(opts.ScalingMode,["data","auto","user"])} = "data"
     opts.Colormap                   (256,3) double = gray
+    opts.Format (1,1) string {mustBeMember(opts.Format,["PNG","TIFF","JPEG"])} = "PNG"
+    opts.Width (1,1) double {mustBeNonnegative,mustBeFinite} = 0
+    opts.Height (1,1) double {mustBeNonnegative,mustBeFinite} = 0
+    opts.PreserveAspectRatio (1,1) matlab.lang.OnOffSwitchState = "on"
+    opts.OverlaySizing (1,1) string {mustBeMember(opts.OverlaySizing,["physical","scale"])} = "physical"
     opts.Resolution                 (1,1) double = 600
     opts.ROIColor                   (1,3) double = [1 1 1]
     opts.ROILineWidth               (1,1) double = 1
@@ -62,18 +68,19 @@ if isempty(firstRegion)
     return
 end
 
-I = getRegionChannelImage(firstRegion,opts.Channel);
+firstIndex = firstImage.sourceChannelIndex(opts.Channel);
+I = getRegionChannelImage(firstRegion,firstIndex);
 
 [ax,fig] = matlabx.app.quickshow(I, ...
     "Colormap",opts.Colormap, ...
     "Tools",{'DrawRectangle'}, ...
     "WindowStyle","normal", ...
     "Visible","off", ...
-    "Size",opts.Size, ...
-    "Units",opts.Units);
+    "Size",3, ...
+    "Units","inches");
 c = onCleanup(@() delete(fig));
 
-ax.CLim = imageExportCLim(firstImage,opts.Channel,opts.ScalingMode);
+ax.CLim = desmostorm.export.imageDisplayLimits(firstImage,firstIndex,opts.ScalingMode,opts.DisplaySettings);
 ax.Tools.DrawRectangle.ROIColor = opts.ROIColor;
 ax.Tools.DrawRectangle.ROILineWidth = opts.ROILineWidth;
 ax.Tools.DrawRectangle.ROIMarkerSize = opts.ROIMarkerSize;
@@ -100,11 +107,12 @@ for k = 1:numel(regions)
     region = regions(k);
     img = region.Parent;
 
-    updateProgress(opts.ProgressDialog, ...
+    desmostorm.runtime.updateProgress(opts.ProgressDialog, ...
         sprintf('Exporting ROI overlay (%d/%d): %s',k,numel(regions),region.Name), ...
         k-1,numel(regions));
 
-    if opts.Channel > img.SizeC
+    sourceIndex = img.sourceChannelIndex(opts.Channel);
+    if isempty(sourceIndex)
         summary.Skipped = summary.Skipped + 1;
         desmostorm.Log.WARN(sprintf( ...
             "Skipping ROI overlay export for %s: channel %d does not exist.", ...
@@ -119,8 +127,8 @@ for k = 1:numel(regions)
         continue
     end
 
-    ax.CData = getRegionChannelImage(region,opts.Channel);
-    ax.CLim = imageExportCLim(img,opts.Channel,opts.ScalingMode);
+    ax.CData = getRegionChannelImage(region,sourceIndex);
+    ax.CLim = desmostorm.export.imageDisplayLimits(img,sourceIndex,opts.ScalingMode,opts.DisplaySettings);
     ax.Tools.DrawRectangle.setROIPosition(region.ROI);
 
     drawnow
@@ -131,30 +139,39 @@ for k = 1:numel(regions)
     end
 
 
-    filename = fullfile(folderName,sprintf('%s_%s_C%d_subimage-ROI-overlay.png', ...
-        safeFileStem(img.shortName),safeFileStem(region.Name),opts.Channel));
-
-    exportAxesImage(ax.getAxes(),filename, ...
-        "HideToolbar",          true, ...
-        "PreserveAspectRatio",  'off', ...
-        "Resolution",           opts.Resolution, ...
-        "Units",                opts.Units, ...
-        "Width",                opts.Size, ...
-        "Height",               opts.Size);
+    filename = fullfile(folderName,sprintf('%s_%s_C%d_subimage-ROI-overlay.%s', ...
+        safeFileStem(img.shortName),safeFileStem(region.Name),opts.Channel,lower(opts.Format)));
+    width = opts.Width;
+    height = opts.Height;
+    if width == 0, width = opts.Size; end
+    if height == 0, height = opts.Size; end
+    if opts.OverlaySizing == "physical"
+        screenSize = ax.getOnScreenSize();
+        scale = desmostorm.export.physicalStyleScale(screenSize.Inches, ...
+            [width height],opts.Units,opts.Resolution,opts.PreserveAspectRatio);
+        tool = ax.Tools.DrawRectangle;
+        tool.ROILineWidth = opts.ROILineWidth * scale;
+        tool.ROIMarkerSize = opts.ROIMarkerSize * scale;
+        tool.AnnotationLineWidth = opts.AnnotationLineWidth * scale;
+        tool.FontSize = opts.FontSize * scale;
+    end
+    ax.exportView(filename,Units=opts.Units,Width=width,Height=height, ...
+        PreserveAspectRatio=opts.PreserveAspectRatio,Resolution=opts.Resolution, ...
+        OverlaySizing=opts.OverlaySizing);
 
     summary.Exported = summary.Exported + 1;
     exportedFiles{end+1} = filename; %#ok<AGROW>
 end
 
 if opts.TiledSummary == "on" && ~isempty(exportedFiles)
-    updateProgress(opts.ProgressDialog, ...
+    desmostorm.runtime.updateProgress(opts.ProgressDialog, ...
         'Building tiled ROI overlay summary...', ...
         numel(regions),numel(regions));
-    summaryFile = fullfile(folderName,sprintf('ROI-overlay-tiled-summary_C%d.png',opts.Channel));
+    summaryFile = fullfile(folderName,sprintf('ROI-overlay-tiled-summary_C%d.%s',opts.Channel,lower(opts.Format)));
     writeTiledSummary(exportedFiles,summaryFile);
 end
 
-updateProgress(opts.ProgressDialog, ...
+desmostorm.runtime.updateProgress(opts.ProgressDialog, ...
     sprintf('ROI overlay export complete: %d exported, %d skipped.', ...
     summary.Exported,summary.Skipped), ...
     numel(regions),numel(regions));
@@ -189,7 +206,7 @@ function [region,img] = firstExportableRegion(regions,channel)
     for k = 1:numel(regions)
         candidate = regions(k);
         candidateImage = candidate.Parent;
-        if channel <= candidateImage.SizeC && hasValidROI(candidate)
+        if ~isempty(candidateImage.sourceChannelIndex(channel)) && hasValidROI(candidate)
             region = candidate;
             img = candidateImage;
             return
@@ -209,61 +226,11 @@ function I = getRegionChannelImage(region,channel)
     I = Icell{channel};
 end
 
-function clim = imageExportCLim(img,channel,scalingMode)
-    switch string(scalingMode)
-        case "data"
-            clim = img.getDataRange(channel);
-        case "auto"
-            clim = img.getAutoDisplayRange(channel);
-        case "user"
-            clim = img.getDisplayRange(channel);
-    end
-
-    clim = double(clim);
-    if any(~isfinite(clim)) || clim(1) == clim(2)
-        v = clim(find(isfinite(clim),1,'first'));
-        if isempty(v), v = 0; end
-        clim = [v-0.5 v+0.5];
-    end
-    clim = sort(clim);
-end
-
 function stem = safeFileStem(str)
     stem = regexprep(char(str),'[^A-Za-z0-9_.-]','_');
     if isempty(stem)
         stem = 'region';
     end
-end
-
-function exportAxesImage(ax,filename,opts)
-    arguments
-        ax                          (1,1) matlab.ui.control.UIAxes
-        filename                    (1,:) char
-        opts.Units                  (1,:) char = 'inches'
-        opts.Width                  (1,1) double = 3
-        opts.Height                 (1,1) double = 3
-        opts.BackgroundColor        (1,3) double = [0 0 0]
-        opts.PreserveAspectRatio    (1,:) char = 'on'
-        opts.Resolution             (1,1) double = 600
-        opts.HideToolbar            (1,1) logical = true
-    end
-
-    toolbarVisible = ax.Toolbar.Visible;
-    toolbarCleanup = onCleanup(@() set(ax.Toolbar,'Visible',toolbarVisible));
-    if opts.HideToolbar
-        ax.Toolbar.Visible = 'off';
-    end
-
-    exportgraphics(ax,filename, ...
-        "ContentType","image", ...
-        "Units",opts.Units, ...
-        "Width",opts.Width, ...
-        "Height",opts.Height, ...
-        "Colorspace","rgb", ...
-        "Padding",0, ...
-        "PreserveAspectRatio",opts.PreserveAspectRatio, ...
-        "BackgroundColor",opts.BackgroundColor, ...
-        "Resolution",opts.Resolution);
 end
 
 function writeTiledSummary(fileNames,filename)
@@ -310,17 +277,4 @@ function tile = padToSquare(I,tileSize)
     rows = row0:(row0 + size(I,1) - 1);
     cols = col0:(col0 + size(I,2) - 1);
     tile(rows,cols,:) = I;
-end
-
-function updateProgress(h,msg,idx,total)
-    if isempty(h) || ~isvalid(h)
-        return
-    end
-
-    h.Message = msg;
-    if total > 0
-        h.Indeterminate = 'off';
-        h.Value = idx/total;
-    end
-    drawnow limitrate
 end

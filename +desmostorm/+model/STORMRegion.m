@@ -164,7 +164,7 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
             % --- peak stats table (for all channels) --- 
             % get max number of channels in the project
             proj = obj.Project;
-            nChannels = proj.MaxSizeC;
+            nChannels = numel(proj.Channels);
             % cell array to hold tables for each channel
             channelTableCells = cell(1,nChannels);
             for C = 1:nChannels
@@ -183,24 +183,26 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
             peakStatNames = cell(5,1);
             peakStatValues = cell(1,5);
 
-            % variable names per channel
-            peakStatNames{1} = sprintf('Peak distance (C%i)',C);
-            peakStatNames{2} = sprintf('Peak L FWHM (C%i)',C);
-            peakStatNames{3} = sprintf('Peak L location (C%i)',C);
-            peakStatNames{4} = sprintf('Peak R FWHM (C%i)',C);
-            peakStatNames{5} = sprintf('Peak R location (C%i)',C);
+            % Names refer to project channels; measurements stay in source order.
+            name = obj.Project.getChannelName(C);
+            peakStatNames{1} = sprintf('Peak distance (%s)',name);
+            peakStatNames{2} = sprintf('Peak L FWHM (%s)',name);
+            peakStatNames{3} = sprintf('Peak L location (%s)',name);
+            peakStatNames{4} = sprintf('Peak R FWHM (%s)',name);
+            peakStatNames{5} = sprintf('Peak R location (%s)',name);
 
-            if C <= length(obj.LinescanResults)
-                if obj.LinescanResults(C).hasCentralPeakPair
-                    peakStatValues{1} = obj.LinescanResults(C).CentralPeakPairDistance;
+            c = obj.Parent.sourceChannelIndex(C);
+            if ~isempty(c) && c <= numel(obj.LinescanResults)
+                if obj.LinescanResults(c).hasCentralPeakPair
+                    peakStatValues{1} = obj.LinescanResults(c).CentralPeakPairDistance;
                 end
-                if obj.LinescanResults(C).hasLeftPeak
-                    peakStatValues{2} = obj.LinescanResults(C).LeftPeakWidth;
-                    peakStatValues{3} = obj.LinescanResults(C).LeftPeakLocation;
+                if obj.LinescanResults(c).hasLeftPeak
+                    peakStatValues{2} = obj.LinescanResults(c).LeftPeakWidth;
+                    peakStatValues{3} = obj.LinescanResults(c).LeftPeakLocation;
                 end
-                if obj.LinescanResults(C).hasRightPeak
-                    peakStatValues{4} = obj.LinescanResults(C).RightPeakWidth;
-                    peakStatValues{5} = obj.LinescanResults(C).RightPeakLocation;
+                if obj.LinescanResults(c).hasRightPeak
+                    peakStatValues{4} = obj.LinescanResults(c).RightPeakWidth;
+                    peakStatValues{5} = obj.LinescanResults(c).RightPeakLocation;
                 end
             end
 
@@ -293,7 +295,7 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
             if isempty(C) % no channel idx specified
                 T2 = obj.getChannelPeakStatsTable(); % get peak stats table for all channels
             else
-                T2 = obj.getSingleChannelPeakStatsTable(C); % get peak stats for specified channel
+                T2 = obj.getSingleChannelPeakStatsTable(obj.Project.channelIndex(obj.Parent.ChannelIDs(C)));
             end
             % concatenate region info and channel stats tables
             T = [T1,T2];
@@ -343,6 +345,9 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
 
                 if isfield(R,'LabelID') && ~isempty(R.LabelID)
                     reg.LabelID = string(R.LabelID);
+                end
+                if isempty(reg.Project.LabelBank.getByID(reg.LabelID))
+                    reg.LabelID = "unlabeled";
                 end
 
                 if isfield(R,'LabelSource') && ~isempty(R.LabelSource)

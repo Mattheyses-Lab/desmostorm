@@ -20,16 +20,21 @@ function regionLinescanPlot(region,filename,opts)
         region      (1,1) desmostorm.model.STORMRegion
         filename    (1,:) char
         % plot appearance options
-        opts.TitleVisible           (1,1) matlab.lang.OnOffSwitchState = "on"
+        opts.FontSize (1,1) double {mustBePositive,mustBeFinite} = 12
+        opts.AnnotationFontSize (1,1) double {mustBePositive,mustBeFinite} = 10
+        opts.TitleFontSizeMultiplier (1,1) double {mustBePositive,mustBeFinite} = 1
+        opts.LabelFontSizeMultiplier (1,1) double {mustBePositive,mustBeFinite} = 1
+        opts.TitleVisible           (1,1) matlab.lang.OnOffSwitchState = "off"
         opts.DistanceAnnotations    (1,1) matlab.lang.OnOffSwitchState = "on"
-        opts.DistanceAnnotationsMode (1,1) string {mustBeMember(opts.DistanceAnnotationsMode,["data","lanes"])} = "lanes"
+        opts.DistanceAnnotationsMode (1,1) string {mustBeMember(opts.DistanceAnnotationsMode,["data","lanes"])} = "data"
         opts.WidthAnnotations       (1,1) matlab.lang.OnOffSwitchState = "on"
         opts.WidthAnnotationsMode   (1,1) string {mustBeMember(opts.WidthAnnotationsMode,["normal","hover"])} = "normal"
         opts.Channels               = "1"
         opts.CurrentChannel         (1,1) double {mustBeInteger,mustBePositive} = 1
-        opts.RawLineWidth           (1,1) double = 1
+        opts.RawLineWidth           (1,1) double = 0.5
         opts.RawLineColor           (1,3) double = [0.5 0.5 0.5]
         opts.SmoothLineWidth        (1,1) double = 1
+        opts.AnnotationLineWidth (1,1) double {mustBePositive,mustBeFinite} = 0.5
         opts.SmoothLineColor        (1,3) double = [0 0 0]
         opts.Color                  (1,3) double = [0 0 0]
         opts.ColorSource            (1,1) string {mustBeMember(opts.ColorSource,["channel","manual"])} = "manual"
@@ -39,6 +44,9 @@ function regionLinescanPlot(region,filename,opts)
         opts.AlphaMode              (1,1) string {mustBeMember(opts.AlphaMode,["auto","manual"])} = "auto"
         opts.XLabel                 (1,:) char = ''
         opts.YLabel                 (1,:) char = ''
+        opts.StyleSizing (1,1) string {mustBeMember(opts.StyleSizing,["physical","scale"])} = "physical"
+        opts.PreserveAspectRatio (1,1) matlab.lang.OnOffSwitchState = "off"
+        opts.Resolution (1,1) double {mustBePositive,mustBeFinite} = 300
         % export options
         opts.ContentType        (1,:) char {mustBeMember(opts.ContentType,{'vector','image'})} = 'vector'
         opts.Units              (1,:) char = 'inches'
@@ -49,19 +57,23 @@ function regionLinescanPlot(region,filename,opts)
         opts.ProgressDialog = matlab.ui.dialog.ProgressDialog.empty()
     end
 
-    setProgressMessage(opts.ProgressDialog,'Preparing linescan plot...');
+    desmostorm.runtime.updateProgress(opts.ProgressDialog,'Preparing linescan plot...');
 
-    W = opts.Width;
-    H = opts.Height;
+    figureSize = desmostorm.export.outputSizeInches([opts.Width opts.Height],opts.Units,opts.Resolution);
+    if opts.StyleSizing == "scale"
+        figureSize = [6.5 3];
+    end
+    W = figureSize(1);
+    H = figureSize(2);
     plotBackgroundColor = resolvePlotBackgroundColor(opts.BackgroundColor);
 
-    screenCenter = matlabx.ui.calibration.getScreenCenter(opts.Units);
+    screenCenter = matlabx.ui.calibration.getScreenCenter("inches");
     pos = [screenCenter(1) - W/2, screenCenter(2) - H/2, W, H];
 
     % create new figure
     fig = uifigure(...
         "WindowStyle","normal",...
-        "Units",opts.Units,...
+        "Units","inches",...
         "InnerPosition",pos);
 
     % close figure on function completion
@@ -77,28 +89,35 @@ function regionLinescanPlot(region,filename,opts)
     plotData = region.LinescanResults(channels);
     plotColors = resolvePlotColors(region,channels,opts.Color,opts.ColorSource);
 
-    % create a PeaksPlotContainer in the figure
-    peaksPlotContainer = desmostorm.widgets.PeaksPlotContainer(g, ...
-        "Data",plotData(:), ...
-        "TitleVisible",opts.TitleVisible, ...
-        "RawLineWidth",opts.RawLineWidth, ...
-        "RawLineColor",opts.RawLineColor, ...
-        "SmoothLineWidth",opts.SmoothLineWidth, ...
-        "SmoothLineColor",opts.SmoothLineColor, ...
-        "Color",opts.Color, ...
-        "Colors",plotColors, ...
-        "AnnotationColorMode",char(opts.AnnotationColorMode), ...
-        "AnnotationColor",opts.AnnotationColor, ...
-        "ColorMode",char(opts.ColorMode), ...
-        "AlphaMode",char(opts.AlphaMode), ...
-        "BackgroundColor",plotBackgroundColor, ...
-        "ForegroundColor",opts.ForegroundColor, ...
-        "DistanceAnnotations",opts.DistanceAnnotations, ...
-        "DistanceAnnotationsMode",char(opts.DistanceAnnotationsMode), ...
-        "WidthAnnotations",opts.WidthAnnotations, ...
-        "WidthAnnotationsMode",char(opts.WidthAnnotationsMode), ...
-        "XLabel",opts.XLabel, ...
-        "YLabel",opts.YLabel);
+    img = region.Parent;
+    names = img.channelNames();
+    data = desmostorm.plot.PeaksPlotData(plotData, ...
+        ChannelIDs=img.ChannelIDs(channels),Names=names(channels));
+    style = desmostorm.plot.PeaksPlotStyle( ...
+        Colors=plotColors,AnnotationColors=manualAnnotationColor(opts), ...
+        RawLineWidth=opts.RawLineWidth,SmoothLineWidth=opts.SmoothLineWidth, ...
+        AnnotationLineWidth=opts.AnnotationLineWidth,AnnotationsFontSize=opts.AnnotationFontSize, ...
+        BackgroundColor=plotBackgroundColor,ForegroundColor=opts.ForegroundColor, ...
+        DistanceAnnotations=opts.DistanceAnnotations,DistanceAnnotationsMode=opts.DistanceAnnotationsMode, ...
+        WidthAnnotations=opts.WidthAnnotations,WidthAnnotationsMode=opts.WidthAnnotationsMode);
+    % Retain explicit trace overrides accepted by this export entry point.
+    if opts.ColorMode == "manual"
+        style.RawLineColor = opts.RawLineColor;
+        style.SmoothLineColor = opts.SmoothLineColor;
+    end
+    if opts.AlphaMode == "manual", style.RawLineAlpha = 0.5; end
+
+    host = matlabx.ui.axes.PlotAxes(g,FontName="Arial",FontSize=opts.FontSize, ...
+        TitleFontSizeMultiplier=opts.TitleFontSizeMultiplier,LabelFontSizeMultiplier=opts.LabelFontSizeMultiplier, ...
+        TitleVisible=opts.TitleVisible,ToolbarVisible="off");
+    renderer = desmostorm.plot.PeaksPlotRenderer();
+    cleanupRenderer = onCleanup(@() delete(renderer));
+    renderer.update(data,style);
+    host.mount(renderer);
+    xlabel(host.Axes,opts.XLabel);
+    ylabel(host.Axes,opts.YLabel);
+    title(host.Axes,matlabx.utils.text.texFriendly(img.Name) + " | " + ...
+        matlabx.utils.text.texFriendly(region.Name));
 
     % draw and pause briefly for graphics to render
     drawnow
@@ -109,19 +128,11 @@ function regionLinescanPlot(region,filename,opts)
     desmostorm.app.focusMainFigure();
 
     % --- export plot to specified file location ---
-    setProgressMessage(opts.ProgressDialog,'Writing linescan plot...');
-    peaksPlotContainer.export(filename, ...
-        "BackgroundColor","none", ...
-        "Units",opts.Units, ...
-        "Height",opts.Height, ...
-        "Width",opts.Width);
-end
-
-function setProgressMessage(h,msg)
-    if ~isempty(h) && isvalid(h)
-        h.Message = msg;
-        drawnow limitrate
-    end
+    desmostorm.runtime.updateProgress(opts.ProgressDialog,'Writing linescan plot...');
+    host.exportPlot(filename,ContentType=opts.ContentType, ...
+        BackgroundColor=opts.BackgroundColor,Color=opts.BackgroundColor,Units=opts.Units, ...
+        Height=opts.Height,Width=opts.Width,Resolution=opts.Resolution, ...
+        PreserveAspectRatio=opts.PreserveAspectRatio);
 end
 
 function color = resolvePlotBackgroundColor(color)
@@ -170,7 +181,11 @@ function colors = resolvePlotColors(region,channels,manualColor,colorSource)
     project = region.Project;
     colors = zeros(numel(channels),3);
     for i = 1:numel(channels)
-        colorName = project.getChannelColorName(channels(i));
-        colors(i,:) = matlabx.colors.names.toRGB(char(colorName),"Palette","MATLAB");
+        colors(i,:) = project.getChannelRGB(region.Parent.ChannelIDs(channels(i)));
     end
+end
+
+function colors = manualAnnotationColor(opts)
+    colors = zeros(0,3);
+    if opts.AnnotationColorMode == "manual", colors = opts.AnnotationColor; end
 end

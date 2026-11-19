@@ -27,6 +27,10 @@ classdef LabelRegistry < handle
         ActiveLabelID (1,1) string = ""
     end
 
+    properties (SetAccess=private)
+        SelectedLabelIDs (1,:) string = strings(1,0)
+    end
+
     events
         LabelsChanged
         ActiveChanged
@@ -97,6 +101,10 @@ classdef LabelRegistry < handle
             end
         end
 
+        function setSelection(obj,ids)
+            obj.SelectedLabelIDs = intersect(obj.Order,string(ids(:)).','stable');
+        end
+
         function lbl = active(obj)
             lbl = obj.getByID(obj.ActiveLabelID);
         end
@@ -132,19 +140,20 @@ classdef LabelRegistry < handle
 
         function remove(obj, id)
             id = string(id);
-            if ~isKey(obj.LabelsDict, id), return; end
+            if id == "unlabeled" || ~isKey(obj.LabelsDict, id), return; end
 
             lbl = obj.LabelsDict(id);
 
             if lbl.hasHotkey() && isKey(obj.HotkeyMap, lbl.Hotkey)
                 % remove only if it still points to this label
                 if obj.HotkeyMap(lbl.Hotkey) == id
-                    remove(obj.HotkeyMap, lbl.Hotkey);
+                    obj.HotkeyMap = remove(obj.HotkeyMap, lbl.Hotkey);
                 end
             end
 
-            remove(obj.LabelsDict, id);
+            obj.LabelsDict = remove(obj.LabelsDict,id);
             obj.Order(obj.Order == id) = [];
+            obj.setSelection(obj.SelectedLabelIDs);
 
             if obj.ActiveLabelID == id
                 obj.ActiveLabelID = "";
@@ -177,11 +186,11 @@ classdef LabelRegistry < handle
             end
             
             % ID
-            if ~isempty(opts.ID)
+            if ~isempty(opts.ID) && opts.ID ~= id && id ~= "unlabeled"
                 oldID = lbl.ID;
                 lbl.ID = opts.ID;
                 % remove entry keyed by oldID
-                remove(obj.LabelsDict,oldID);
+                obj.LabelsDict = remove(obj.LabelsDict,oldID);
                 % replace oldID in Order
                 obj.Order(obj.Order == oldID) = opts.ID;
             end
@@ -191,7 +200,9 @@ classdef LabelRegistry < handle
                 oldHotkey = lbl.Hotkey;
                 lbl.Hotkey = opts.Hotkey;
                 % remove entry keyed by oldHotkey
-                remove(obj.HotkeyMap,oldHotkey);
+                if isKey(obj.HotkeyMap,oldHotkey)
+                    obj.HotkeyMap = remove(obj.HotkeyMap,oldHotkey);
+                end
             end
 
             % Color
@@ -215,6 +226,7 @@ classdef LabelRegistry < handle
             arr = obj.labels();
             S = struct();
             S.ActiveLabelID = obj.ActiveLabelID;
+            S.SelectedLabelIDs = obj.SelectedLabelIDs;
 
             S.Labels = repmat(struct(), 1, numel(arr));
             for k = 1:numel(arr)
@@ -250,18 +262,27 @@ classdef LabelRegistry < handle
             end
 
             if isfield(S,'Order') && ~isempty(S.Order)
-                bank.Order = string(S.Order);
+                bank.Order = intersect(string(S.Order),bank.Order,'stable');
             end
 
-            if isfield(S,'ActiveLabelID')
+            if ~ismember("unlabeled",bank.Order)
+                bank.add("Unlabeled",ID="unlabeled",Color=[1 1 1]);
+            end
+            bank.Order = ["unlabeled",bank.Order(bank.Order ~= "unlabeled")];
+            if isfield(S,'ActiveLabelID') && ismember(string(S.ActiveLabelID),bank.Order)
                 bank.ActiveLabelID = string(S.ActiveLabelID);
+            else
+                bank.ActiveLabelID = "unlabeled";
+            end
+            if isfield(S,'SelectedLabelIDs')
+                bank.setSelection(S.SelectedLabelIDs);
             end
         end
 
 
         function obj = default()
             obj = desmostorm.model.LabelRegistry();
-            obj.add("Unlabeled","ID","unlabeled","Hotkey","u","Color",[0.7 0.7 0.7]);
+            obj.add("Unlabeled","ID","unlabeled","Hotkey","u","Color",[1 1 1]);
             % Examples (edit/remove as you like)
             obj.add("Object","ID","object","Hotkey","1","Color",[0.2 0.8 0.2]);
             obj.add("Background","ID","background","Hotkey","2","Color",[0.9 0.2 0.2]);

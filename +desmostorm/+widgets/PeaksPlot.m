@@ -34,6 +34,7 @@ classdef PeaksPlot < handle & matlab.mixin.SetGetExactNames
         ForegroundColor (1,3) double = [0 0 0]
         % color of peak annotation lines
         AnnotationsColor (1,3) double = [0 0 0]
+        AnnotationLineWidth (1,1) double {mustBePositive,mustBeFinite} = 1
         % base color used when ColorMode is auto
         Color (1,3) double {mustBeInRange(Color,0,1)} = [0 0 0]
         % auto derives raw/smooth/area colors from Color; manual uses per-object colors
@@ -147,19 +148,19 @@ classdef PeaksPlot < handle & matlab.mixin.SetGetExactNames
                 'DisplayName','Smoothed');
             % dashed vertical lines showing peak locations, from baseline to maximum value of normalized/smoothed
             obj.PeakVerticalLines = line(ax,...
-                NaN,NaN,'LineWidth',0.5,'Color',[1 1 1],'LineStyle','--');
+                NaN,NaN,'LineWidth',obj.AnnotationLineWidth,'Color',[1 1 1],'LineStyle','--');
             obj.PeakVerticalLines.Annotation.LegendInformation.IconDisplayStyle = "off";
             % horizontal lines showing distances between peaks
             obj.PeakToPeakLines = line(ax,...
-                NaN,NaN,'LineWidth',0.5,'Color',[1 1 1],'LineStyle','-');
+                NaN,NaN,'LineWidth',obj.AnnotationLineWidth,'Color',[1 1 1],'LineStyle','-');
             obj.PeakToPeakLines.Annotation.LegendInformation.IconDisplayStyle = "off";
             % horizontal lines showing FWHM
             obj.PeakWidthLines = line(ax,...
-                NaN,NaN,'LineWidth',0.5,'Color',[1 1 1],'LineStyle','-');
+                NaN,NaN,'LineWidth',obj.AnnotationLineWidth,'Color',[1 1 1],'LineStyle','-');
             obj.PeakWidthLines.Annotation.LegendInformation.IconDisplayStyle = "off";
             % vertical lines showing peak borders, from baseline to signal
             obj.PeakBorderLines = line(ax,...
-                NaN,NaN,'LineWidth',0.5,'Color',[1 1 1],'LineStyle','-');
+                NaN,NaN,'LineWidth',obj.AnnotationLineWidth,'Color',[1 1 1],'LineStyle','-');
             obj.PeakBorderLines.Annotation.LegendInformation.IconDisplayStyle = "off";
             % empty label arrays for peak widths and distances
             obj.WidthLabels = matlab.graphics.primitive.Text.empty();
@@ -303,15 +304,9 @@ classdef PeaksPlot < handle & matlab.mixin.SetGetExactNames
             obj.updatePeakPatchAppearance();
 
             % annotation lines
-            set([obj.PeakVerticalLines,obj.PeakToPeakLines], ...
+            set([obj.PeakVerticalLines,obj.PeakToPeakLines,obj.PeakWidthLines,obj.PeakBorderLines], ...
                 "Color",obj.AnnotationsColor, ...
-                "LineWidth",1);
-            set(obj.PeakWidthLines, ...
-                "Color",obj.AnnotationsColor, ...
-                "LineWidth",1);
-            set(obj.PeakBorderLines, ...
-                "Color",obj.AnnotationsColor, ...
-                "LineWidth",1);
+                "LineWidth",obj.AnnotationLineWidth);
 
             % annotation labels
             set(obj.PeakToPeakLabels, ...

@@ -22,6 +22,7 @@ arguments
     folderName                      {mustBeTextScalar}
     opts.Scope                      (1,1) string {mustBeMember(opts.Scope,["active","all"])} = "active"
     opts.Channel                    (1,1) double {mustBeInteger,mustBePositive} = 1
+    opts.DisplaySettings (1,1) desmostorm.config.Display = desmostorm.config.Display()
     opts.ScalingMode                (1,1) string {mustBeMember(opts.ScalingMode,["data","auto","user"])} = "data"
     opts.Colormap                   (256,3) double = gray
     opts.ColorMode                  (1,1) string {mustBeMember(opts.ColorMode,["label","manual"])} = "label"
@@ -30,6 +31,11 @@ arguments
     opts.BoxLineWidth               (1,1) double {mustBePositive} = 1
     opts.BoxFaceAlpha               (1,1) double {mustBeInRange(opts.BoxFaceAlpha,0,1)} = 0
     opts.FontSize                   (1,1) double {mustBePositive} = 10
+    opts.Format (1,1) string {mustBeMember(opts.Format,["PNG","TIFF","JPEG"])} = "PNG"
+    opts.Width (1,1) double {mustBeNonnegative,mustBeFinite} = 0
+    opts.Height (1,1) double {mustBeNonnegative,mustBeFinite} = 0
+    opts.PreserveAspectRatio (1,1) matlab.lang.OnOffSwitchState = "on"
+    opts.OverlaySizing (1,1) string {mustBeMember(opts.OverlaySizing,["physical","scale"])} = "physical"
     opts.Resolution                 (1,1) double = 600
     opts.Size                       (1,1) double {mustBePositive} = 7
     opts.Units                      (1,:) char = 'inches'
@@ -58,11 +64,11 @@ end
     "Tools",{}, ...
     "WindowStyle","normal", ...
     "Visible","off", ...
-    "Size",opts.Size, ...
-    "Units",opts.Units);
+    "Size",7, ...
+    "Units","inches");
 c = onCleanup(@() delete(fig));
 
-ax.CLim = imageExportCLim(firstImage,opts.Channel,opts.ScalingMode);
+ax.CLim = desmostorm.export.imageDisplayLimits(firstImage,firstImage.sourceChannelIndex(opts.Channel),opts.ScalingMode,opts.DisplaySettings);
 addRegionBoxOverlays(ax,project,firstImage,opts);
 
 % Match the ROI overlay export behavior: show once so ImageAxes and overlay
@@ -76,11 +82,12 @@ fig.Visible = "off";
 for k = 1:numel(imgs)
     img = imgs(k);
 
-    updateProgress(opts.ProgressDialog, ...
+    desmostorm.runtime.updateProgress(opts.ProgressDialog, ...
         sprintf('Exporting region box overlay (%d/%d): %s',k,numel(imgs),img.Name), ...
         k-1,numel(imgs));
 
-    if opts.Channel > img.SizeC
+    sourceIndex = img.sourceChannelIndex(opts.Channel);
+    if isempty(sourceIndex)
         summary.Skipped = summary.Skipped + 1;
         desmostorm.Log.WARN(sprintf( ...
             "Skipping region box overlay export for %s: channel %d does not exist.", ...
@@ -88,8 +95,8 @@ for k = 1:numel(imgs)
         continue
     end
 
-    ax.CData = getImageChannel(img,opts.Channel);
-    ax.CLim = imageExportCLim(img,opts.Channel,opts.ScalingMode);
+    ax.CData = getImageChannel(img,sourceIndex);
+    ax.CLim = desmostorm.export.imageDisplayLimits(img,sourceIndex,opts.ScalingMode,opts.DisplaySettings);
     ax.Overlays.clear();
     addRegionBoxOverlays(ax,project,img,opts);
 
@@ -100,22 +107,19 @@ for k = 1:numel(imgs)
         pause(0.05)
     end
 
-    filename = fullfile(folderName,sprintf('%s_C%d_region-box-overlay.png', ...
-        safeFileStem(img.shortName),opts.Channel));
-
-    [exportW,exportH] = imageExportSize(img,opts.Size);
-    exportAxesImage(ax.getAxes(),filename, ...
-        "HideToolbar",          true, ...
-        "PreserveAspectRatio",  'off', ...
-        "Resolution",           opts.Resolution, ...
-        "Units",                opts.Units, ...
-        "Width",                exportW, ...
-        "Height",               exportH);
+    filename = fullfile(folderName,sprintf('%s_C%d_region-box-overlay.%s', ...
+        safeFileStem(img.shortName),opts.Channel,lower(opts.Format)));
+    [width,height] = imageExportSize(img,opts.Size);
+    if opts.Width > 0, width = opts.Width; end
+    if opts.Height > 0, height = opts.Height; end
+    ax.exportView(filename,Units=opts.Units,Width=width,Height=height, ...
+        PreserveAspectRatio=opts.PreserveAspectRatio,Resolution=opts.Resolution, ...
+        OverlaySizing=opts.OverlaySizing);
 
     summary.Exported = summary.Exported + 1;
 end
 
-updateProgress(opts.ProgressDialog, ...
+desmostorm.runtime.updateProgress(opts.ProgressDialog, ...
     sprintf('Region box overlay export complete: %d exported, %d skipped.', ...
     summary.Exported,summary.Skipped), ...
     numel(imgs),numel(imgs));
@@ -140,9 +144,10 @@ function [img,I] = firstExportableImage(imgs,channel)
     img = desmostorm.model.STORMImage.empty();
     I = [];
     for k = 1:numel(imgs)
-        if channel <= imgs(k).SizeC
+        sourceIndex = imgs(k).sourceChannelIndex(channel);
+        if ~isempty(sourceIndex)
             img = imgs(k);
-            I = getImageChannel(img,channel);
+            I = getImageChannel(img,sourceIndex);
             return
         end
     end
@@ -199,72 +204,9 @@ function [W,H] = imageExportSize(img,longSide)
     end
 end
 
-function clim = imageExportCLim(img,channel,scalingMode)
-    switch string(scalingMode)
-        case "data"
-            clim = img.getDataRange(channel);
-        case "auto"
-            clim = img.getAutoDisplayRange(channel);
-        case "user"
-            clim = img.getDisplayRange(channel);
-    end
-
-    clim = double(clim);
-    if any(~isfinite(clim)) || clim(1) == clim(2)
-        v = clim(find(isfinite(clim),1,'first'));
-        if isempty(v), v = 0; end
-        clim = [v-0.5 v+0.5];
-    end
-    clim = sort(clim);
-end
-
 function stem = safeFileStem(str)
     stem = regexprep(char(str),'[^A-Za-z0-9_.-]','_');
     if isempty(stem)
         stem = 'image';
     end
-end
-
-function exportAxesImage(ax,filename,opts)
-    arguments
-        ax                          (1,1) matlab.ui.control.UIAxes
-        filename                    (1,:) char
-        opts.Units                  (1,:) char = 'inches'
-        opts.Width                  (1,1) double = 7
-        opts.Height                 (1,1) double = 7
-        opts.BackgroundColor        (1,3) double = [0 0 0]
-        opts.PreserveAspectRatio    (1,:) char = 'on'
-        opts.Resolution             (1,1) double = 600
-        opts.HideToolbar            (1,1) logical = true
-    end
-
-    toolbarVisible = ax.Toolbar.Visible;
-    toolbarCleanup = onCleanup(@() set(ax.Toolbar,'Visible',toolbarVisible));
-    if opts.HideToolbar
-        ax.Toolbar.Visible = 'off';
-    end
-
-    exportgraphics(ax,filename, ...
-        "ContentType","image", ...
-        "Units",opts.Units, ...
-        "Width",opts.Width, ...
-        "Height",opts.Height, ...
-        "Colorspace","rgb", ...
-        "Padding",0, ...
-        "PreserveAspectRatio",opts.PreserveAspectRatio, ...
-        "BackgroundColor",opts.BackgroundColor, ...
-        "Resolution",opts.Resolution);
-end
-
-function updateProgress(h,msg,idx,total)
-    if isempty(h) || ~isvalid(h)
-        return
-    end
-
-    h.Message = msg;
-    if total > 0
-        h.Indeterminate = 'off';
-        h.Value = idx/total;
-    end
-    drawnow limitrate
 end

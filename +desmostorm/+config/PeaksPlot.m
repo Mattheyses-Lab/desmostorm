@@ -24,13 +24,17 @@ classdef PeaksPlot < handle
         BackgroundColor_    (1,3) double {mustBeInRange(BackgroundColor_,0,1)} = [1 1 1]
         ForegroundColor_    (1,3) double {mustBeInRange(ForegroundColor_,0,1)} = [0 0 0]
         ShownPlots_         (1,1) string {mustBeMember(ShownPlots_,["current","all"])} = "all"
-        ColorSource_        (1,1) string {mustBeMember(ColorSource_,["channel","manual"])} = "channel"
+        ColorSource_        (1,1) string {mustBeMember(ColorSource_,["channel","manual"])} = "manual"
         AnnotationColorMode_ (1,1) string {mustBeMember(AnnotationColorMode_,["auto","manual"])} = "auto"
+        AnnotationLineWidth_ (1,1) double {mustBePositive,mustBeFinite} = 0.5
         AnnotationColor_     (1,3) double {mustBeInRange(AnnotationColor_,0,1)} = [0 0 0]
         DistanceAnnotations_    (1,1) matlab.lang.OnOffSwitchState = "on"
         DistanceAnnotationsMode_ (1,1) string {mustBeMember(DistanceAnnotationsMode_,["data","lanes"])} = "data"
         WidthAnnotations_       (1,1) matlab.lang.OnOffSwitchState = "on"
         WidthAnnotationsMode_    (1,1) string {mustBeMember(WidthAnnotationsMode_,["normal","hover"])} = "hover"
+        AnnotationFontSize_ (1,1) double {mustBePositive,mustBeFinite} = 10
+        FontSize_ (1,1) double {mustBePositive,mustBeFinite} = 12
+        TitleVisible_ (1,1) matlab.lang.OnOffSwitchState = "off"
     end
 
     properties (Dependent)
@@ -43,10 +47,14 @@ classdef PeaksPlot < handle
         ColorSource
         AnnotationColorMode
         AnnotationColor
+        AnnotationLineWidth
         DistanceAnnotations
         DistanceAnnotationsMode
         WidthAnnotations
         WidthAnnotationsMode
+        AnnotationFontSize
+        FontSize
+        TitleVisible
     end
 
 
@@ -67,11 +75,16 @@ classdef PeaksPlot < handle
         function v = get.ShownPlots(this),      v = this.ShownPlots_;       end
         function v = get.ColorSource(this),     v = this.ColorSource_;      end
         function v = get.AnnotationColorMode(this), v = this.AnnotationColorMode_; end
+        function v = get.AnnotationLineWidth(this), v = this.AnnotationLineWidth_; end
         function v = get.AnnotationColor(this),     v = this.AnnotationColor_;     end
         function v = get.DistanceAnnotations(this),     v = this.DistanceAnnotations_;     end
         function v = get.DistanceAnnotationsMode(this), v = this.DistanceAnnotationsMode_; end
         function v = get.WidthAnnotations(this),        v = this.WidthAnnotations_;        end
         function v = get.WidthAnnotationsMode(this),    v = this.WidthAnnotationsMode_;    end
+
+        function v = get.AnnotationFontSize(this), v = this.AnnotationFontSize_; end
+        function v = get.FontSize(this), v = this.FontSize_; end
+        function v = get.TitleVisible(this), v = this.TitleVisible_; end
 
         % ---------- Setters ----------
 
@@ -83,12 +96,17 @@ classdef PeaksPlot < handle
         function set.ShownPlots(this,v),               this.setValue("ShownPlots",string(v));       end
         function set.ColorSource(this,v),              this.setValue("ColorSource",string(v));      end
         function set.AnnotationColorMode(this,v),      this.setValue("AnnotationColorMode",string(v)); end
+        function set.AnnotationLineWidth(this,v), this.setValue("AnnotationLineWidth",v); end
         function set.AnnotationColor(this,v),          this.setValue("AnnotationColor",v);          end
         function set.DistanceAnnotations(this,v),      this.setValue("DistanceAnnotations",v);      end
         function set.DistanceAnnotationsMode(this,v),  this.setValue("DistanceAnnotationsMode",string(v)); end
         function set.WidthAnnotations(this,v),         this.setValue("WidthAnnotations",v);         end
         function set.WidthAnnotationsMode(this,v),     this.setValue("WidthAnnotationsMode",string(v)); end
 
+
+        function set.AnnotationFontSize(this,v), this.setValue("AnnotationFontSize",v); end
+        function set.FontSize(this,v), this.setValue("FontSize",v); end
+        function set.TitleVisible(this,v), this.setValue("TitleVisible",v); end
 
         % ---------- Serialization ----------
         function S = toStruct(this)
@@ -102,10 +120,14 @@ classdef PeaksPlot < handle
                 'ColorSource',      this.ColorSource, ...
                 'AnnotationColorMode', this.AnnotationColorMode, ...
                 'AnnotationColor',     this.AnnotationColor, ...
+                'AnnotationLineWidth', this.AnnotationLineWidth, ...
                 'DistanceAnnotations',     this.DistanceAnnotations, ...
                 'DistanceAnnotationsMode', this.DistanceAnnotationsMode, ...
                 'WidthAnnotations',        this.WidthAnnotations, ...
-                'WidthAnnotationsMode',    this.WidthAnnotationsMode);
+                'WidthAnnotationsMode',    this.WidthAnnotationsMode, ...
+                'AnnotationFontSize', this.AnnotationFontSize, ...
+                'FontSize', this.FontSize, ...
+                'TitleVisible', this.TitleVisible);
         end
 
         function fromStruct(this,S)

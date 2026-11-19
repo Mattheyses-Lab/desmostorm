@@ -247,9 +247,6 @@ classdef Settings < handle
 
                 % Display settings gained intensity scaling and channel mode.
                 defaultDisplay = desmostorm.config.Display;
-                if ~isfield(S.Display,'AutoScaleDisplayIntensity')
-                    S.Display.AutoScaleDisplayIntensity = defaultDisplay.AutoScaleDisplayIntensity;
-                end
                 if ~isfield(S.Display,'ChannelColorMode')
                     S.Display.ChannelColorMode = defaultDisplay.ChannelColorMode;
                 end
@@ -285,6 +282,13 @@ classdef Settings < handle
             if ~isfield(S,'ROI') || isempty(S.ROI)
                 defaultROI = desmostorm.config.ROI;
                 S.ROI = defaultROI.toStruct();
+                migrated = true;
+            end
+
+            if desmostorm.Version.compare(old,"1.2.0") < 0 && ...
+                    isfield(S.Display,'AutoScaleDisplayIntensity')
+                S.Display.DefaultKeepAuto = S.Display.AutoScaleDisplayIntensity;
+                S.Display = rmfield(S.Display,'AutoScaleDisplayIntensity');
                 migrated = true;
             end
 

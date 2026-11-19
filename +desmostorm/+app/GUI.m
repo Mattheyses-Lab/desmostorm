@@ -36,15 +36,11 @@ classdef GUI < handle
         LogGrid matlab.ui.container.GridLayout
         LogTextArea matlab.ui.control.TextArea
 
-        % --- listboxes ---
+        % --- navigation trees ---
         % images
-        ImageListBoxPanel matlab.ui.container.Panel
-        ImageListBoxPanelGrid matlab.ui.container.GridLayout
-        ImageListBox matlab.ui.control.ListBox
+        ImageTree matlab.ui.container.CheckBoxTree
         % regions
-        RegionListBoxPanel matlab.ui.container.Panel
-        RegionListBoxPanelGrid matlab.ui.container.GridLayout
-        RegionListBox matlab.ui.control.ListBox
+        RegionTree matlab.ui.container.CheckBoxTree
 
         % --- viewers ---
         % ImageViewer
@@ -64,23 +60,19 @@ classdef GUI < handle
         % --- linescan plot ---
         RegionLinescanPanel matlab.ui.container.Panel
         RegionLinescanPanelGrid matlab.ui.container.GridLayout
-        RegionLinescanPlot desmostorm.widgets.PeaksPlotContainer % custom plot
+        RegionLinescanPlot matlabx.ui.axes.PlotAxes
+        RegionLinescanRenderer desmostorm.plot.PeaksPlotRenderer
 
         % --- Settings-related UI ---
-        ExampleColormapPanel matlab.ui.container.Panel
-        ExampleColormapAxes matlab.ui.control.UIAxes
-        ExampleColormapImage matlab.graphics.primitive.Image
+        ColormapPreview matlab.ui.control.Image
         ColormapTree matlab.ui.container.Tree
-        IntensitySliders matlabx.ui.control.Slider
-        ChannelColorLabels matlab.ui.control.Label
-        ChannelColorDropDowns matlab.ui.control.DropDown
-        LabelsTree matlab.ui.container.Tree
+        DisplayLimitBlocks struct = struct.empty()
+        LabelsTree matlab.ui.container.CheckBoxTree
         
         % Extra graphics handles, stored as struct to reduce clutter
         MenubarUI struct
         SettingsUI struct
         LabelsUI struct
-        ContextMenuUI struct
 
     end
 
@@ -111,8 +103,11 @@ classdef GUI < handle
     properties (Access=private)
         pendingSizeUpdate (1,1) logical = false
         isSyncingSelection (1,1) logical = false
+        isSyncingTrees (1,1) logical = false
+        registeredLabelHotkeys (1,:) string = strings(1,0)
         isSyncingColormapSelection (1,1) logical = false
-        % isSyncingChannelDisplay (1,1) logical = false
+        isSyncingChannelDisplay (1,1) logical = false
+        displayedChannelIDs (1,:) string = strings(1,0)
     end
 
     % CommnadRouter, Calibration, Log
@@ -226,6 +221,8 @@ classdef GUI < handle
 
             % center the GUI after defining all graphics components
             movegui(obj.Fig,"center");
+            obj.Fig.SizeChangedFcn = @(~,~) obj.refreshComponentSizes();
+            obj.refreshComponentSizes();
         end
 
         function setupFigure(obj)
@@ -241,7 +238,6 @@ classdef GUI < handle
                 'Theme','dark',...
                 'HandleVisibility','on',...
                 'AutoResizeChildren','off',...
-                'SizeChangedFcn',@(~,~) obj.refreshComponentSizes(),...
                 'CloseRequestFcn',@(~,~) obj.onCloseRequest());
         end
 
@@ -260,13 +256,13 @@ classdef GUI < handle
             obj.MenubarUI.File_New   = uimenu(obj.MenubarUI.File,'Text','New',  'MenuSelectedFcn',@(~,~) obj.onNew(),'Accelerator','N');
             obj.MenubarUI.File_Open  = uimenu(obj.MenubarUI.File,'Text','Open...', 'MenuSelectedFcn',@(~,~) obj.onOpen(),'Accelerator','O');
             obj.MenubarUI.File_Close = uimenu(obj.MenubarUI.File,'Text','Close','MenuSelectedFcn',@(~,~) obj.onClose(),'Accelerator','X');
-            obj.MenubarUI.File_Save  = uimenu(obj.MenubarUI.File,'Text','Save...', 'MenuSelectedFcn',@(~,~) obj.onSave(),'Separator','on','Accelerator','S');
-            % --- separator ---
-            obj.MenubarUI.File_SaveSettings = uimenu(obj.MenubarUI.File,'Text','Save Settings','MenuSelectedFcn',@(~,~) obj.onSaveSettings(),'Separator','on');
-            % --- separator ---
-            obj.MenubarUI.File_LoadImages = uimenu(obj.MenubarUI.File,'Text','Load Images...','MenuSelectedFcn',@(~,~) obj.onLoadImages(),'Accelerator','L');
+            obj.MenubarUI.File_Save  = uimenu(obj.MenubarUI.File,'Text','Save...', 'MenuSelectedFcn',@(~,~) obj.saveProject(false),'Separator','on','Accelerator','S');
+            obj.MenubarUI.File_SaveAs = uimenu(obj.MenubarUI.File,'Text','Save As...', ...
+                'MenuSelectedFcn',@(~,~) obj.saveProject(true));
+            obj.MenubarUI.File_ImportImages = uimenu(obj.MenubarUI.File,'Text','Import Images...', ...
+                'MenuSelectedFcn',@(~,~) obj.onImportImages(),'Separator','on','Accelerator','L');
             % --- File -> Export ---
-            obj.MenubarUI.File_Export = uimenu(obj.MenubarUI.File,'Text','Export');
+            obj.MenubarUI.File_Export = uimenu(obj.MenubarUI.File,'Text','Export','Separator','on');
             obj.MenubarUI.File_Export_Measurements = uimenu(obj.MenubarUI.File_Export,'Text','Measurements (.xlsx)', 'MenuSelectedFcn',@(~,~) obj.onExportMeasurements());
             obj.MenubarUI.File_Export_SumaryPDF    = uimenu(obj.MenubarUI.File_Export,'Text','Summary PDF',          'MenuSelectedFcn',@(~,~) obj.onExportSummaryPDF());
             obj.MenubarUI.File_Export_RegionImages = uimenu(obj.MenubarUI.File_Export,'Text','Region Images (.tif)', 'MenuSelectedFcn',@(~,~) obj.onExportRegionImages());
@@ -280,6 +276,14 @@ classdef GUI < handle
             obj.MenubarUI.File_Export_RegionSubimageWithROI = uimenu(obj.MenubarUI.File_Export, ...
                 'Text','Region Image + ROI...', ...
                 'MenuSelectedFcn',@(~,~) obj.onExportRegionSubimageWithROI());
+
+            % --- Edit ---
+            obj.MenubarUI.Edit = uimenu(obj.Fig,'Text','Edit');
+            obj.MenubarUI.Edit_Channels = uimenu(obj.MenubarUI.Edit,'Text','Channels...', ...
+                'MenuSelectedFcn',@(~,~) obj.onEditChannels());
+
+            obj.MenubarUI.Edit_Labels = uimenu(obj.MenubarUI.Edit,'Text','Labels...', ...
+                'MenuSelectedFcn',@(~,~) obj.onManageLabels());
 
             % --- Run ---
             obj.MenubarUI.Run = uimenu(obj.Fig,'Text','Run');
@@ -303,6 +307,11 @@ classdef GUI < handle
             obj.MenubarUI.Test_Region_TuneClusters = uimenu(obj.MenubarUI.Test_Region, ...
                 'Text','Tune Cluster Parameters', ...
                 'MenuSelectedFcn',@(~,~) obj.onTuneRegionClusterParameters());
+            obj.MenubarUI.Settings = uimenu(obj.Fig,'Text','Settings');
+            obj.MenubarUI.Settings_SaveDefaults = uimenu(obj.MenubarUI.Settings, ...
+                'Text','Save as app defaults','MenuSelectedFcn',@(~,~) obj.onSaveSettings());
+            obj.MenubarUI.Settings_LoadDefaults = uimenu(obj.MenubarUI.Settings, ...
+                'Text','Load app defaults','MenuSelectedFcn',@(~,~) obj.onLoadSettings());
         end 
 
         function setupGrids(obj)
@@ -314,7 +323,7 @@ classdef GUI < handle
                 'RowSpacing',0, ...
                 'Padding',[5 5 5 5],...
                 'BackgroundColor',[0.12 0.12 0.12]);
-            % Left Pane Grid (ListBoxes and settings)
+            % Left pane grid for navigation and settings
             obj.LeftPane = uigridlayout(obj.Grid,[1 1],...
                 "RowHeight",{'fit'},...
                 "ColumnWidth",300,...
@@ -346,7 +355,7 @@ classdef GUI < handle
                 'BackgroundColor',[.12 .12 .12]);
 
             % initialize items
-            itemTitles = ["Images","Regions","Analysis","Channel Display","Colormap","Image Display","Peaks Plot","Linescan ROI","Labels"];
+            itemTitles = ["Images","Regions","Analysis","Display Limits","Image Display","Peaks Plot","Linescan ROI","Labels"];
 
             for i = 1:numel(itemTitles)
                 obj.SettingsAccordion.addItem("Title",itemTitles(i),...
@@ -361,12 +370,12 @@ classdef GUI < handle
             end
 
             % --- Images ---
-            desmostorm.Log.DEBUG("Setting up Images listbox...");
-            try obj.setupImagesListBox(); catch ME, desmostorm.Log.EXCEPTION(ME); rethrow(ME); end
+            desmostorm.Log.DEBUG("Setting up Images tree...");
+            try obj.setupImagesTree(); catch ME, desmostorm.Log.EXCEPTION(ME); rethrow(ME); end
 
             % --- Regions ---
-            desmostorm.Log.DEBUG("Setting up Regions listbox...");
-            try obj.setupRegionsListBox(); catch ME, desmostorm.Log.EXCEPTION(ME); rethrow(ME); end
+            desmostorm.Log.DEBUG("Setting up Regions tree...");
+            try obj.setupRegionsTree(); catch ME, desmostorm.Log.EXCEPTION(ME); rethrow(ME); end
 
             % Set up SettingsUI struct
             obj.SettingsUI = struct(...
@@ -377,21 +386,19 @@ classdef GUI < handle
                 "ROI",struct(),...
                 "Box",struct());
 
-            % --- Colormap ---
-            desmostorm.Log.DEBUG("Setting up Colormap controls...");
-            try obj.setupColormapControls(); catch ME, desmostorm.Log.EXCEPTION(ME); rethrow(ME); end
-
-            % --- Channel Display ---
-            desmostorm.Log.DEBUG("Setting up Channel Display controls...");
-            try obj.setupChannelDisplayControls(); catch ME, desmostorm.Log.EXCEPTION(ME); rethrow(ME); end
-
             % --- Analysis ---
             desmostorm.Log.DEBUG("Setting up Analysis controls...");
             try obj.setupAnalysisControls(); catch ME, desmostorm.Log.EXCEPTION(ME); rethrow(ME); end
 
-            % --- Image Display ---
-            desmostorm.Log.DEBUG("Setting up Image Display controls...");
-            try obj.setupImageDisplayControls(); catch ME, desmostorm.Log.EXCEPTION(ME); rethrow(ME); end
+            % --- Display Limits and Image Display ---
+            desmostorm.Log.DEBUG("Setting up Display Limits and Image Display controls...");
+            try
+                obj.setupDisplayLimitsControls();
+                obj.setupImageDisplayControls();
+            catch ME
+                desmostorm.Log.EXCEPTION(ME);
+                rethrow(ME);
+            end
 
             % --- Peaks Plot ---
             desmostorm.Log.DEBUG("Setting up Peaks Plot controls...");
@@ -405,132 +412,78 @@ classdef GUI < handle
             desmostorm.Log.DEBUG("Setting up Labels controls...");
             try obj.setupLabelsControls(); catch ME, desmostorm.Log.EXCEPTION(ME); rethrow(ME); end
 
-            % Expand Images and Regions listbox accordion items
+            % Expand Images and Regions tree accordion items
             obj.SettingsAccordion.getItem("Images").expand();
             obj.SettingsAccordion.getItem("Regions").expand();
         end
 
-        function setupImagesListBox(obj)
-            item = obj.SettingsAccordion.getItem("Images");
-            set(item.Pane,...
-                "RowHeight",{200},...
-                "ColumnWidth",{'1x'},...
-                "Padding",[0 0 0 0]);
-            % Image selection listbox
-            obj.ImageListBox = uilistbox(item.Pane, ...
-                'Items',string.empty(1,0),...
-                'ItemsData',string.empty(1,0),...
-                'Value',string.empty(1,0),...
-                'ValueChangedFcn',@(lb,~) obj.onImageListBoxValueChanged(lb.Value),...
-                'BackgroundColor',[.18 .18 .18],...
-                'FontColor',[.9 .9 .9]);
+        function setupImagesTree(obj)
+            obj.ImageTree = obj.buildNavigationTree("Images");
         end
 
-        function setupRegionsListBox(obj)
-            % set size and spacing of pane grid
-            item = obj.SettingsAccordion.getItem("Regions");
-            set(item.Pane,...
-                "RowHeight",{200},...
-                "ColumnWidth",{'1x'},...
-                "Padding",[0 0 0 0]);
-            % Region selection listbox
-            obj.RegionListBox = uilistbox(item.Pane, ...
-                'Items',string.empty(1,0),...
-                'ItemsData',string.empty(1,0),...
-                'Value',string.empty(1,0),...
-                'ValueChangedFcn',@(lb,evt) obj.onRegionListBoxValueChanged(lb,evt),...
-                'BackgroundColor',[.18 .18 .18],...
-                'FontColor',[.9 .9 .9]);
+        function setupRegionsTree(obj)
+            obj.RegionTree = obj.buildNavigationTree("Regions");
         end
 
-        function setupColormapControls(obj)
-            item = obj.SettingsAccordion.getItem("Colormap");
-            % set size and spacing of pane grid
-            set(item.Pane,"RowHeight",{30,'1x'},...
-                "ColumnWidth",{'1x'},...
-                "RowSpacing",5,...
-                "ColumnSpacing",5);
+        function tree = buildNavigationTree(obj,scope)
+            item = obj.SettingsAccordion.getItem(scope);
+            set(item.Pane,'RowHeight',{200},'ColumnWidth',{'1x'},'Padding',0);
+            tree = uitree(item.Pane,'checkbox', ...
+                'BackgroundColor',[.18 .18 .18],'FontColor',[.9 .9 .9], ...
+                'SelectionChangedFcn',@(src,~) obj.onNavigationTreeChanged(src,scope,false), ...
+                'CheckedNodesChangedFcn',@(src,~) obj.onNavigationTreeChanged(src,scope,true));
+            tree.Tooltip = 'Highlight to activate. Check boxes for batch operations.';
+            tree.ContextMenu = obj.navigationMenu(scope,"");
+        end
 
-            % panel to hold example colormap axes
-            obj.ExampleColormapPanel = uipanel(item.Pane);
-            obj.ExampleColormapPanel.Layout.Row = 1;
-            obj.ExampleColormapPanel.Layout.Column = 1;
+        function setupImageDisplayControls(obj)
+            item = obj.SettingsAccordion.getItem("Image Display");
+            pane = item.Pane;
+            set(pane,'ColumnWidth',{70,'1x'},'RowHeight',{24,24,24,200}, ...
+                'Padding',5,'RowSpacing',5,'ColumnSpacing',5);
 
-            % axes to hold example colorbar
-            obj.ExampleColormapAxes = uiaxes(obj.ExampleColormapPanel,...
-                'Visible','Off',...
-                'XTick',[],...
-                'YTick',[],...
-                'Units','Normalized',...
-                'InnerPosition',[0 0 1 1]);
-            obj.ExampleColormapAxes.Toolbar.Visible = 'Off';
-            disableDefaultInteractivity(obj.ExampleColormapAxes);
+            modeLabel = uilabel(pane,'Text','Mode','FontColor',[.85 .85 .85]);
+            modeLabel.Layout.Row = 1;
+            mode = uidropdown(pane,'Items',{'Colors','LUTs'}, ...
+                'ItemsData',{'colors','luts'},'BackgroundColor',[.3 .3 .3], ...
+                'FontColor',[.9 .9 .9], ...
+                'ValueChangedFcn',@(src,~) obj.DisplaySettingsChanged(src,"ChannelColorMode"));
+            mode.Layout.Row = 1;
+            mode.Layout.Column = 2;
 
-            % create image to show example colorbar for colormap switching
-            obj.ExampleColormapImage = image(obj.ExampleColormapAxes,...
-                'CData',repmat(1:256,50,1),...
-                'CDataMapping','direct');
-            % set axes limits so that colorbar image fills axes area
-            set(obj.ExampleColormapAxes,"YLim",[0.5 50.5],"XLim",[0.5 256.5]);
+            channelLabel = uilabel(pane,'Text','Channel','FontColor',[.85 .85 .85]);
+            channelLabel.Layout.Row = 2;
+            channel = uidropdown(pane,'Items',{'No channels'},'ItemsData',{''}, ...
+                'Enable','off','BackgroundColor',[.3 .3 .3],'FontColor',[.9 .9 .9], ...
+                'ValueChangedFcn',@(~,~) obj.refreshChannelDisplayControls());
+            channel.Layout.Row = 2;
+            channel.Layout.Column = 2;
 
+            appearance = uilabel(pane,'Text','Color','FontColor',[.85 .85 .85]);
+            appearance.Layout.Row = 3;
+            color = uidropdown(pane,'Items',matlabx.ui.axes.ImageAxes.getColorNames(), ...
+                'BackgroundColor',[.3 .3 .3],'FontColor',[.9 .9 .9], ...
+                'ValueChangedFcn',@(src,~) obj.ChannelColorChanged(src));
+            color.Layout.Row = 3;
+            color.Layout.Column = 2;
+            obj.ColormapPreview = uiimage(pane,'ScaleMethod','stretch');
+            obj.ColormapPreview.Layout.Row = 3;
+            obj.ColormapPreview.Layout.Column = 2;
+            obj.ColormapTree = uitree(pane,'BackgroundColor',[.18 .18 .18], ...
+                'FontColor',[.9 .9 .9], ...
+                'SelectionChangedFcn',@(~,e) obj.ColormapSelectionChanged(e));
+            obj.ColormapTree.Layout.Row = 4;
+            obj.ColormapTree.Layout.Column = [1 2];
 
-            % uitree for colormap selection
-            obj.ColormapTree = uitree(...
-                "Parent",item.Pane,...
-                "SelectionChangedFcn",@(~,e) obj.ColormapSelectionChanged(e));
-            obj.ColormapTree.Layout.Row = 2;
-            obj.ColormapTree.Layout.Column = 1;
-
-            % populate tree with colormap categories
-            categories = matlabx.colors.maps.Registry.categories;
-
-            for i = 1:numel(categories)
-                thisCategory = categories(i);
-                catNode = uitreenode("Parent",obj.ColormapTree,"Text",thisCategory);
-
-                names = matlabx.colors.maps.Registry.names(thisCategory);
-
-                for j = 1:numel(names)
-                    uitreenode("Parent",catNode,"Text",names(j),"NodeData",names(j));
+            for category = reshape(matlabx.colors.maps.Registry.categories(),1,[])
+                categoryNode = uitreenode(obj.ColormapTree,'Text',category);
+                for name = reshape(matlabx.colors.maps.Registry.names(category),1,[])
+                    uitreenode(categoryNode,'Text',name, ...
+                        'NodeData',struct('Category',category,'Name',name));
                 end
             end
-
-            % get the current active colormap name
-            colormapName = obj.Settings.Display.ColormapName;
-            % select it in the tree
-            obj.ColormapTree.SelectedNodes = obj.ColormapTree.findobj("NodeData",colormapName);
-            % and set it as the colormap of the example colormap image
-            obj.ExampleColormapAxes.Colormap = obj.Settings.Display.Colormap;
-        end
-
-        function setupChannelDisplayControls(obj)
-            item = obj.SettingsAccordion.getItem("Channel Display");
-            set(item.Pane,...
-                "RowHeight",{'fit'},...
-                "ColumnWidth",{'fit','1x'},...
-                "RowSpacing",5,...
-                "ColumnSpacing",5);
-
-            uilabel(item.Pane,...
-                "Text","Color mode",...
-                "FontColor",[0.85 0.85 0.85]);
-
-            % obj.SettingsUI.ChannelDisplay.ColorModeDropDown = uidropdown(item.Pane,...
-            %     "Items",["colors","luts"],...
-            %     "Value",obj.Settings.Display.ChannelColorMode,...
-            %     "ValueChangedFcn",@(o,~) obj.ChannelColorModeChanged(o));
-
-
-            obj.SettingsUI.ChannelDisplay.ColorModeDropDown = uidropdown(item.Pane,...
-                "Items",["colors","luts"],...
-                "Value",obj.Settings.Display.ChannelColorMode,...
-                "ValueChangedFcn",@(o,~) obj.DisplaySettingsChanged(o,"ChannelColorMode"));
-
-            obj.SettingsUI.ChannelDisplay.ColorModeDropDown.Layout.Row = 1;
-            obj.SettingsUI.ChannelDisplay.ColorModeDropDown.Layout.Column = 2;
-
-            obj.syncChannelColorControlCount();
-            obj.updateChannelColorControlRows(0);
+            obj.SettingsUI.ChannelDisplay = struct( ...
+                'Mode',mode,'Channel',channel,'AppearanceLabel',appearance,'Color',color);
         end
 
         function setupAnalysisControls(obj)
@@ -600,131 +553,92 @@ classdef GUI < handle
                 "Value",obj.Settings.Analysis.PixelSizeUnit);
         end
 
-        function setupImageDisplayControls(obj)
-            item = obj.SettingsAccordion.getItem("Image Display");
-            % set size and spacing of pane grid
-            set(item.Pane,...
-                "RowHeight",{'fit','fit'},...
-                "ColumnWidth",{'1x'},...
-                "RowSpacing",5,...
-                "ColumnSpacing",5);
-
-            obj.SettingsUI.Display.AutoScaleDisplayIntensityCheckBox = uicheckbox(item.Pane,...
-                "Value",obj.Settings.Display.AutoScaleDisplayIntensity,...
-                "ValueChangedFcn",@(o,~) obj.DisplaySettingsChanged(o,"AutoScaleDisplayIntensity"),...
-                "Text","Auto-scale display intensity");
-
-            % --- IntensitySliders ---
-            desmostorm.Log.DEBUG("Setting up IntensitySliders...");
-            try obj.setupIntensitySliders(); catch ME, desmostorm.Log.EXCEPTION(ME); rethrow(ME); end
-        end
-
-        function setupIntensitySliders(obj)
-            obj.syncIntensitySliderCount();
-            obj.updateIntensitySliderRows(1);
+        function setupDisplayLimitsControls(obj)
+            item = obj.SettingsAccordion.getItem("Display Limits");
+            set(item.Pane,'RowHeight',{'fit'},'ColumnWidth',{'1x'}, ...
+                'RowSpacing',5,'ColumnSpacing',5);
         end
 
         function setupPeaksPlotControls(obj)
             item = obj.SettingsAccordion.getItem("Peaks Plot");
-            % set size and spacing of pane grid
-            set(item.Pane,...
-                "RowHeight",repmat({'fit'},1,13),...
-                "ColumnWidth",{'fit','1x'},...
-                "RowSpacing",5,...
-                "ColumnSpacing",5);
+            pane = item.Pane;
+            rows = {
+                "Channel",               "ShownPlots",               ["all","current"], [],                     []
+                "Color",                 "ColorSource",             ["channel","manual"], "Color",            "color"
+                "Raw Line Width",        "RawLineWidth",             "number", [],                              []
+                "Smooth Line Width",     "SmoothLineWidth",          "number", [],                              []
+                "Annotation Color",      "AnnotationColorMode",      ["auto","manual"], "AnnotationColor",     "color"
+                "Annotation Line Width", "AnnotationLineWidth",      "number", [],                              []
+                "Annotation Font Size (pt)", "AnnotationFontSize",      "number", [],                              []
+                "Distance Labels",       "DistanceAnnotations",      ["on","off"], "DistanceAnnotationsMode", ["lanes","data"]
+                "Width Labels",          "WidthAnnotations",         ["on","off"], "WidthAnnotationsMode",     ["hover","normal"]
+                "Title",                 "TitleVisible",            ["on","off"], [],                         []
+                "Font Size (pt)",        "FontSize",                "number", [],                              []
+                "Background Color",     "BackgroundColor",         "color", [],                               []
+                "Foreground Color",     "ForegroundColor",         "color", [],                               []
+            };
+            set(pane,'RowHeight',repmat({'fit'},1,size(rows,1)),'ColumnWidth',{'fit','1x'}, ...
+                'Padding',5,'RowSpacing',5,'ColumnSpacing',5);
+            for row = 1:size(rows,1)
+                label = uilabel(pane,'Text',rows{row,1},'FontColor',[.85 .85 .85]);
+                label.Layout.Row = row;
+                label.Layout.Column = 1;
+                second = rows{row,4};
+                if isempty(second)
+                    control = obj.addPeaksPlotControl(pane,rows{row,2},rows{row,3});
+                    control.Layout.Row = row;
+                    control.Layout.Column = 2;
+                else
+                    columns = {'1x','1x'};
+                    if isequal(rows{row,5},"color"), columns{2} = 'fit'; end
+                    pair = uigridlayout(pane,[1 2],'ColumnWidth',columns, ...
+                        'RowHeight',{'fit'},'Padding',0,'ColumnSpacing',5, ...
+                        'BackgroundColor',[.18 .18 .18]);
+                    pair.Layout.Row = row;
+                    pair.Layout.Column = 2;
+                    left = obj.addPeaksPlotControl(pair,rows{row,2},rows{row,3});
+                    left.Layout.Column = 1;
+                    right = obj.addPeaksPlotControl(pair,second,rows{row,5});
+                    right.Layout.Column = 2;
+                end
+            end
+            obj.refreshPeaksPlotControls();
+        end
 
-            uilabel(item.Pane,"Text","Shown Plots","FontColor",[0.85 0.85 0.85]);
-            obj.SettingsUI.PeaksPlot.ShownPlotsDropDown = uidropdown(...
-                item.Pane,...
-                "Items",{'all','current'},...
-                "Value",char(obj.Settings.PeaksPlot.ShownPlots),...
-                "ValueChangedFcn",@(o,~) obj.PeaksPlotSettingsChanged(o,"ShownPlots"));
+        function control = addPeaksPlotControl(obj,parent,name,choices)
+            callback = @(src,~) obj.PeaksPlotSettingsChanged(src,name);
+            if isequal(choices,"color")
+                control = uicolorpicker(parent,'ValueChangedFcn',callback);
+            elseif isequal(choices,"number")
+                control = uieditfield(parent,'numeric','Value',1, ...
+                    'Limits',[0 Inf],'LowerLimitInclusive','off','ValueChangedFcn',callback);
+            else
+                control = uidropdown(parent,'Items',cellstr(choices), ...
+                    'BackgroundColor',[.3 .3 .3],'FontColor',[.9 .9 .9], ...
+                    'ValueChangedFcn',callback);
+            end
+            obj.SettingsUI.PeaksPlot.(name) = control;
+        end
 
-            uilabel(item.Pane,"Text","Color Source","FontColor",[0.85 0.85 0.85]);
-            obj.SettingsUI.PeaksPlot.ColorSourceDropDown = uidropdown(...
-                item.Pane,...
-                "Items",{'channel','manual'},...
-                "Value",char(obj.Settings.PeaksPlot.ColorSource),...
-                "ValueChangedFcn",@(o,~) obj.PeaksPlotSettingsChanged(o,"ColorSource"));
-
-            uilabel(item.Pane,"Text","Plot Color","FontColor",[0.85 0.85 0.85]);
-            obj.SettingsUI.PeaksPlot.ColorPicker = uicolorpicker(...
-                'Parent',item.Pane,...
-                'Value',obj.Settings.PeaksPlot.Color,...
-                'ValueChangedFcn',@(o,~) obj.PeaksPlotSettingsChanged(o,"Color"));
-
-            uilabel(item.Pane,"Text","Annotation Color Mode","FontColor",[0.85 0.85 0.85]);
-            obj.SettingsUI.PeaksPlot.AnnotationColorModeDropDown = uidropdown(...
-                item.Pane,...
-                "Items",{'auto','manual'},...
-                "Value",char(obj.Settings.PeaksPlot.AnnotationColorMode),...
-                "ValueChangedFcn",@(o,~) obj.PeaksPlotSettingsChanged(o,"AnnotationColorMode"));
-
-            uilabel(item.Pane,"Text","Annotation Color","FontColor",[0.85 0.85 0.85]);
-            obj.SettingsUI.PeaksPlot.AnnotationColorPicker = uicolorpicker(...
-                'Parent',item.Pane,...
-                'Value',obj.Settings.PeaksPlot.AnnotationColor,...
-                'ValueChangedFcn',@(o,~) obj.PeaksPlotSettingsChanged(o,"AnnotationColor"));
-
-            uilabel(item.Pane,"Text","Background Color","FontColor",[0.85 0.85 0.85]);
-            obj.SettingsUI.PeaksPlot.BackgroundColorPicker = uicolorpicker(...
-                'Parent',item.Pane,...
-                'Value',obj.Settings.PeaksPlot.BackgroundColor,...
-                'ValueChangedFcn',@(o,~) obj.PeaksPlotSettingsChanged(o,"BackgroundColor"));
-
-            uilabel(item.Pane,"Text","Foreground Color","FontColor",[0.85 0.85 0.85]);
-            obj.SettingsUI.PeaksPlot.ForegroundColorPicker = uicolorpicker(...
-                'Parent',item.Pane,...
-                'Value',obj.Settings.PeaksPlot.ForegroundColor,...
-                'ValueChangedFcn',@(o,~) obj.PeaksPlotSettingsChanged(o,"ForegroundColor"));
-
-            uilabel(item.Pane,"Text","Raw Line Width","FontColor",[0.85 0.85 0.85]);
-            obj.SettingsUI.PeaksPlot.RawLineWidthEditField = uieditfield(...
-                item.Pane,...
-                "numeric",...
-                "ValueChangedFcn",@(o,~) obj.PeaksPlotSettingsChanged(o,"RawLineWidth"),...
-                "Value",obj.Settings.PeaksPlot.RawLineWidth);
-
-            uilabel(item.Pane,"Text","Smooth Line Width","FontColor",[0.85 0.85 0.85]);
-            obj.SettingsUI.PeaksPlot.SmoothLineWidthEditField = uieditfield(...
-                item.Pane,...
-                "numeric",...
-                "ValueChangedFcn",@(o,~) obj.PeaksPlotSettingsChanged(o,"SmoothLineWidth"),...
-                "Value",obj.Settings.PeaksPlot.SmoothLineWidth);
-
-            uilabel(item.Pane,"Text","Distance Labels","FontColor",[0.85 0.85 0.85]);
-            obj.SettingsUI.PeaksPlot.DistanceAnnotationsDropDown = uidropdown(...
-                item.Pane,...
-                "Items",{'on','off'},...
-                "Value",char(obj.Settings.PeaksPlot.DistanceAnnotations),...
-                "ValueChangedFcn",@(o,~) obj.PeaksPlotSettingsChanged(o,"DistanceAnnotations"));
-
-            uilabel(item.Pane,"Text","Distance Mode","FontColor",[0.85 0.85 0.85]);
-            obj.SettingsUI.PeaksPlot.DistanceAnnotationsModeDropDown = uidropdown(...
-                item.Pane,...
-                "Items",{'lanes','data'},...
-                "Value",char(obj.Settings.PeaksPlot.DistanceAnnotationsMode),...
-                "ValueChangedFcn",@(o,~) obj.PeaksPlotSettingsChanged(o,"DistanceAnnotationsMode"));
-
-            uilabel(item.Pane,"Text","Width Labels","FontColor",[0.85 0.85 0.85]);
-            obj.SettingsUI.PeaksPlot.WidthAnnotationsDropDown = uidropdown(...
-                item.Pane,...
-                "Items",{'on','off'},...
-                "Value",char(obj.Settings.PeaksPlot.WidthAnnotations),...
-                "ValueChangedFcn",@(o,~) obj.PeaksPlotSettingsChanged(o,"WidthAnnotations"));
-
-            uilabel(item.Pane,"Text","Width Mode","FontColor",[0.85 0.85 0.85]);
-            obj.SettingsUI.PeaksPlot.WidthAnnotationsModeDropDown = uidropdown(...
-                item.Pane,...
-                "Items",{'hover','normal'},...
-                "Value",char(obj.Settings.PeaksPlot.WidthAnnotationsMode),...
-                "ValueChangedFcn",@(o,~) obj.PeaksPlotSettingsChanged(o,"WidthAnnotationsMode"));
+        function refreshPeaksPlotControls(obj)
+            controls = obj.SettingsUI.PeaksPlot;
+            settings = obj.Settings.PeaksPlot;
+            for name = reshape(string(fieldnames(controls)),1,[])
+                control = controls.(name);
+                value = settings.(name);
+                if isa(control,'matlab.ui.control.DropDown'), value = char(value); end
+                control.Value = value;
+            end
+            controls.Color.Enable = settings.ColorSource == "manual";
+            controls.AnnotationColor.Enable = settings.AnnotationColorMode == "manual";
+            controls.DistanceAnnotationsMode.Enable = logical(settings.DistanceAnnotations);
+            controls.WidthAnnotationsMode.Enable = logical(settings.WidthAnnotations);
         end
 
         function setupROIControls(obj)
             item = obj.SettingsAccordion.getItem("Linescan ROI");
             set(item.Pane,...
-                "RowHeight",repmat({'fit'},1,10),...
+                "RowHeight",repmat({'fit'},1,9),...
                 "ColumnWidth",{'fit','1x'},...
                 "RowSpacing",5,...
                 "ColumnSpacing",5);
@@ -777,20 +691,13 @@ classdef GUI < handle
                 "Value",char(obj.Settings.ROI.RotationAngleVisible),...
                 "ValueChangedFcn",@(o,~) obj.ROISettingsChanged(o,"RotationAngleVisible"));
 
-            uilabel(item.Pane,"Text","Angle Mode","FontColor",[0.85 0.85 0.85]);
-            obj.SettingsUI.ROI.RotationAngleModeDropDown = uidropdown(...
-                item.Pane,...
-                "Items",{'half-circle','full-circle'},...
-                "Value",obj.Settings.ROI.RotationAngleMode,...
-                "ValueChangedFcn",@(o,~) obj.ROISettingsChanged(o,"RotationAngleMode"));
-
             uilabel(item.Pane,"Text","Font Color","FontColor",[0.85 0.85 0.85]);
             obj.SettingsUI.ROI.FontColorPicker = uicolorpicker(...
                 'Parent',item.Pane,...
                 'Value',obj.Settings.ROI.FontColor,...
                 'ValueChangedFcn',@(o,~) obj.ROISettingsChanged(o,"FontColor"));
 
-            uilabel(item.Pane,"Text","Font Size","FontColor",[0.85 0.85 0.85]);
+            uilabel(item.Pane,"Text","Font Size (pt)","FontColor",[0.85 0.85 0.85]);
             obj.SettingsUI.ROI.FontSizeEditField = uieditfield(...
                 item.Pane,...
                 "numeric",...
@@ -800,17 +707,12 @@ classdef GUI < handle
 
         function setupLabelsControls(obj)
             item = obj.SettingsAccordion.getItem("Labels");
-            % set size and spacing of pane grid
-            set(item.Pane,...
-                "RowHeight",{'1x'},...
-                "ColumnWidth",{'1x'},...
-                "Padding",[0 0 0 0]);
-
-            obj.LabelsTree = uitree(...
-                "Parent",item.Pane,...
-                "SelectionChangedFcn",@(~,e) obj.onSelectLabel(e));
-
-            obj.ContextMenuUI = struct('LabelsTreeNodeContextMenu',[]);
+            set(item.Pane,'RowHeight',{150},'ColumnWidth',{'1x'},'Padding',0);
+            obj.LabelsTree = uitree(item.Pane,'checkbox', ...
+                'BackgroundColor',[.18 .18 .18],'FontColor',[.9 .9 .9], ...
+                'SelectionChangedFcn',@(~,e) obj.onSelectLabel(e), ...
+                'CheckedNodesChangedFcn',@(~,e) obj.onCheckLabels(e));
+            obj.LabelsTree.ContextMenu = obj.labelMenu("");
         end
 
         function setupLogWindow(obj)
@@ -845,7 +747,7 @@ classdef GUI < handle
             obj.ImageViewer = matlabx.ui.axes.ImageAxes(obj.ImageViewerPanelGrid,...
                 'Name','ImageViewer',...
                 'CData',[],...
-                'Tools',{'Zoom','Box','Colorbar'},...
+                'Tools',{'Zoom','Box','DisplayLimits','Colorbar','ExportView'},...
                 'Colormap',obj.Settings.Display.Colormap,...
                 'CLim',[0 1]);
 
@@ -859,8 +761,8 @@ classdef GUI < handle
             obj.ImageViewer.Tools.Box.BoxSelectionChangedFcn = @(~,d) obj.onBoxSelectionChanged(d);
 
             obj.axesL(1) = addlistener(obj.ImageViewer,'C','PostSet',@(~,~) obj.onImageViewerChannelChanged());
-            obj.axesL(2) = addlistener(obj.ImageViewer,'ComponentColorMode','PostSet',@(~,~) obj.onImageViewerChannelDisplayChanged());
-            obj.axesL(3) = addlistener(obj.ImageViewer,'ComponentColors','PostSet',@(~,~) obj.onImageViewerChannelDisplayChanged());
+            obj.axesL(2) = addlistener(obj.ImageViewer,'DisplayStateChanged', ...
+                @(~,e) obj.onImageViewerChannelDisplayChanged(e));
 
             % set the box size for Box tool
             obj.ImageViewer.Tools.Box.BoxSize = obj.Settings.Analysis.BoxSize;
@@ -896,7 +798,7 @@ classdef GUI < handle
             obj.RegionViewer = matlabx.ui.axes.ImageAxes(obj.RegionViewerPanelGrid,...
                 'Name','RegionViewer',...
                 'CData',[],...
-                'Tools',{'DrawRectangle'},...
+                'Tools',{'DrawRectangle','DisplayLimits','ExportView'},...
                 'Colormap',obj.Settings.Display.Colormap,...
                 'CLim',[0 1]);
 
@@ -949,7 +851,12 @@ classdef GUI < handle
                 "ColumnWidth",{'1x'},...
                 "Padding",[0 0 0 0]);
 
-            obj.syncRegionLinescanPlotCount();
+            obj.RegionLinescanPlot = matlabx.ui.axes.PlotAxes(obj.RegionLinescanPanelGrid, ...
+                Name="RegionLinescan",FontName="Arial",Visible="off");
+            obj.RegionLinescanPlot.Layout.Row = 1;
+            obj.RegionLinescanPlot.Layout.Column = 1;
+            obj.RegionLinescanRenderer = desmostorm.plot.PeaksPlotRenderer();
+            obj.RegionLinescanPlot.mount(obj.RegionLinescanRenderer);
             obj.updateRegionLinescanPlotRows(0);
 
         end
@@ -972,6 +879,9 @@ classdef GUI < handle
             if ~isempty(obj.axesL), delete(obj.axesL(isvalid(obj.axesL))); end
             if ~isempty(obj.ImageViewer) && isvalid(obj.ImageViewer), delete(obj.ImageViewer); end
             if ~isempty(obj.RegionViewer) && isvalid(obj.RegionViewer), delete(obj.RegionViewer); end
+            if ~isempty(obj.RegionLinescanRenderer) && isvalid(obj.RegionLinescanRenderer)
+                delete(obj.RegionLinescanRenderer);
+            end
             if ~isempty(obj.SettingsAccordion) && isvalid(obj.SettingsAccordion), delete(obj.SettingsAccordion); end
             if ~isempty(obj.Grid) && isvalid(obj.Grid), delete(obj.Grid); end
             if ~isempty(obj.Fig)  && isvalid(obj.Fig),  delete(obj.Fig);  end
@@ -1068,11 +978,11 @@ classdef GUI < handle
             obj.refreshSettingsControllers();
 
             % images
-            obj.refreshImageListBox();
+            obj.refreshImageTree();
             obj.syncActiveImageToView();
 
             % regions
-            obj.refreshRegionListBox();
+            obj.refreshRegionTree();
             obj.syncActiveRegionToView();
 
             % labels
@@ -1083,46 +993,30 @@ classdef GUI < handle
         function refreshMenubar(obj)
             % File, New, and Open must stay available without a project.
             projectMenus = setdiff(fieldnames(obj.MenubarUI), ...
-                {'File','File_New','File_Open'});
+                {'File','File_New','File_Open','Settings','Settings_SaveDefaults','Settings_LoadDefaults'});
             hasProject = ~isempty(obj.Project);
             for i = 1:numel(projectMenus)
                 obj.MenubarUI.(projectMenus{i}).Enable = hasProject;
             end
+            obj.MenubarUI.Edit_Channels.Enable = hasProject && ~isempty(obj.Project.Channels);
         end
 
         function refreshWindowName(obj)
-            dirtyMark = "";
-            projectName = "";
-            if ~isempty(obj.Project)
-                projectName = obj.Project.Name;
-                if obj.Project.HasUnsavedChanges
-                    dirtyMark = "*";
-                end
+            title = "DesmoSTORM (" + desmostorm.Info.Version + ")";
+            if isempty(obj.Project)
+                obj.Fig.Name = char(title + " — No project");
+                return
             end
 
-            if isempty(obj.Project)
-                obj.Fig.Name = sprintf("%s%s (%s)",desmostorm.Info.Name,dirtyMark,desmostorm.Info.Version);
-            else
-                obj.Fig.Name = sprintf("%s%s (%s) - %s",desmostorm.Info.Name,dirtyMark,desmostorm.Info.Version,projectName);
-            end
+            title = title + " — " + obj.Project.Name;
+            if obj.Project.HasUnsavedChanges, title = title + "*"; end
+            if obj.Project.SourcePath ~= "", title = title + " — " + obj.Project.SourcePath; end
+            obj.Fig.Name = char(title);
         end
 
         function refreshSettingsControllers(obj)
             S = obj.Settings;
-            % Colormap
-            cmap = S.Display.Colormap;
-            cmapName = obj.Settings.Display.ColormapName;
-            obj.ColormapTree.SelectedNodes = obj.ColormapTree.findobj("NodeData",cmapName);
-            obj.ExampleColormapAxes.Colormap = cmap;
-            if ~isempty(obj.Project)
-                obj.applyProjectChannelDisplayToAxes();
-                obj.syncColormapSelectorToChannel();
-            else
-                obj.ExampleColormapAxes.Colormap = cmap;
-            end
             obj.refreshChannelDisplayControls();
-            % set axes limits so that colorbar image fills axes area
-            set(obj.ExampleColormapAxes,"YLim",[0.5 50.5],"XLim",[0.5 256.5]);
             % Analysis
             obj.SettingsUI.Analysis.BoxSizeEditField.Value = S.Analysis.BoxSize;
             obj.SettingsUI.Analysis.MinPeakDistanceEditField.Value = S.Analysis.MinPeakDistance;
@@ -1132,20 +1026,7 @@ classdef GUI < handle
             obj.SettingsUI.Analysis.PeakSmoothingEditField.Value = S.Analysis.PeakSmoothing;
             obj.SettingsUI.Analysis.PixelSizeValueEditField.Value = S.Analysis.PixelSizeValue;
             obj.SettingsUI.Analysis.PixelSizeUnitDropDown.Value = S.Analysis.PixelSizeUnit;
-            % PeaksPlot
-            obj.SettingsUI.PeaksPlot.ShownPlotsDropDown.Value = char(S.PeaksPlot.ShownPlots);
-            obj.SettingsUI.PeaksPlot.ColorSourceDropDown.Value = char(S.PeaksPlot.ColorSource);
-            obj.SettingsUI.PeaksPlot.RawLineWidthEditField.Value = S.PeaksPlot.RawLineWidth;
-            obj.SettingsUI.PeaksPlot.ColorPicker.Value = S.PeaksPlot.Color;
-            obj.SettingsUI.PeaksPlot.SmoothLineWidthEditField.Value = S.PeaksPlot.SmoothLineWidth;
-            obj.SettingsUI.PeaksPlot.BackgroundColorPicker.Value = S.PeaksPlot.BackgroundColor;
-            obj.SettingsUI.PeaksPlot.ForegroundColorPicker.Value = S.PeaksPlot.ForegroundColor;
-            obj.SettingsUI.PeaksPlot.AnnotationColorModeDropDown.Value = char(S.PeaksPlot.AnnotationColorMode);
-            obj.SettingsUI.PeaksPlot.AnnotationColorPicker.Value = S.PeaksPlot.AnnotationColor;
-            obj.SettingsUI.PeaksPlot.DistanceAnnotationsDropDown.Value = char(S.PeaksPlot.DistanceAnnotations);
-            obj.SettingsUI.PeaksPlot.DistanceAnnotationsModeDropDown.Value = char(S.PeaksPlot.DistanceAnnotationsMode);
-            obj.SettingsUI.PeaksPlot.WidthAnnotationsDropDown.Value = char(S.PeaksPlot.WidthAnnotations);
-            obj.SettingsUI.PeaksPlot.WidthAnnotationsModeDropDown.Value = char(S.PeaksPlot.WidthAnnotationsMode);
+            obj.refreshPeaksPlotControls();
             % Linescan ROI
             obj.SettingsUI.ROI.ROIColorPicker.Value = S.ROI.ROIColor;
             obj.SettingsUI.ROI.ROILineWidthEditField.Value = S.ROI.ROILineWidth;
@@ -1154,14 +1035,10 @@ classdef GUI < handle
             obj.SettingsUI.ROI.AnnotationLineColorPicker.Value = S.ROI.AnnotationLineColor;
             obj.SettingsUI.ROI.AnnotationLineWidthEditField.Value = S.ROI.AnnotationLineWidth;
             obj.SettingsUI.ROI.RotationAngleVisibleDropDown.Value = char(S.ROI.RotationAngleVisible);
-            obj.SettingsUI.ROI.RotationAngleModeDropDown.Value = S.ROI.RotationAngleMode;
             obj.SettingsUI.ROI.FontColorPicker.Value = S.ROI.FontColor;
             obj.SettingsUI.ROI.FontSizeEditField.Value = S.ROI.FontSize;
             obj.refreshROISettings();
-            % Display
-            obj.SettingsUI.Display.AutoScaleDisplayIntensityCheckBox.Value = S.Display.AutoScaleDisplayIntensity;
-            % Sliders
-            obj.resetIntensitySliders();
+            obj.refreshDisplayLimits();
         end
 
         function detatchListeners(obj)
@@ -1187,8 +1064,10 @@ classdef GUI < handle
                 obj.projectL(8) = addlistener(obj.Project,'RegionSelectionChanged', @(~,e) obj.onRegionSelectionChanged(e));
                 % Labels
                 obj.projectL(9) = addlistener(obj.Project,'LabelsChanged',          @(~,~) obj.onLabelsChanged());
-                % Dirty state
-                obj.projectL(10) = addlistener(obj.Project,'DirtyStateChanged',     @(~,~) obj.onDirtyStateChanged());
+                obj.projectL(10) = addlistener(obj.Project,'ChannelsChanged',     @(~,~) obj.onChannelsChanged());
+                obj.projectL(11) = addlistener(obj.Project,'DirtyStateChanged',   @(~,~) obj.onDirtyStateChanged());
+                obj.projectL(12) = addlistener(obj.Project,'ImageSelectionChanged', ...
+                    @(~,~) obj.refreshImageTree());
             end
             % Settings
             obj.settingsL(1) = addlistener(obj.Settings,'DisplayChanged',   @(~,e) obj.onDisplayChanged(e));
@@ -1200,21 +1079,31 @@ classdef GUI < handle
         end
 
         function refreshHotkeys(obj)
-            % refresh hotkeys for label selection
-            labels = obj.Project.LabelBank.labels;
-            for i = 1:numel(labels)
-                % add a hotkey for each label
-                obj.CommandRouter.addHotkey(labels(i).Hotkey,@(~,k) obj.onLabelHotkeyPressed(k));
+            for key = obj.registeredLabelHotkeys
+                obj.CommandRouter.removeHotkey(key);
+            end
+            obj.registeredLabelHotkeys = strings(1,0);
+            if isempty(obj.Project), return, end
+            keys = obj.Project.LabelBank.hotkeys();
+            for key = reshape(unique(keys(strlength(keys)>0),'stable'),1,[])
+                obj.CommandRouter.addHotkey(key,@(~,k) obj.onLabelHotkeyPressed(k));
+                obj.registeredLabelHotkeys(end+1) = key;
             end
         end
 
         function refreshComponentSizes(obj)
 
-            if obj.pendingSizeUpdate, return; end
+            if obj.pendingSizeUpdate || isempty(obj.Fig) || ~isvalid(obj.Fig) || ...
+                    isempty(obj.RegionGrid) || ~isvalid(obj.RegionGrid) || ...
+                    isempty(obj.ImageViewerPanelGrid) || ~isvalid(obj.ImageViewerPanelGrid) || ...
+                    isempty(obj.RegionViewerPanelGrid) || ~isvalid(obj.RegionViewerPanelGrid) || ...
+                    isempty(obj.RegionSummaryPanelGrid) || ~isvalid(obj.RegionSummaryPanelGrid)
+                return
+            end
             obj.pendingSizeUpdate = true;
+            guard = onCleanup(@() obj.finishSizeUpdate());
 
             p = obj.Fig.InnerPosition;
-            H = p(4);
             W = p(3);
 
             % remaining width for top row of right panel
@@ -1224,45 +1113,46 @@ classdef GUI < handle
             panelTop = obj.uipanelTopChromePx;
 
             % take half for the ImageViewer
-            imageW = (remW-obj.ColumnSpacing)/2;
-            % imageH = imageW+panelTop;
+            imageW = max(1,(remW-obj.ColumnSpacing)/2);
             imageH = imageW+panelTop;
 
             % half of that is the RegionViewer
-            regionW = (imageW-obj.ColumnSpacing)/2;
+            regionW = max(1,(imageW-obj.ColumnSpacing)/2);
             regionH = regionW+panelTop;
 
             % second row of RegionGrid is for linescan plots
-            plotPanelOuterH = (imageH - regionH - obj.Padding);
+            plotPanelOuterH = max(1,imageH - regionH - obj.Padding);
 
             % set sizes
             set(obj.ImageViewerPanelGrid,"RowHeight",{imageH},"ColumnWidth",{imageW});
             set(obj.RegionViewerPanelGrid,"RowHeight",{regionH},"ColumnWidth",{regionW});
 
-            % test below
             set(obj.RegionSummaryPanelGrid,"RowHeight",{regionH});
-            % end test
 
             obj.RegionGrid.RowHeight{2} = plotPanelOuterH;
 
             drawnow
-            obj.pendingSizeUpdate = false;
 
+        end
+
+        function finishSizeUpdate(obj)
+            if isvalid(obj), obj.pendingSizeUpdate = false; end
         end
 
         % clear / reset
         function clearUI(obj)
             obj.refreshMenubar();
             obj.refreshWindowName();
-            obj.clearImageListBox();
+            obj.clearImageTree();
             obj.clearImageViewer();
-            obj.clearRegionListBox();
+            obj.clearRegionTree();
             obj.clearRegionViewer();
             obj.clearRegionLinescanPlot();
             obj.clearRegionSummaryTable();
-            obj.resetIntensitySliders();
+            obj.refreshDisplayLimits();
             obj.refreshChannelDisplayControls();
             obj.clearLabelsTree();
+            obj.refreshHotkeys();
         end
 
     end
@@ -1276,10 +1166,12 @@ classdef GUI < handle
                 return
             end
 
-            n = min(obj.Project.MaxSizeC,obj.ImageViewer.NumComponents);
+            img = obj.Project.ActiveImage;
+            if isempty(img), return, end
+            n = min(img.SizeC,obj.ImageViewer.NumComponents);
             cmaps = obj.ImageViewer.ComponentColormaps;
             for C = 1:n
-                cmaps{C} = obj.Project.getChannelColormap(C);
+                cmaps{C} = obj.Project.getChannelColormap(img.ChannelIDs(C));
             end
             obj.ImageViewer.ComponentColormaps = cmaps;
         end
@@ -1290,10 +1182,15 @@ classdef GUI < handle
                 return
             end
 
-            n = min(obj.Project.MaxSizeC,obj.ImageViewer.NumComponents);
+            img = obj.Project.ActiveImage;
+            if isempty(img), return, end
+            n = min(img.SizeC,obj.ImageViewer.NumComponents);
+            previous = obj.isSyncingChannelDisplay;
+            obj.isSyncingChannelDisplay = true;
+            cleanup = onCleanup(@() obj.setChannelDisplaySyncFlag(previous));
             colors = obj.ImageViewer.ComponentColors;
             for C = 1:n
-                colors{C} = obj.Project.getChannelColorName(C);
+                colors{C} = obj.Project.getChannelColorName(img.ChannelIDs(C));
             end
             obj.ImageViewer.ComponentColors = colors;
         end
@@ -1304,153 +1201,82 @@ classdef GUI < handle
                 return
             end
 
-            % obj.isSyncingChannelDisplay = true;
-            % cleanup = onCleanup(@() obj.clearChannelDisplaySyncFlag());
+            previous = obj.isSyncingChannelDisplay;
+            obj.isSyncingChannelDisplay = true;
+            cleanup = onCleanup(@() obj.setChannelDisplaySyncFlag(previous));
 
             obj.applyProjectChannelColormapsToAxes();
             obj.applyProjectChannelColorsToAxes();
+            obj.ImageViewer.ComponentColorMode = char(obj.Settings.Display.ChannelColorMode);
         end
 
         function refreshChannelDisplayControls(obj)
-        %REFRESHCHANNELDISPLAYCONTROLS Sync Channel Display controls to project and active image
-            obj.syncChannelColorControlCount();
-
-            if isempty(obj.SettingsUI) || ~isfield(obj.SettingsUI,'ChannelDisplay')
-                return
-            end
-
-            % obj.isSyncingChannelDisplay = true;
-            % cleanup = onCleanup(@() obj.clearChannelDisplaySyncFlag());
-
-            obj.SettingsUI.ChannelDisplay.ColorModeDropDown.Value = obj.Settings.Display.ChannelColorMode;
-
-            nVisible = 0;
+            controls = obj.SettingsUI.ChannelDisplay;
+            channel = controls.Channel;
+            id = string(channel.Value);
+            ids = strings(1,0);
             if ~isempty(obj.Project)
-                img = obj.Project.ActiveImage;
-                if ~isempty(img)
-                    nVisible = min(numel(obj.ChannelColorDropDowns),img.SizeC);
-                end
+                ids = string({obj.Project.Channels.ID});
             end
 
-            for C = 1:numel(obj.ChannelColorDropDowns)
-                if C > nVisible
-                    obj.ChannelColorLabels(C).Visible = 'off';
-                    obj.ChannelColorDropDowns(C).Visible = 'off';
-                    continue
-                end
-
-                obj.ChannelColorLabels(C).Visible = 'on';
-                obj.ChannelColorDropDowns(C).Visible = 'on';
-                obj.ChannelColorDropDowns(C).Value = obj.Project.getChannelColorName(C);
+            if isempty(ids)
+                set(channel,'Items',{'No channels'},'ItemsData',{''}, ...
+                    'Value','','Enable','off');
+                id = "";
+            else
+                if ~ismember(id,ids), id = ids(1); end
+                set(channel,'Items',cellstr(string({obj.Project.Channels.Name})), ...
+                    'ItemsData',cellstr(ids),'Value',char(id),'Enable','on');
             end
 
-            obj.updateChannelColorControlRows(nVisible);
-        end
-
-        function syncChannelColorControlCount(obj)
-        %SYNCCHANNELCOLORCONTROLCOUNT Match color dropdown count to project channel capacity
-            nDesired = 1;
-            if ~isempty(obj.Project)
-                nDesired = max(obj.Project.MaxSizeC,1);
+            colorsMode = obj.Settings.Display.ChannelColorMode == "colors";
+            controls.Mode.Value = char(obj.Settings.Display.ChannelColorMode);
+            controls.Mode.Enable = id ~= "";
+            controls.Color.Visible = colorsMode;
+            controls.Color.Enable = id ~= "";
+            showLookup = ~colorsMode && id ~= "";
+            obj.ColormapTree.Visible = showLookup;
+            obj.ColormapPreview.Visible = showLookup;
+            item = obj.SettingsAccordion.getItem("Image Display");
+            item.Pane.RowHeight = {24,24,24,200*double(showLookup)};
+            if colorsMode
+                controls.AppearanceLabel.Text = 'Color';
+            else
+                controls.AppearanceLabel.Text = 'LUT';
             end
 
-            nCurrent = numel(obj.ChannelColorDropDowns);
-            if nCurrent > nDesired
-                delete(obj.ChannelColorLabels(nDesired+1:end));
-                delete(obj.ChannelColorDropDowns(nDesired+1:end));
-                obj.ChannelColorLabels = obj.ChannelColorLabels(1:nDesired);
-                obj.ChannelColorDropDowns = obj.ChannelColorDropDowns(1:nDesired);
-                nCurrent = nDesired;
-            end
-
-            item = obj.SettingsAccordion.getItem("Channel Display");
-            colorNames = string(matlabx.ui.axes.ImageAxes.getColorNames());
-            for C = nCurrent+1:nDesired
-                obj.ChannelColorLabels(C) = uilabel(item.Pane,...
-                    "Text",sprintf("Channel %i",C),...
-                    "FontColor",[0.85 0.85 0.85]);
-
-                obj.ChannelColorDropDowns(C) = uidropdown(item.Pane,...
-                    "Items",colorNames,...
-                    "Value",colorNames(1 + mod(C-1,numel(colorNames))),...
-                    "ValueChangedFcn",@(o,~) obj.ChannelColorChanged(o,C));
-            end
-
-            for C = 1:numel(obj.ChannelColorDropDowns)
-                obj.ChannelColorLabels(C).Layout.Row = C + 1;
-                obj.ChannelColorLabels(C).Layout.Column = 1;
-                obj.ChannelColorLabels(C).Text = sprintf("Channel %i",C);
-
-                obj.ChannelColorDropDowns(C).Layout.Row = C + 1;
-                obj.ChannelColorDropDowns(C).Layout.Column = 2;
-            end
-        end
-
-        function updateChannelColorControlRows(obj,nVisible)
-        %UPDATECHANNELCOLORCONTROLROWS Collapse unused Channel Display rows
-            item = obj.SettingsAccordion.getItem("Channel Display");
-            nRows = numel(obj.ChannelColorDropDowns);
-            nVisible = min(max(nVisible,0),nRows);
-
-            rowHeight = [{'fit'}, repmat({0},1,nRows)];
-            if nVisible > 0
-                rowHeight(2:(nVisible+1)) = repmat({'fit'},1,nVisible);
-            end
-            item.Pane.RowHeight = rowHeight;
-        end
-
-        function syncColormapSelectorToChannel(obj)
-        %SYNCCOLORMAPSELECTORTOCHANNEL Reflect the active channel colormap in the selector
-            if isempty(obj.Project) || isempty(obj.ImageViewer) || isempty(obj.ColormapTree)
-                return
-            end
-            if ~isvalid(obj.ImageViewer) || ~isvalid(obj.ColormapTree)
-                return
-            end
-
-            C = obj.ImageViewer.C;
-            [name,category] = obj.Project.getChannelColormapInfo(C);
-            node = obj.findColormapTreeNode(name,category);
-            cmap = obj.Project.getChannelColormap(C);
-
+            previous = obj.isSyncingColormapSelection;
             obj.isSyncingColormapSelection = true;
-            cleanup = onCleanup(@() obj.clearColormapSelectionSyncFlag());
-
-            if ~isempty(node)
-                obj.ColormapTree.SelectedNodes = node;
+            cleanup = onCleanup(@() obj.setColormapSelectionSyncFlag(previous));
+            if id == ""
+                obj.ColormapTree.SelectedNodes = [];
+                obj.ColormapPreview.ImageSource = '';
+                return
             end
-            obj.ExampleColormapAxes.Colormap = cmap;
-        end
 
-        function node = findColormapTreeNode(obj,name,category)
-        %FINDCOLORMAPTREENODE Find a colormap tree leaf by category/name
-            node = matlab.ui.container.TreeNode.empty();
-
-            categoryNodes = obj.ColormapTree.Children;
-            for i = 1:numel(categoryNodes)
-                if string(categoryNodes(i).Text) ~= category
-                    continue
-                end
-
-                mapNodes = categoryNodes(i).Children;
-                for j = 1:numel(mapNodes)
-                    if ~isempty(mapNodes(j).NodeData) && string(mapNodes(j).NodeData) == name
-                        node = mapNodes(j);
-                        return
-                    end
+            controls.Color.Value = char(obj.Project.getChannelColorName(id));
+            [name,category] = obj.Project.getChannelColormapInfo(id);
+            nodes = findall(obj.ColormapTree,'Type','uitreenode');
+            obj.ColormapTree.SelectedNodes = [];
+            for i = 1:numel(nodes)
+                data = nodes(i).NodeData;
+                if isstruct(data) && data.Name == name && data.Category == category
+                    obj.ColormapTree.SelectedNodes = nodes(i);
+                    if ~colorsMode, expand(nodes(i).Parent); end
+                    break
                 end
             end
+            cmap = obj.Project.getChannelColormap(id);
+            obj.ColormapPreview.ImageSource = permute(repmat(cmap,1,1,16),[3 1 2]);
         end
 
-        function clearColormapSelectionSyncFlag(obj)
-        %CLEARCOLORMAPSELECTIONSYNCFLAG Reset programmatic colormap-selection guard
-            obj.isSyncingColormapSelection = false;
+        function setColormapSelectionSyncFlag(obj,value)
+            obj.isSyncingColormapSelection = value;
         end
 
-        % function clearChannelDisplaySyncFlag(obj)
-        % %CLEARCHANNELDISPLAYSYNCFLAG Reset programmatic channel-display guard
-        %     obj.isSyncingChannelDisplay = false;
-        % end
+        function setChannelDisplaySyncFlag(obj,value)
+            obj.isSyncingChannelDisplay = value;
+        end
 
         function guialert(obj,opts)
             arguments
@@ -1483,132 +1309,299 @@ classdef GUI < handle
         % --- LISTENER CALLBACKS ---
         function onImageAdded(obj)
         %ONIMAGEADDED ImageAdded event callback
-            obj.refreshImageListBox();
+            obj.refreshImageTree();
             desmostorm.Log.DEBUG("Image added.")
         end
 
         function onImageRemoved(obj)
         %ONIMAGEREMOVED ImageRemoved event callback    
-            obj.refreshImageListBox();
+            obj.refreshImageTree();
             desmostorm.Log.DEBUG("Image removed.")
         end
 
         function onActiveImageChanged(obj)
         %ONACTIVEIMAGECHANGED ActiveImageChanged event callback
+            obj.refreshImageTree();
             obj.syncActiveImageToView();
             desmostorm.Log.DEBUG("Active Image changed.")
         end
 
         function onMaxSizeCChanged(obj)
         %ONMAXSIZECCHANGED MaxSizeCChanged event callback
-            obj.refreshIntensitySliders();
+            obj.refreshDisplayLimits();
             obj.refreshRegionLinescanPlot();
             obj.applyProjectChannelDisplayToAxes();
-            obj.syncColormapSelectorToChannel();
             obj.refreshChannelDisplayControls();
         end
 
         function onImageViewerChannelChanged(obj)
-        %ONIMAGEVIEWERCHANNELCHANGED Sync colormap selector to active image channel
-            obj.syncColormapSelectorToChannel();
+        %ONIMAGEVIEWERCHANNELCHANGED Update the current-channel linescan.
             if obj.Settings.PeaksPlot.ShownPlots == "current"
                 obj.refreshRegionLinescanPlot();
             end
         end
 
-        function onImageViewerChannelDisplayChanged(obj)
-        %ONIMAGEVIEWERCHANNELDISPLAYCHANGED Sync context-menu display changes to project/settings
-            if isempty(obj.Project) || isempty(obj.ImageViewer)
+        function onImageViewerChannelDisplayChanged(obj,event)
+            if obj.isSyncingChannelDisplay || isempty(obj.Project) || ...
+                    ~ismember(event.Property,["ComponentColorMode","ComponentColors","ComponentColormaps","ComponentCLims"])
                 return
             end
+            img = obj.Project.ActiveImage;
+            if isempty(img), return, end
 
-            colors = obj.ImageViewer.ComponentColors;
-            n = min(numel(colors),obj.Project.MaxSizeC);
-            for C = 1:n
-                obj.Project.setChannelColor(C,string(colors{C}));
+            obj.isSyncingChannelDisplay = true;
+            cleanup = onCleanup(@() obj.setChannelDisplaySyncFlag(false));
+            switch event.Property
+                case "ComponentCLims"
+                    limits = obj.ImageViewer.ComponentCLims;
+                    for c = reshape(event.ComponentIdx,1,[])
+                        if c <= img.SizeC && c <= numel(event.PreviousValue) && ...
+                                ~isequaln(event.PreviousValue{c},limits{c}) && ...
+                                all(isfinite(limits{c})) && limits{c}(1) < limits{c}(2)
+                            value = img.normalizeDisplayRange(c,limits{c});
+                            obj.storeManualDisplayLimits(img,c,value);
+                            obj.previewDisplayLimits(c,value);
+                        end
+                    end
+                    obj.refreshDisplayLimits();
+                    return
+                case "ComponentColorMode"
+                    obj.Settings.Display.ChannelColorMode = string(obj.ImageViewer.ComponentColorMode);
+                case "ComponentColors"
+                    colors = obj.ImageViewer.ComponentColors;
+                    for c = reshape(event.ComponentIdx,1,[])
+                        if c <= img.SizeC
+                            obj.Project.setChannelColor(img.ChannelIDs(c),string(colors{c}));
+                        end
+                    end
+                case "ComponentColormaps"
+                    maps = obj.ImageViewer.ComponentColormaps;
+                    for c = reshape(event.ComponentIdx,1,[])
+                        if c > img.SizeC || isequaln(event.PreviousValue{c},maps{c})
+                            continue
+                        end
+                        id = img.ChannelIDs(c);
+                        if isequal(maps{c},obj.Project.getChannelColormap(id)), continue, end
+                        [name,category] = identifyColormap(maps{c});
+                        if name ~= ""
+                            obj.Project.setChannelColormap(id,name,category);
+                        end
+                    end
             end
-
-            obj.Settings.Display.ChannelColorMode = string(obj.ImageViewer.ComponentColorMode);
             obj.refreshChannelDisplayControls();
+            obj.refreshDisplayLimits();
+        end
+
+        function onChannelsChanged(obj)
+            obj.MenubarUI.Edit_Channels.Enable = ~isempty(obj.Project.Channels);
+            if ~obj.isSyncingChannelDisplay
+                obj.applyProjectChannelColorsToAxes();
+            end
+            obj.refreshChannelDisplayControls();
+            obj.refreshDisplayLimits();
+            obj.refreshRegionSummaryTable();
+            if ~isempty(obj.Project.ActiveRegion)
+                components = obj.RegionViewer.ImageData.Components;
+                names = obj.Project.ActiveImage.channelNames();
+                for c = 1:min(numel(components),numel(names))
+                    components(c).Name = names(c);
+                end
+            end
+            if obj.Settings.PeaksPlot.ColorSource == "channel"
+                obj.refreshRegionLinescanPlot();
+            end
         end
 
         % --- UI SYNC DRIVER ---
         function syncActiveImageToView(obj)
         % SYNCACTIVEIMAGETOVIEW Sync UI to ActiveImage
             obj.refreshImageViewer();
-            obj.refreshRegionListBox();
+            obj.refreshRegionTree();
             obj.refreshRegionBoxes();
             obj.syncActiveRegionToView();
         end
 
         % --- COMPONENT CALLBACKS ---
-        function onImageListBoxValueChanged(obj, imageID)
-        %ONIMAGELISTBOXVALUECHANGED ValueChangedFcn callback for ImageListBox
-            if isempty(imageID), return; end
-            obj.Project.setActiveImage(imageID);
-        end
-
-        % --- COMPONENTS UI SYNC ---
-        function refreshImageListBox(obj)
-        %REFRESHIMAGELISTBOX Update ImageListBox
-
-            ids = obj.Project.ImageIDs;
-
-            if isempty(ids), obj.clearImageListBox(); return; end
-
-            set(obj.ImageListBox,"Items",obj.Project.ImageNames,"ItemsData",ids)
-
+        function refreshImageTree(obj)
             img = obj.Project.ActiveImage;
-
-            if ~isempty(img)
-                obj.ImageListBox.Value = img.ID;
-            else
-                obj.ImageListBox.Value = ids(1);
-            end
-
-            % forward value to ValueChangedFcn of ImageListBox
-            obj.onImageListBoxValueChanged(obj.ImageListBox.Value);
+            active = "";
+            if ~isempty(img), active = img.ID; end
+            obj.syncNavigationTree(obj.ImageTree,"Images",obj.Project.ImageIDs, ...
+                obj.Project.ImageNames,active,obj.Project.SelectedImageIDs);
         end
 
-        function clearImageListBox(obj)
-        %CLEARIMAGELISTBOX Reset ImageListBox
-            set(obj.ImageListBox,"Items",{},"ItemsData",{},"Value",{});
+        function clearImageTree(obj)
+            deleteTreeNodes(obj.ImageTree.Children);
+        end
+
+        function onNavigationTreeChanged(obj,tree,scope,checked)
+            if obj.isSyncingTrees || isempty(obj.Project), return, end
+            if checked
+                obj.setNavigationSelection(scope,nodeIDs(tree.CheckedNodes));
+                return
+            end
+            ids = nodeIDs(tree.SelectedNodes);
+            id = "";
+            if ~isempty(ids), id = ids(1); end
+            if scope == "Images"
+                obj.Project.setActiveImage(id);
+            else
+                img = obj.Project.ActiveImage;
+                if ~isempty(img), img.setActiveRegion(id); end
+            end
+        end
+
+        function syncNavigationTree(obj,tree,scope,ids,names,active,selected)
+            obj.isSyncingTrees = true;
+            guard = onCleanup(@() obj.endTreeSync());
+            ids = reshape(ids,1,[]);
+            nodes = tree.Children;
+            removed = ~ismember(nodeIDs(nodes),ids);
+            deleteTreeNodes(nodes(removed));
+            nodes = tree.Children;
+            if ~isequal(nodeIDs(nodes),ids(1:numel(nodes)))
+                deleteTreeNodes(nodes);
+                nodes = tree.Children;
+            end
+            for k = numel(nodes)+1:numel(ids)
+                node = uitreenode(tree,'Text',char(names(k)),'NodeData',ids(k));
+                node.ContextMenu = obj.navigationMenu(scope,ids(k));
+            end
+            nodes = tree.Children;
+            for k = 1:numel(nodes)
+                if ~strcmp(nodes(k).Text,names(k))
+                    nodes(k).Text = char(names(k));
+                end
+            end
+            syncTreeSelection(tree,active,selected);
+        end
+
+        function endTreeSync(obj)
+            obj.isSyncingTrees = false;
+        end
+
+        function menu = navigationMenu(obj,scope,id)
+            menu = uicontextmenu(obj.Fig);
+            singular = lower(extractBefore(scope,strlength(scope)));
+            if scope == "Images" && id ~= ""
+                uimenu(menu,'Text','Info...', ...
+                    'MenuSelectedFcn',@(~,~) obj.showImageInfo(id));
+            end
+            uimenu(menu,'Text','Select all','Separator','on', ...
+                'MenuSelectedFcn',@(~,~) obj.changeNavigationSelection(scope,"All"));
+            uimenu(menu,'Text','Clear selection', ...
+                'MenuSelectedFcn',@(~,~) obj.changeNavigationSelection(scope,"Clear"));
+            uimenu(menu,'Text','Invert selection', ...
+                'MenuSelectedFcn',@(~,~) obj.changeNavigationSelection(scope,"Invert"));
+            if id ~= ""
+                uimenu(menu,'Text',"Delete " + singular, ...
+                    'MenuSelectedFcn',@(~,~) obj.deleteNavigation(scope,id));
+            end
+            uimenu(menu,'Text',"Delete selected " + lower(scope), ...
+                'MenuSelectedFcn',@(~,~) obj.deleteNavigation(scope,""));
+        end
+
+        function [allIDs,selected] = navigationSelection(obj,scope)
+            allIDs = strings(0,1);
+            selected = strings(0,1);
+            if isempty(obj.Project), return, end
+            if scope == "Images"
+                allIDs = obj.Project.ImageIDs;
+                selected = obj.Project.SelectedImageIDs;
+            elseif ~isempty(obj.Project.ActiveImage)
+                img = obj.Project.ActiveImage;
+                allIDs = img.RegionOrder;
+                selected = img.SelectedRegionIDs;
+            end
+        end
+
+        function setNavigationSelection(obj,scope,ids)
+            if scope == "Images"
+                obj.Project.setImageSelection(ids);
+            elseif ~isempty(obj.Project.ActiveImage)
+                obj.Project.ActiveImage.setRegionSelection(ids);
+            end
+        end
+
+        function changeNavigationSelection(obj,scope,action)
+            if isempty(obj.Project), return, end
+            [ids,selected] = obj.navigationSelection(scope);
+            switch action
+                case "Clear", ids = strings(0,1);
+                case "Invert", ids = setdiff(ids,selected,'stable');
+            end
+            obj.setNavigationSelection(scope,ids);
+        end
+
+        function deleteNavigation(obj,scope,id)
+            if isempty(obj.Project), return, end
+            [~,selected] = obj.navigationSelection(scope);
+            if id == "", ids = selected; else, ids = id; end
+            if isempty(ids) || ~obj.confirmTreeDeletion(numel(ids),lower(scope)), return, end
+            img = obj.Project.ActiveImage;
+            for id = reshape(ids,1,[])
+                if scope == "Images"
+                    obj.Project.removeImage(id);
+                else
+                    img.removeRegion(id);
+                end
+            end
+            if scope == "Regions", obj.refreshRegionBoxes(); end
+        end
+
+        function confirmed = confirmTreeDeletion(obj,count,description)
+            confirmed = uiconfirm(obj.Fig,sprintf('Delete %d %s?',count,description), ...
+                'Confirm deletion','Options',{'Delete','Cancel'},'DefaultOption',2, ...
+                'CancelOption',2,'Icon','warning') == "Delete";
+        end
+
+        function showImageInfo(obj,id)
+            img = obj.Project.getImage(id);
+            if isempty(img), return, end
+            info = struct('Name',img.Name,'SourcePath',img.SourcePath, ...
+                'Height',img.SizeY,'Width',img.SizeX,'Channels',img.channelNames(), ...
+                'Regions',numel(img.RegionArray));
+            matlabx.app.TextWindow('Title',img.Name + " Info", ...
+                'Text',cellstr(matlabx.struct.prettyPrint(info,StringArrayStyle="lines")));
         end
 
         function refreshImageViewer(obj)
         %REFRESHIMAGEVIEWER Sync ImageViewer to ActiveImage
             % get the active image
             img = obj.Project.ActiveImage;
-            % if empty, clear view and return
-            if isempty(img), obj.ImageViewer.CData = []; return, end
-            % get current channel index of ImageViewer
-            C = obj.ImageViewer.C;
-
-            % new image does not have at least C channels, reset to 1
-            if C > img.SizeC
-                C = 1;
+            if isempty(img)
+                obj.clearImageViewer();
+                return
             end
 
-            % get CLim
-            switch obj.Settings.Display.AutoScaleDisplayIntensity
-                case true
-                    clims = img.getAutoDisplayRanges();
-                case false
-                    clims = img.getDisplayRanges();
+            C = 1;
+            previousIndex = obj.ImageViewer.C;
+            if previousIndex <= numel(obj.displayedChannelIDs)
+                nextIndex = img.sourceChannelIndex(obj.displayedChannelIDs(previousIndex));
+                if ~isempty(nextIndex), C = nextIndex; end
+            end
+            obj.displayedChannelIDs = img.ChannelIDs;
+
+            clims = cell(1,img.SizeC);
+            for c = 1:img.SizeC
+                policy = obj.Settings.Display.channelPolicy(img.ChannelIDs(c));
+                clims{c} = img.displayLimits(c,policy);
             end
 
             % update ImageViewer ImageData, C, and CLims
+            obj.isSyncingChannelDisplay = true;
+            cleanup = onCleanup(@() obj.setChannelDisplaySyncFlag(false));
             set(obj.ImageViewer,'ImageData',img.ImageData,'C',C,'ComponentCLims',clims);
             obj.applyProjectChannelDisplayToAxes();
-            obj.syncColormapSelectorToChannel();
             obj.refreshChannelDisplayControls();
-            obj.refreshIntensitySliders();
+            obj.refreshDisplayLimits();
         end
 
 
 
         function clearImageViewer(obj)
         %REFRESHIMAGEVIEWER Reset ImageViewer
+            obj.displayedChannelIDs = strings(1,0);
             obj.ImageViewer.CData = [];
             obj.ImageViewer.Tools.Box.clearBoxes();
         end
@@ -1616,7 +1609,9 @@ classdef GUI < handle
         function refreshRegionBoxes(obj)
         %REFRESHREGIONBOXES Sync Region boxes in ImageViewer to ActiveImage
 
-            % clear boxes from ImageViewer
+            previous = obj.isSyncingSelection;
+            obj.isSyncingSelection = true;
+            guard = onCleanup(@() obj.setBoxSelectionSync(previous));
             obj.ImageViewer.Tools.Box.clearBoxes();
 
             img = obj.Project.ActiveImage;
@@ -1627,7 +1622,9 @@ classdef GUI < handle
 
             % add a box for each region, colored according to its label
             for r = img.RegionArray'
-                boxColor = obj.Project.LabelBank.getByID(r.LabelID).Color;
+                label = obj.Project.LabelBank.getByID(r.LabelID);
+                if isempty(label), label = obj.Project.LabelBank.getByID("unlabeled"); end
+                boxColor = label.Color;
                 obj.ImageViewer.Tools.Box.addBox(r.ID, r.Center, r.BoxSize, ...
                     "EdgeColor", boxColor, "FaceColor", boxColor, "Label", r.Name);
             end
@@ -1635,117 +1632,98 @@ classdef GUI < handle
             % apply selection status to region boxes
             obj.ImageViewer.Tools.Box.setSelectedBoxIDs(img.SelectedRegionIDs);
             % set active box
-            obj.ImageViewer.Tools.Box.setActiveBoxID(img.ActiveRegionID);
+            id = img.ActiveRegionID;
+            if isempty(id), id = ""; end
+            obj.ImageViewer.Tools.Box.setActiveBoxID(id);
         end
 
-        function refreshIntensitySliders(obj)
-        %REFRESHINTENSITYSLIDERS Sync intensity sliders to ActiveImage
-            obj.syncIntensitySliderCount();
+        function refreshDisplayLimits(obj)
+            item = obj.SettingsAccordion.getItem("Display Limits");
+            img = desmostorm.model.STORMImage.empty();
+            if ~isempty(obj.Project), img = obj.Project.ActiveImage; end
+            n = 0;
+            if ~isempty(img), n = img.SizeC; end
 
-            % get the active image
-            if isempty(obj.Project)
-                obj.resetIntensitySliders();
-                return
+            for c = n+1:numel(obj.DisplayLimitBlocks)
+                delete(obj.DisplayLimitBlocks(c).Host);
             end
+            obj.DisplayLimitBlocks = obj.DisplayLimitBlocks(1:min(n,numel(obj.DisplayLimitBlocks)));
+            item.Pane.RowHeight = repmat({'fit'},1,max(1,n));
 
-            img = obj.Project.ActiveImage;
-            % if empty, reset sliders and return
-            if isempty(img)
-                obj.resetIntensitySliders();
-                return
-            end
-
-            nVisible = img.SizeC;
-            if ~isempty(obj.ImageViewer) && isvalid(obj.ImageViewer)
-                nVisible = min(nVisible,obj.ImageViewer.NumComponents);
-            end
-            nVisible = min(numel(obj.IntensitySliders), nVisible);
-            for C = 1:numel(obj.IntensitySliders)
-                if C > nVisible
-                    obj.IntensitySliders(C).Visible = 'off';
-                    continue
+            for c = 1:n
+                if c > numel(obj.DisplayLimitBlocks)
+                    block = obj.createDisplayLimitBlock(item.Pane,c);
+                    if isempty(obj.DisplayLimitBlocks)
+                        obj.DisplayLimitBlocks = block;
+                    else
+                        obj.DisplayLimitBlocks(c) = block;
+                    end
                 end
-                obj.IntensitySliders(C).Visible = 'on';
-
-                % get DisplayRange and DataRange
-                switch obj.Settings.Display.AutoScaleDisplayIntensity
-                    case true
-                        val = img.getAutoDisplayRange(C);
-                    case false
-                        val = img.getDisplayRange(C);
+                block = obj.DisplayLimitBlocks(c);
+                id = img.ChannelIDs(c);
+                policy = obj.Settings.Display.channelPolicy(id);
+                [value,bounds] = img.displayLimits(c,policy);
+                block.Slider.Title = char(img.channelName(c));
+                integerDisplay = any(startsWith(string(img.ImageData.getComponentClass(c)),["int","uint"]));
+                block.Slider.RoundValues = integerDisplay;
+                if integerDisplay
+                    block.Slider.ValueDisplayFormat = '%d';
+                else
+                    block.Slider.ValueDisplayFormat = '%.2f';
                 end
-                lims = img.getDataRange(C);
-                % update Value and Limits
-                set(obj.IntensitySliders(C),'Limits',lims,'Value',val)
-            end
-
-            obj.updateIntensitySliderRows(nVisible);
-
-        end
-
-        function resetIntensitySliders(obj)
-        %RESETINTENSITYSLIDERS Reset IntensitySliders    
-            obj.syncIntensitySliderCount();
-
-            if isempty(obj.IntensitySliders), return; end
-
-            set(obj.IntensitySliders,'Limits',[0 1],'Value',[0 1]);
-            obj.IntensitySliders(1).Visible = 'on';
-            if numel(obj.IntensitySliders) > 1
-                set(obj.IntensitySliders(2:end),'Visible','off');
-            end
-
-            obj.updateIntensitySliderRows(1);
-        end
-
-        function syncIntensitySliderCount(obj)
-        %SYNCINTENSITYSLIDERCOUNT Match slider count to project channel capacity
-            nDesired = 1;
-            if ~isempty(obj.Project)
-                nDesired = max(obj.Project.MaxSizeC,1);
-            end
-
-            nCurrent = numel(obj.IntensitySliders);
-            if nCurrent > nDesired
-                delete(obj.IntensitySliders(nDesired+1:end));
-                obj.IntensitySliders = obj.IntensitySliders(1:nDesired);
-                nCurrent = nDesired;
-            end
-
-            item = obj.SettingsAccordion.getItem("Image Display");
-            for C = nCurrent+1:nDesired
-                obj.IntensitySliders(C) = matlabx.ui.control.Slider(item.Pane,...
-                    "Title",sprintf("Channel %i",C),...
-                    "FontColor",[1 1 1],...
-                    "BackgroundColor",[.18 .18 .18],...
-                    "Limits",[0 1],...
-                    "Value",[0 1],...
-                    "RoundValues","on",...
-                    "RoundDigits",0,...
-                    "ValueChangingFcn",@(~,evt) obj.onIntensitySliderChanging(evt,C),...
-                    "ValueChangedFcn",@(~,evt) obj.onIntensitySliderChanged(evt,C));
-            end
-
-            for C = 1:numel(obj.IntensitySliders)
-                obj.IntensitySliders(C).Layout.Row = C + 1;
-                obj.IntensitySliders(C).Layout.Column = 1;
-                obj.IntensitySliders(C).Title = sprintf("Channel %i",C);
+                block.Slider.Limits = bounds;
+                block.Slider.Value = value;
+                block.KeepAuto.Value = policy.KeepAuto;
+                block.Lock.Value = policy.Lock;
+                block.Method.Value = char(policy.Method);
+                if obj.Settings.Display.ChannelColorMode == "colors"
+                    block.Slider.Colormap = linspace(0,1,256).' * obj.Project.getChannelRGB(id);
+                else
+                    cmap = obj.Project.getChannelColormap(id);
+                    sample = round(linspace(1,size(cmap,1),256));
+                    block.Slider.Colormap = cmap(sample,:);
+                end
             end
         end
 
-        function updateIntensitySliderRows(obj,nVisible)
-        %UPDATEINTENSITYSLIDERROWS Collapse unused slider rows in Image Display controls
-            item = obj.SettingsAccordion.getItem("Image Display");
-            nSliders = numel(obj.IntensitySliders);
-            nVisible = min(max(nVisible,0),nSliders);
+        function block = createDisplayLimitBlock(obj,parent,c)
+            host = uigridlayout(parent,[3 2], ...
+                'ColumnWidth',{'fit','1x'},'RowHeight',{'fit','fit','fit'}, ...
+                'Padding',0,'RowSpacing',4,'ColumnSpacing',5, ...
+                'BackgroundColor',[.18 .18 .18]);
+            host.Layout.Row = c;
+            slider = matlabx.ui.control.Slider(host,'ValueMode','range', ...
+                'Limits',[0 1],'Value',[0 1],'ValueDisplayFormat','%.2f', ...
+                'FontColor',[.9 .9 .9],'BackgroundColor',[.18 .18 .18], ...
+                'RoundDigits',0, ...
+                'ValueChangingFcn',@(src,~) obj.dragDisplayLimits(c,src.Value), ...
+                'ValueChangedFcn',@(src,~) obj.commitDisplayLimits(c,src.Value));
+            slider.Layout.Row = 1;
+            slider.Layout.Column = [1 2];
 
-            rowHeight = [{'fit'}, repmat({0},1,nSliders)];
-            if nVisible > 0
-                rowHeight(2:(nVisible+1)) = repmat({'fit'},1,nVisible);
-            end
-            item.Pane.RowHeight = rowHeight;
+            buttons = uigridlayout(host,[1 4], ...
+                'ColumnWidth',{'1x','1x','1x','1x'},'RowHeight',{'fit'}, ...
+                'ColumnSpacing',4,'Padding',0,'BackgroundColor',[.18 .18 .18]);
+            buttons.Layout.Row = 2;
+            buttons.Layout.Column = [1 2];
+            uibutton(buttons,'Text','Reset', ...
+                'ButtonPushedFcn',@(~,~) obj.applyDisplayLimitAction(c,"Reset"));
+            uibutton(buttons,'Text','Auto', ...
+                'ButtonPushedFcn',@(~,~) obj.applyDisplayLimitAction(c,"Auto"));
+            keepAuto = uibutton(buttons,'state','Text','Keep Auto', ...
+                'ValueChangedFcn',@(src,~) obj.changeDisplayLimitPolicy(c,"KeepAuto",src.Value));
+            lock = uibutton(buttons,'state','Text','Lock', ...
+                'ValueChangedFcn',@(src,~) obj.changeDisplayLimitPolicy(c,"Lock",src.Value));
+            label = uilabel(host,'Text','Scaling method','FontColor',[.75 .75 .75]);
+            label.Layout.Row = 3;
+            method = uidropdown(host, ...
+                'Items',{'Light contrast','Medium contrast','Strong contrast','Zero to max','Data range'}, ...
+                'ValueChangedFcn',@(src,~) obj.changeDisplayLimitPolicy(c,"Method",string(src.Value)));
+            method.Layout.Row = 3;
+            method.Layout.Column = 2;
+            block = struct('Host',host,'Slider',slider,'KeepAuto',keepAuto, ...
+                'Lock',lock,'Method',method);
         end
-
 
     end
 
@@ -1756,14 +1734,14 @@ classdef GUI < handle
         function onRegionAdded(obj,evt)
         %ONREGIONADDED RegionAdded event callback
             desmostorm.Log.INFO("Region added (" + obj.formatRegionEventLabel(evt) + ").")
-            obj.refreshRegionListBox();
+            obj.refreshRegionTree();
             obj.markProjectDirty();
         end
 
         function onRegionRemoved(obj,evt)
         %ONREGIONREMOVED RegionRemoved event callback    
             desmostorm.Log.INFO("Region removed (" + obj.formatRegionEventLabel(evt) + ").")
-            obj.refreshRegionListBox();
+            obj.refreshRegionTree();
             obj.markProjectDirty();
         end
 
@@ -1776,7 +1754,12 @@ classdef GUI < handle
         function onRegionSelectionChanged(obj,evt)
         %ONREGIONSELECTIONCHANGED RegionSelectionChanged event callback
             desmostorm.Log.DEBUG("Region selection changed (" + obj.formatRegionSelection(evt.NewIDs) + ").")
-            obj.refreshRegionListBox();
+            obj.refreshRegionTree();
+            if ~obj.isSyncingSelection
+                obj.isSyncingSelection = true;
+                guard = onCleanup(@() obj.setBoxSelectionSync(false));
+                obj.ImageViewer.Tools.Box.setSelectedBoxIDs(evt.NewIDs);
+            end
         end
 
         % --- UI SYNC DRIVER ---
@@ -1787,52 +1770,34 @@ classdef GUI < handle
             obj.refreshRegionROI();
             obj.refreshRegionLinescanPlot();
 
-            % set active box
-            reg = obj.Project.ActiveRegion;
-            if ~isempty(reg)
-                obj.ImageViewer.Tools.Box.setActiveBoxID(reg.ID);
-            end
-        end
-
-        % --- COMPONENT CALLBACKS ---
-        function onRegionListBoxValueChanged(obj, ~, evt)
-        %ONREGIONLISTBOXVALUECHANGED ValueChangedFcn for RegionListBox
-
+            obj.refreshRegionTree();
             img = obj.Project.ActiveImage;
-            if isempty(img), return; end
-
-            regionID = evt.Value;
-            id = string(regionID);
-
-            % set active/selected region
-            obj.ImageViewer.Tools.Box.setActiveBoxID(id);
-            img.setActiveRegion(id);
+            if ~isempty(img)
+                id = img.ActiveRegionID;
+                if isempty(id), id = ""; end
+                previous = obj.isSyncingSelection;
+                obj.isSyncingSelection = true;
+                guard = onCleanup(@() obj.setBoxSelectionSync(previous));
+                obj.ImageViewer.Tools.Box.setActiveBoxID(id);
+            end
         end
 
-        % --- COMPONENTS UI SYNC ---
-        function refreshRegionListBox(obj)
-        %REFRESHREGIONLISTBOX Update RegionListBox
-            % get ActiveImage
+        function refreshRegionTree(obj)
             img = obj.Project.ActiveImage;
-            % no Image || no Regions in Image -> clear the listbox
-            if isempty(img) || isempty(img.RegionOrder)
-                obj.clearRegionListBox(); return
+            if isempty(img)
+                obj.clearRegionTree();
+                return
             end
-
-            % update Items and ItemsData
-            set(obj.RegionListBox,"Items",img.RegionNames,"ItemsData",img.RegionOrder);
-
-            reg = img.ActiveRegion;
-            if ~isempty(reg)
-                obj.RegionListBox.Value = reg.ID;
-            else
-                obj.RegionListBox.Value = string.empty();
-            end
+            obj.syncNavigationTree(obj.RegionTree,"Regions",img.RegionOrder, ...
+                img.RegionNames,img.ActiveRegionID,img.SelectedRegionIDs);
         end
 
-        function clearRegionListBox(obj)
-        %CLEARREGIONLISTBOX Reset RegionListBox
-            set(obj.RegionListBox,"Items",{},"ItemsData",{},"Value",{});
+        function clearRegionTree(obj)
+            deleteTreeNodes(obj.RegionTree.Children);
+        end
+
+        function setBoxSelectionSync(obj,value)
+            obj.isSyncingSelection = value;
         end
 
         function label = formatRegionEventLabel(~,evt)
@@ -1879,7 +1844,11 @@ classdef GUI < handle
                 obj.clearRegionViewer(); return
             end
 
-            obj.RegionViewer.CData = img.regionSubimageCell(img.ActiveRegion);
+            previous = obj.isSyncingChannelDisplay;
+            obj.isSyncingChannelDisplay = true;
+            guard = onCleanup(@() obj.setChannelDisplaySyncFlag(previous));
+            obj.RegionViewer.ImageData = matlabx.image.Image5D.fromComponents( ...
+                img.regionSubimageCell(img.ActiveRegion),Names=img.channelNames());
         end
 
         function clearRegionViewer(obj)
@@ -1903,8 +1872,6 @@ classdef GUI < handle
 
         function refreshRegionLinescanPlot(obj)
         %REFRESHREGIONLINESCANPLOT Sync RegionLinescanPlot to ActiveRegion
-            obj.syncRegionLinescanPlotCount();
-
             % get active Image
             img = obj.Project.ActiveImage;
 
@@ -1922,72 +1889,48 @@ classdef GUI < handle
                 return
             end
 
-            if obj.Settings.Analysis.Normalize
-                obj.RegionLinescanPlot.YLabel = 'Normalized intensity';
-            else
-                obj.RegionLinescanPlot.YLabel = 'Intensity';
+            host = obj.RegionLinescanPlot;
+            yLabel = "Intensity";
+            if obj.Settings.Analysis.Normalize, yLabel = "Normalized intensity"; end
+            xlabel(host.Axes,"Distance (" + img.PixelSize.Unit + ")");
+            ylabel(host.Axes,yLabel);
+            title(host.Axes,matlabx.utils.text.texFriendly(img.Name) + " | " + ...
+                matlabx.utils.text.texFriendly(reg.Name));
+
+            appearance = obj.Settings.PeaksPlot;
+            host.FontSize = appearance.FontSize;
+            host.TitleVisible = appearance.TitleVisible;
+            colors = appearance.Color;
+            if appearance.ColorSource == "channel"
+                colors = obj.getRegionLinescanPlotColors(colorChannels);
             end
-
-            obj.RegionLinescanPlot.XLabel = sprintf("Distance (%s)",img.PixelSize.Unit);
-            obj.RegionLinescanPlot.Title = char(matlabx.utils.text.texFriendly(img.Name) + " | " + reg.Name);
-            obj.applyRegionLinescanPlotColors(colorChannels);
-            obj.RegionLinescanPlot.DistanceAnnotations = obj.Settings.PeaksPlot.DistanceAnnotations;
-            obj.RegionLinescanPlot.DistanceAnnotationsMode = char(obj.Settings.PeaksPlot.DistanceAnnotationsMode);
-            obj.RegionLinescanPlot.WidthAnnotations = obj.Settings.PeaksPlot.WidthAnnotations;
-            obj.RegionLinescanPlot.WidthAnnotationsMode = char(obj.Settings.PeaksPlot.WidthAnnotationsMode);
-            obj.RegionLinescanPlot.Data = plotData;
-            obj.RegionLinescanPlot.Visible = 'on';
-
+            annotationColors = zeros(0,3);
+            if appearance.AnnotationColorMode == "manual"
+                annotationColors = appearance.AnnotationColor;
+            end
+            names = img.channelNames();
+            data = desmostorm.plot.PeaksPlotData(plotData, ...
+                ChannelIDs=img.ChannelIDs(colorChannels),Names=names(colorChannels));
+            style = desmostorm.plot.PeaksPlotStyle( ...
+                Colors=colors,AnnotationColors=annotationColors, ...
+                RawLineWidth=appearance.RawLineWidth,SmoothLineWidth=appearance.SmoothLineWidth, ...
+                AnnotationLineWidth=appearance.AnnotationLineWidth, ...
+                AnnotationsFontSize=appearance.AnnotationFontSize, ...
+                BackgroundColor=appearance.BackgroundColor,ForegroundColor=appearance.ForegroundColor, ...
+                DistanceAnnotations=appearance.DistanceAnnotations, ...
+                DistanceAnnotationsMode=appearance.DistanceAnnotationsMode, ...
+                WidthAnnotations=appearance.WidthAnnotations, ...
+                WidthAnnotationsMode=appearance.WidthAnnotationsMode);
+            obj.RegionLinescanRenderer.update(data,style);
+            host.Visible = 'on';
             obj.updateRegionLinescanPlotRows(1);
-
         end
 
         function clearRegionLinescanPlot(obj)
-        %CLEARREGIONLINESCANPLOT Reset RegionLinescanPlot
-            obj.syncRegionLinescanPlotCount();
-
-            if isempty(obj.RegionLinescanPlot), return; end
-
-            set(obj.RegionLinescanPlot,'Data',desmostorm.analysis.PeaksData.empty(),'Title','');
-            set(obj.RegionLinescanPlot,'Visible','off');
+            if isempty(obj.RegionLinescanPlot), return, end
+            obj.RegionLinescanRenderer.update(desmostorm.plot.PeaksPlotData());
+            obj.RegionLinescanPlot.Visible = 'off';
             obj.updateRegionLinescanPlotRows(0);
-        end
-
-        function syncRegionLinescanPlotCount(obj)
-        %SYNCREGIONLINESCANPLOTCOUNT Ensure the single overlay plot exists
-            nDesired = 1;
-
-            nCurrent = numel(obj.RegionLinescanPlot);
-            if nCurrent > nDesired
-                delete(obj.RegionLinescanPlot(nDesired+1:end));
-                obj.RegionLinescanPlot = obj.RegionLinescanPlot(1:nDesired);
-                nCurrent = nDesired;
-            end
-
-            for C = nCurrent+1:nDesired
-                obj.RegionLinescanPlot(C) = desmostorm.widgets.PeaksPlotContainer(obj.RegionLinescanPanelGrid,...
-                    "RawLineWidth",obj.Settings.PeaksPlot.RawLineWidth, ...
-                    "SmoothLineWidth",obj.Settings.PeaksPlot.SmoothLineWidth, ...
-                    "Color",obj.Settings.PeaksPlot.Color, ...
-                    "ColorMode",'auto', ...
-                    "AlphaMode",'auto', ...
-                    "AnnotationColorMode",char(obj.Settings.PeaksPlot.AnnotationColorMode), ...
-                    "AnnotationColor",obj.Settings.PeaksPlot.AnnotationColor, ...
-                    "DistanceAnnotations",obj.Settings.PeaksPlot.DistanceAnnotations, ...
-                    "DistanceAnnotationsMode",char(obj.Settings.PeaksPlot.DistanceAnnotationsMode), ...
-                    "WidthAnnotations",obj.Settings.PeaksPlot.WidthAnnotations, ...
-                    "WidthAnnotationsMode",char(obj.Settings.PeaksPlot.WidthAnnotationsMode), ...
-                    "BackgroundColor",obj.Settings.PeaksPlot.BackgroundColor, ...
-                    "ForegroundColor",obj.Settings.PeaksPlot.ForegroundColor, ...
-                    "XLabel",sprintf("Distance (%s)",obj.Settings.Analysis.PixelSizeUnit), ...
-                    "YLabel","Normalized Intensity", ...
-                    "Visible","off");
-            end
-
-            for C = 1:numel(obj.RegionLinescanPlot)
-                obj.RegionLinescanPlot(C).Layout.Row = 1;
-                obj.RegionLinescanPlot(C).Layout.Column = 1;
-            end
         end
 
         function updateRegionLinescanPlotRows(obj,nVisible)
@@ -2024,35 +1967,13 @@ classdef GUI < handle
             end
         end
 
-        function applyRegionLinescanPlotColors(obj,colorChannels)
-        %APPLYREGIONLINESCANPLOTCOLORS Apply channel or manual plot colors
-            nPlots = numel(colorChannels);
-            obj.RegionLinescanPlot.ColorMode = 'auto';
-            obj.RegionLinescanPlot.AlphaMode = 'auto';
-
-            switch obj.Settings.PeaksPlot.ColorSource
-                case "channel"
-                    colors = obj.getRegionLinescanPlotColors(colorChannels);
-                otherwise
-                    colors = repmat(obj.Settings.PeaksPlot.Color,nPlots,1);
-            end
-
-            obj.RegionLinescanPlot.Colors = colors;
-            obj.RegionLinescanPlot.SmoothLineColors = zeros(0,3);
-            obj.RegionLinescanPlot.RawLineColors = zeros(0,3);
-            obj.RegionLinescanPlot.AnnotationColorMode = char(obj.Settings.PeaksPlot.AnnotationColorMode);
-            obj.RegionLinescanPlot.AnnotationColor = obj.Settings.PeaksPlot.AnnotationColor;
-            obj.RegionLinescanPlot.AnnotationsColors = zeros(0,3);
-            obj.RegionLinescanPlot.PeakAreaColors = zeros(0,3);
-        end
-
         function colors = getRegionLinescanPlotColors(obj,channels)
         %GETREGIONLINESCANPLOTCOLORS Convert project channel color names to RGB rows
             channels = channels(:).';
             colors = zeros(numel(channels),3);
+            img = obj.Project.ActiveImage;
             for i = 1:numel(channels)
-                colorName = obj.Project.getChannelColorName(channels(i));
-                colors(i,:) = matlabx.colors.names.toRGB(char(colorName),"Palette","MATLAB");
+                colors(i,:) = obj.Project.getChannelRGB(img.ChannelIDs(channels(i)));
             end
         end
 
@@ -2100,185 +2021,244 @@ classdef GUI < handle
         end
 
         function onLabelHotkeyPressed(obj,key)
-        %ONLABELHOTKEYPRESSED Shared callback for label hotkeys    
-            if isempty(obj.Project), return; end
-
-            % get label matching hotkey
-            L = obj.Project.LabelBank.getByHotkey(key);
-
-            % no match -> return
-            if isempty(L), return; end
-
-            % set it as active
-            obj.Project.LabelBank.setActiveByID(L.ID);
-
-            % reflect in tree selection if present
-            if ~isempty(obj.LabelsTree) && isvalid(obj.LabelsTree)
-                n = obj.LabelsTree.findobj("NodeData", L.ID);
-                if ~isempty(n), obj.LabelsTree.SelectedNodes = n(1); end
-            end
-
-            obj.applyActiveLabelToSelection();
-            return
-
+            if isempty(obj.Project), return, end
+            label = obj.Project.LabelBank.getByHotkey(key);
+            if isempty(label), return, end
+            obj.Project.LabelBank.setActiveByID(label.ID);
+            syncTreeSelection(obj.LabelsTree,label.ID,obj.Project.LabelBank.SelectedLabelIDs);
+            obj.applyRegionLabel(label.ID);
         end
 
         function refreshLabelsTree(obj)
-        %REFRESHLABELSTREE Sync labels uitree to LabelBank
-            if isempty(obj.Project) || isempty(obj.LabelsTree) || ~isvalid(obj.LabelsTree)
-                return
-            end
+            obj.isSyncingTrees = true;
+            guard = onCleanup(@() obj.endTreeSync());
+            obj.clearLabelsTree();
+            if isempty(obj.Project), return, end
 
-            delete(obj.LabelsTree.Children);
-
-            % get label bank and labels
             bank = obj.Project.LabelBank;
-            arr = bank.labels();
-
-            % --- build context menu for tree nodes ---
-            % delete old context menu if valid
-            CM = obj.ContextMenuUI.LabelsTreeNodeContextMenu;
-            if ~isempty(CM)
-                delete(CM(isvalid(CM)));
-            end
-            % make new context menu
-            obj.ContextMenuUI.LabelsTreeNodeContextMenu = uicontextmenu(obj.Fig);
-            % add menu options
-            uimenu(obj.ContextMenuUI.LabelsTreeNodeContextMenu, ...
-                "Text","Edit", ...
-                "MenuSelectedFcn",@(~,e) obj.onEditLabel(e))
-
-            for k = 1:numel(arr)
-                L = arr(k);
-                txt = string(L.Name);
-                if strlength(L.Hotkey) > 0
-                    txt = txt + "  [" + L.Hotkey + "]";
-                end
-                % create tree node
-                tempNode = uitreenode("Parent",obj.LabelsTree,"Text",txt);
-                % IMPORTANT - set NodeData outside the constructor call in case label ID is "default"
-                tempNode.NodeData = L.ID;
-                % add the context menu to the newly created node
-                tempNode.ContextMenu = obj.ContextMenuUI.LabelsTreeNodeContextMenu;
-
-                % create uistyle and add to the node
-                nodeStyle = uistyle("Icon",reshape(L.Color,1,1,3));
-                addStyle(obj.LabelsTree,nodeStyle,"node",tempNode);
+            labels = bank.labels();
+            for k = 1:numel(labels)
+                label = labels(k);
+                title = label.Name;
+                if label.hasHotkey(), title = title + "  [" + label.Hotkey + "]"; end
+                node = uitreenode(obj.LabelsTree,'Text',title);
+                node.NodeData = label.ID;
+                node.Icon = char(matlabx.ui.icon.get(Shape="circle",Color=label.Color,Size=16));
+                node.ContextMenu = obj.labelMenu(label.ID);
             end
 
-            % select active label node if possible
-            if strlength(bank.ActiveLabelID) > 0
-                n = obj.LabelsTree.findobj("NodeData", bank.ActiveLabelID);
-                if ~isempty(n)
-                    obj.LabelsTree.SelectedNodes = n(1);
-                end
-            end
+            syncTreeSelection(obj.LabelsTree,bank.ActiveLabelID,bank.SelectedLabelIDs);
         end
 
         function clearLabelsTree(obj)
-            delete(obj.LabelsTree.Children);
+            deleteTreeNodes(obj.LabelsTree.Children);
         end
 
-        function applyActiveLabelToSelection(obj)
-            img = obj.Project.ActiveImage;
-            if isempty(img), return; end
+        function onSelectLabel(obj,evt)
+            if obj.isSyncingTrees || isempty(obj.Project) || isempty(evt.SelectedNodes), return, end
+            obj.Project.LabelBank.setActiveByID(string(evt.SelectedNodes(1).NodeData));
+        end
 
-            ids = obj.ImageViewer.Tools.Box.getSelectedBoxIDs();
-            if isempty(ids), return; end
+        function onCheckLabels(obj,evt)
+            if obj.isSyncingTrees || isempty(obj.Project), return, end
+            obj.Project.LabelBank.setSelection(nodeIDs(evt.CheckedNodes));
+        end
 
+        function menu = labelMenu(obj,id)
+            menu = uicontextmenu(obj.Fig);
+            merge = uimenu(menu,'Text','Merge selected labels...', ...
+                'MenuSelectedFcn',@(~,~) obj.mergeSelectedLabels());
+            menu.ContextMenuOpeningFcn = @(~,~) obj.updateMergeMenu(merge);
+            uimenu(menu,'Text','New label...', ...
+                'MenuSelectedFcn',@(~,~) obj.promptLabel(""));
+            if id == "", return, end
+            uimenu(menu,'Text','Edit...','Separator','on', ...
+                'MenuSelectedFcn',@(~,~) obj.promptLabel(id));
+            uimenu(menu,'Text','Select regions with this label', ...
+                'MenuSelectedFcn',@(~,~) obj.selectRegionsWithLabel(id));
+            uimenu(menu,'Text','Apply to current region selection', ...
+                'MenuSelectedFcn',@(~,~) obj.applyRegionLabel(id));
+            uimenu(menu,'Text','Delete regions with this label', ...
+                'MenuSelectedFcn',@(~,~) obj.deleteRegionsWithLabel(id));
+            uimenu(menu,'Text','Delete label','Enable',id ~= "unlabeled", ...
+                'MenuSelectedFcn',@(~,~) obj.deleteLabel(id));
+        end
+
+        function updateMergeMenu(obj,menu)
+            menu.Enable = ~isempty(obj.Project) && ...
+                nnz(obj.Project.LabelBank.SelectedLabelIDs ~= "unlabeled") >= 2;
+        end
+
+        function selectRegionsWithLabel(obj,id)
+            if isempty(obj.Project), return, end
+            images = obj.Project.ImageArray;
+            for k = 1:numel(images)
+                img = images(k);
+                matches = img.getRegionsByLabelID(id);
+                if isempty(matches), continue, end
+                img.setRegionSelection([img.SelectedRegionIDs(:);reshape([matches.ID],[],1)]);
+            end
+        end
+
+        function applyRegionLabel(obj,id)
+            if isempty(obj.Project) || isempty(obj.Project.LabelBank.getByID(id)), return, end
+            images = obj.Project.ImageArray;
+            changed = false;
+            for k = 1:numel(images)
+                img = images(k);
+                for regionID = reshape(img.SelectedRegionIDs,1,[])
+                    region = img.getRegion(regionID);
+                    if ~isempty(region) && (region.LabelID ~= id || region.LabelSource ~= "user")
+                        region.LabelID = id;
+                        region.LabelSource = "user";
+                        changed = true;
+                    end
+                end
+            end
+            if changed
+                obj.refreshRegionBoxes();
+                obj.refreshRegionSummaryTable();
+                obj.markProjectDirty();
+            end
+        end
+
+        function deleteRegionsWithLabel(obj,id)
+            if isempty(obj.Project), return, end
+            regions = obj.Project.getRegionsByLabelID(id);
+            if isempty(regions) || ~obj.confirmTreeDeletion(numel(regions),"matching regions"), return, end
+            for k = 1:numel(regions)
+                region = regions(k);
+                region.Parent.removeRegion(region.ID);
+            end
+            obj.refreshRegionBoxes();
+        end
+
+        function onManageLabels(obj)
+            if isempty(obj.Project), return, end
+            snapshot = obj.Project.LabelBank.toStruct();
+            [draft,originalIDs] = desmostorm.app.editLabelsDialog(snapshot.Labels);
+            if ~isempty(draft)
+                ids = reshape(string({draft.ID}),[],1);
+                edited = originalIDs ~= "" & originalIDs ~= ids;
+                removed = reshape(setdiff(string({snapshot.Labels.ID}),originalIDs),[],1);
+                obj.Project.replaceLabels(draft,SourceIDs=[originalIDs(edited);removed], ...
+                    TargetIDs=[ids(edited);repmat("unlabeled",numel(removed),1)]);
+            end
+        end
+
+        function promptLabel(obj,id)
+            if isempty(obj.Project), return, end
             bank = obj.Project.LabelBank;
-            L = bank.active();
-            if isempty(L), return; end
-
-            for i = 1:numel(ids)
-                r = img.getRegion(ids(i));
-                if ~isempty(r)
-                    r.LabelID = L.ID;
-                    r.LabelSource = "user";
+            label = bank.getByID(id);
+            if isempty(label)
+                [name,defaultID] = obj.nextLabelIdentity("Label","label-");
+                hotkey = "";
+                color = [1 1 1];
+                title = "New label";
+            else
+                name = label.Name;
+                defaultID = id;
+                hotkey = label.Hotkey;
+                color = label.Color;
+                title = "Edit label";
+            end
+            params = obj.labelParameters(title,name,hotkey,color,id,defaultID);
+            if isempty(params), return, end
+            if isempty(label)
+                bank.add(params.Name,ID=params.ID,Hotkey=params.Hotkey, ...
+                    Color=params.Color,MakeActive=true);
+                obj.refreshLabelsTree();
+            else
+                snapshot = bank.toStruct();
+                labels = snapshot.Labels;
+                index = find(string({labels.ID}) == id,1);
+                labels(index).ID = params.ID;
+                labels(index).Name = params.Name;
+                labels(index).Hotkey = params.Hotkey;
+                labels(index).Color = params.Color;
+                if params.ID == id
+                    obj.Project.replaceLabels(labels);
+                else
+                    obj.Project.replaceLabels(labels,SourceIDs=id,TargetIDs=params.ID);
                 end
             end
-
-            % recolor overlays
-            obj.ImageViewer.Tools.Box.setBoxesColorByIDs(ids, L.Color);
-
-            % refresh region table
-            obj.refreshRegionSummaryTable();
-            obj.markProjectDirty();
         end
 
-        function clearLabelOnSelection(obj)
-            img = obj.Project.ActiveImage;
-            if isempty(img), return; end
+        function [name,id] = nextLabelIdentity(obj,prefix,idPrefix)
+            labels = obj.Project.LabelBank.labels();
+            names = string({labels.Name});
+            ids = string({labels.ID});
+            number = max(1,numel(labels));
+            name = prefix + " " + number;
+            id = idPrefix + number;
+            while any(strcmpi(name,names)) || ismember(id,ids)
+                number = number+1;
+                name = prefix + " " + number;
+                id = idPrefix + number;
+            end
+        end
 
-            ids = obj.ImageViewer.Tools.Box.getSelectedBoxIDs();
-            if isempty(ids), return; end
-
-            for i = 1:numel(ids)
-                r = img.getRegion(ids(i));
-                if ~isempty(r)
-                    r.LabelID = "";
+        function params = labelParameters(obj,title,name,hotkey,color,excludedID,defaultID)
+            labels = obj.Project.LabelBank.labels();
+            labels = labels(string({labels.ID}) ~= excludedID);
+            names = string({labels.Name});
+            keys = string({labels.Hotkey});
+            idField = {};
+            if excludedID ~= "unlabeled"
+                ids = string({labels.ID});
+                idField = {{'ID','ID','string',defaultID, ...
+                    @(x) strlength(strtrim(x)) > 0 && ~ismember(strtrim(x),ids), ...
+                    'ID must be nonempty and unique.'}};
+            end
+            params = matlabx.app.ParamsDialog.prompt(title, ...
+                idField{:}, ...
+                {'Name','Name','string',name, ...
+                    @(x) strlength(strtrim(x)) > 0 && ~any(strcmpi(strtrim(x),names)), ...
+                    'Name must be nonempty and unique.'}, ...
+                {'Hotkey','Hotkey','string',hotkey, ...
+                    @(x) strlength(strtrim(x)) == 0 || ...
+                        (~isempty(regexp(char(strtrim(x)),'^[A-Za-z0-9]$','once')) && ...
+                        ~any(strcmpi(strtrim(x),keys))), ...
+                    'Enter one unique alphanumeric character, or leave blank.'}, ...
+                {'Color','Color','color',color});
+            if ~isempty(params)
+                params.Name = strtrim(string(params.Name));
+                params.Hotkey = lower(strtrim(string(params.Hotkey)));
+                if excludedID == "unlabeled"
+                    params.ID = excludedID;
+                else
+                    params.ID = strtrim(string(params.ID));
                 end
             end
-
-            obj.ImageViewer.Tools.Box.setBoxesColorByIDs(ids, 'w');
-            obj.markProjectDirty();
         end
 
-        % labels uitree callbacks
-        function onSelectLabel(obj, evt)
-            if isempty(obj.Project), return; end
-            if isempty(evt.SelectedNodes) || isempty(evt.SelectedNodes.NodeData), return; end
-            % get label ID from NodeData of selected node
-            labelID = string(evt.SelectedNodes.NodeData);
-            obj.Project.LabelBank.setActiveByID(labelID);
+        function deleteLabel(obj,id)
+            if isempty(obj.Project) || id == "unlabeled", return, end
+            bank = obj.Project.LabelBank;
+            label = bank.getByID(id);
+            if isempty(label) || ~obj.confirmTreeDeletion(1,"label and reassign its regions to Unlabeled"), return, end
+            snapshot = bank.toStruct();
+            obj.Project.replaceLabels(snapshot.Labels(string({snapshot.Labels.ID}) ~= id));
         end
 
-        % labels uitree context menu callbacks
-        function onEditLabel(obj, evt)
-            % get clicked node from InteractionInformation of event payload
-            clickedNode = evt.InteractionInformation.Node;
-            % get label ID from NodeData of right-clicked node
-            labelID = string(clickedNode.NodeData);
-            % get the active label using its ID
-            label = obj.Project.LabelBank.getByID(labelID);
+        function mergeSelectedLabels(obj)
+            if isempty(obj.Project), return, end
+            bank = obj.Project.LabelBank;
+            ids = setdiff(bank.SelectedLabelIDs,"unlabeled",'stable');
+            if numel(ids) < 2, return, end
+            snapshot = bank.toStruct();
+            selected = ismember(string({snapshot.Labels.ID}),ids);
+            color = mean(vertcat(snapshot.Labels(selected).Color),1);
+            [name,defaultID] = obj.nextLabelIdentity("Merged label","merged-label-");
+            params = obj.labelParameters("Merge selected labels",name,"",color,"",defaultID);
+            if isempty(params), return, end
 
-
-            % get IDs of other labels
-            labelIDs = obj.Project.LabelBank.ids();
-            labelIDs(labelIDs==label.ID) = [];
-
-            % get Hotkeys of other labels
-            labelHotkeys = obj.Project.LabelBank.hotkeys();
-            labelHotkeys(labelHotkeys==label.Hotkey) = [];
-
-            % open form dialog to edit label info
-            obj.Fig.Visible = 'off';
-            labelInfo = matlabx.app.ParamsDialog.prompt( ...
-                'Edit label info', ...
-                {'Name','Name','string',label.Name,@(x) strlength(x) > 0,'Name cannot be empty'}, ...
-                {'ID','ID','string',label.ID,@(x) strlength(x) > 0 && ~ismember(x,labelIDs),'ID must be unique and non-empty'}, ...
-                {'Hotkey','Hotkey','string',label.Hotkey,@(x) strlength(x) == 1 && ~ismember(x,labelHotkeys),'Hotkey must be a single unique alphanumeric character'}, ...
-                {'Color','Color','color',label.Color});
-            % return if empty
-            if isempty(labelInfo)
-                obj.Fig.Visible = 'on';
-                return
-            end
-
-            % update any regions labeled with the old LabelID
-            regs = obj.Project.getRegionsByLabelID(label.ID);
-            if ~isempty(regs), set(regs,"LabelID",labelInfo.ID); end
-
-            % if hotkey changed, remove old hotkey from CommandRouter
-            if ~strcmp(label.Hotkey,labelInfo.Hotkey), obj.CommandRouter.removeHotkey(label.Hotkey); end
-
-            % update the label
-            obj.Project.LabelBank.edit(label.ID, ...
-                "Name",labelInfo.Name, ...
-                "ID",labelInfo.ID, ...
-                "Hotkey",labelInfo.Hotkey, ...
-                "Color",labelInfo.Color);
-            obj.Fig.Visible = 'on';
+            merged = struct('ID',params.ID, ...
+                'Name',params.Name,'Hotkey',params.Hotkey, ...
+                'Color',params.Color,'CreatedAt',datetime('now'));
+            draft = [reshape(snapshot.Labels(~selected),1,[]),merged];
+            obj.Project.replaceLabels(draft,SourceIDs=ids, ...
+                TargetIDs=repmat(merged.ID,size(ids)),ActivateID=merged.ID);
         end
 
         function markProjectDirty(obj)
@@ -2329,45 +2309,21 @@ classdef GUI < handle
                     obj.ImageViewer.ComponentColorMode = char(obj.Settings.Display.ChannelColorMode);
                     obj.refreshChannelDisplayControls();
                 case "Colormap"
-                    cmap = obj.Settings.Display.Colormap;
-                    obj.ExampleColormapAxes.Colormap = cmap;
-
-                    C = obj.ImageViewer.C;
-                    if ~obj.isSyncingColormapSelection && ~isempty(obj.Project)
-                        obj.Project.setChannelColormap( ...
-                            C, ...
-                            obj.Settings.Display.ColormapName, ...
-                            obj.Settings.Display.ColormapCategory);
-                    end
-
-                    if C <= obj.ImageViewer.NumComponents
-                        obj.ImageViewer.setComponentColormap(cmap,C);
+                    if ~isempty(obj.Project)
+                        obj.Project.setDefaultChannelColormap( ...
+                            obj.Settings.Display.ColormapName,obj.Settings.Display.ColormapCategory);
                     end
                 case "BoxFaceColor"
                     %set(obj.ROI, 'FaceColor', obj.Settings.Display.BoxFaceColor);
                 case "BoxEdgeColor"
                     %set(obj.ROI, 'EdgeColor', obj.Settings.Display.BoxEdgeColor);
-                case "AutoScaleDisplayIntensity"
-                    % make sure checked/unchecked state matches settings
-                    obj.SettingsUI.Display.AutoScaleDisplayIntensityCheckBox.Value = e.NewValue;
-                    % refresh image view
-                    obj.refreshImageViewer();
-                    % refresh region view
-                    obj.refreshRegionViewer();
             end
             obj.markProjectDirty();
         end
 
-        function onPeaksPlotChanged(obj,e)
-            %obj.RegionLinescanPlot.(e.Name) = obj.Settings.PeaksPlot.(e.Name);
-            switch e.Name
-                case {"ShownPlots","ColorSource","Color"}
-                    obj.refreshRegionLinescanPlot();
-                case {"DistanceAnnotationsMode","WidthAnnotationsMode","AnnotationColorMode"}
-                    set(obj.RegionLinescanPlot,e.Name,char(obj.Settings.PeaksPlot.(e.Name)));
-                otherwise
-                    set(obj.RegionLinescanPlot,e.Name,obj.Settings.PeaksPlot.(e.Name));
-            end
+        function onPeaksPlotChanged(obj,~)
+            obj.refreshPeaksPlotControls();
+            if ~isempty(obj.Project), obj.refreshRegionLinescanPlot(); end
             obj.markProjectDirty();
         end
 
@@ -2416,22 +2372,19 @@ classdef GUI < handle
         end
 
         function ColormapSelectionChanged(obj,evt)
-            if obj.isSyncingColormapSelection, return; end
-
-            % get the newly selected node
-            node = evt.SelectedNodes;
-            if isempty(node), return; end
-            % get colormap name from NodeData property
-            colormapName = node.NodeData;
-            % if empty -> user selected a category node, reset previous selection
-            if isempty(colormapName)
-                %evt.Source.SelectedNodes = evt.PreviousSelectedNodes;
+            if obj.isSyncingColormapSelection || isempty(obj.Project)
                 return
             end
-            % get category from Text property of Parent node
-            categoryName = node.Parent.Text;
-            % update settings
-            obj.Settings.Display.setColormap(colormapName,categoryName);
+            node = evt.SelectedNodes;
+            id = string(obj.SettingsUI.ChannelDisplay.Channel.Value);
+            if id == "" || isempty(node) || ~isstruct(node(1).NodeData)
+                return
+            end
+            data = node(1).NodeData;
+            obj.Project.setChannelColormap(id,data.Name,data.Category);
+            obj.applyProjectChannelDisplayToAxes();
+            obj.refreshChannelDisplayControls();
+            obj.refreshDisplayLimits();
         end
 
         function AnalysisSettingsChanged(obj,src,stgName)
@@ -2477,16 +2430,10 @@ classdef GUI < handle
             obj.Settings.Display.(stgName) = src.Value;
         end
 
-        function ChannelColorChanged(obj,src,C)
-            if isempty(obj.Project)
-                return
-            end
-
-            colorName = string(src.Value);
-            obj.Project.setChannelColor(C,colorName);
-
-            if C <= obj.ImageViewer.NumComponents
-                obj.ImageViewer.setComponentColor(colorName,C);
+        function ChannelColorChanged(obj,src)
+            id = string(obj.SettingsUI.ChannelDisplay.Channel.Value);
+            if ~isempty(obj.Project) && id ~= ""
+                obj.Project.setChannelColor(id,string(src.Value));
             end
         end
 
@@ -2541,8 +2488,7 @@ classdef GUI < handle
             desmostorm.Log.INFO(sprintf("Loading project file: %s",fname));
             % set up progress dialog
             msg = sprintf("Loading project file:\n%s",fname);
-            h = uiprogressdlg(obj.Fig,"Message",msg,'Indeterminate','on');
-            cleanupProgress = onCleanup(@() closeProgressDialog(h));
+            [h,cleanupProgress] = obj.createProgressDialog(msg);
             % cleanup before loading
             if ~isempty(obj.Project), obj.Project.delete(); end   % delete project
             if ~isempty(obj.Settings), obj.Settings.delete(); end  % delete settings
@@ -2589,61 +2535,122 @@ classdef GUI < handle
             desmostorm.Log.INFO(sprintf("Closed project: %s",projectName));
         end
 
-        function onSave(obj)
-        %ONSAVE MenuSelectedCallback for [File]->[Save...]    
-            obj.saveProject();
-        end
-
-        function tf = saveProject(obj)
-        %SAVEPROJECT Save the active project; true only when save completes.
-            tf = false;
-            if isempty(obj.Project), return; end
-
-            % get filename to save project
-            obj.Fig.Visible = 'off';
-            if obj.Project.isOnDisk
-                defaultName = obj.Project.SourcePath;
-            else
-                defaultName = fullfile(obj.Settings.IO.DefaultFolder, obj.Project.Name + '.mat');
+        function saved = saveProject(obj,saveAs)
+            arguments
+                obj
+                saveAs (1,1) logical = false
             end
-            [file, path] = uiputfile('*.mat','Save project', defaultName);
-            obj.Fig.Visible = 'on';
-            if isequal(file,0), return; end % cancelled | no files selected -> return
-            fname = fullfile(path, file);
 
-            % update log
-            desmostorm.Log.INFO(sprintf("Saving project file: %s",fname));
-            % create progress dialog
-            msg = sprintf("Saving project file:\n%s",fname);
-            h = uiprogressdlg(obj.Fig,"Message",msg,'Indeterminate','on');
-            cleanupProgress = onCleanup(@() closeProgressDialog(h));
-            % save the project
-            obj.Project.save(fname,obj.Settings);
-            % refresh the window name
+            saved = false;
+            if isempty(obj.Project), return, end
+
+            destination = obj.Project.SourcePath;
+            if saveAs || ~obj.Project.isOnDisk || destination == ""
+                if destination == ""
+                    folder = obj.Settings.IO.DefaultFolder;
+                else
+                    folder = fileparts(destination);
+                end
+                suggested = fullfile(folder,obj.Project.Name + ".mat");
+                [file,folder] = uiputfile('*.mat','Save DesmoSTORM project',char(suggested));
+                desmostorm.app.focusMainFigure();
+                if isequal(file,0), return, end
+                destination = string(fullfile(folder,file));
+            end
+
+            [~,cleanup] = obj.createProgressDialog( ...
+                sprintf('Saving project file:\n%s',destination));
+            try
+                obj.Project.save(destination,obj.Settings);
+            catch ME
+                clear cleanup
+                desmostorm.Log.EXCEPTION(ME);
+                obj.guialert("Title","Save failed","Message",ME.message,"Icon",'error');
+                return
+            end
             obj.refreshWindowName();
-            % update log
-            desmostorm.Log.INFO(sprintf("Successfully saved project file: %s",fname));
-            tf = true;
+            desmostorm.Log.INFO(sprintf("Successfully saved project file: %s",destination));
+            saved = true;
         end
 
         function onSaveSettings(obj)
-        %ONSAVESETTINGS MenuSelectedCallback for [File]->[Save Settings]        
-            obj.Settings.save(); % save current settings to default file
-            desmostorm.Log.INFO("Settings saved.");
+            obj.Settings.save();
+            desmostorm.Log.INFO("Saved app defaults.");
         end
 
-        function onLoadImages(obj)
-        %ONLOADIMAGES MenuSelectedCallback for [File]->[Load Images...]
+        function onLoadSettings(obj)
+            loaded = desmostorm.config.Settings.load();
+            cleanup = onCleanup(@() delete(loaded));
+            before = obj.Settings.toStruct();
+            after = loaded.toStruct();
+            if isequaln(before,after), return, end
+
+            % Apply the snapshot together so intermediate setting events do not
+            % reprocess data or delete regions when the default box size changes.
+            obj.detatchListeners();
+            listeners = onCleanup(@() obj.refreshListeners());
+            obj.Settings.fromStruct(after);
+            clear listeners
+
+            obj.ImageViewer.Tools.Box.BoxSize = obj.Settings.Analysis.BoxSize;
+            obj.refreshSettingsControllers();
+            if ~isempty(obj.Project)
+                obj.Project.setDefaultChannelColormap( ...
+                    obj.Settings.Display.ColormapName,obj.Settings.Display.ColormapCategory);
+                pixelSizeChanged = before.Analysis.PixelSizeValue ~= after.Analysis.PixelSizeValue || ...
+                    string(before.Analysis.PixelSizeUnit) ~= string(after.Analysis.PixelSizeUnit);
+                if pixelSizeChanged
+                    obj.Project.DefaultPixelSize = obj.Settings.Analysis.getDefaultPixelSize();
+                end
+                obj.markProjectDirty();
+
+                geometry = {'BoxSize','PixelSizeValue','PixelSizeUnit'};
+                if ~isequaln(rmfield(before.Analysis,geometry),rmfield(after.Analysis,geometry))
+                    obj.processAllRegions();
+                else
+                    if pixelSizeChanged, obj.Project.refreshRegionLinescanPixelSizes(); end
+                    obj.syncActiveImageToView();
+                end
+            end
+            desmostorm.Log.INFO("Loaded app defaults.");
+        end
+
+        function onImportImages(obj)
+        %ONIMPORTIMAGES MenuSelectedCallback for [File]->[Import Images...]
             % get image filename(s)
-            obj.Fig.Visible = 'off';
+            fig = obj.Fig;
+            wasVisible = fig.Visible;
+            restoreVisibility = onCleanup(@() set(fig,'Visible',wasVisible));
+            fig.Visible = 'off';
             [files,path,~] = matlabx.image.io.uigetimagefile('MultiSelect','on');
-            obj.Fig.Visible = 'on';
             if isequal(files,0), return; end % cancelled | no files selected -> return
-            if ischar(files), files = {files}; end
+            fig.Visible = wasVisible;
+            [progress,cleanupProgress] = obj.createProgressDialog("Preparing image import...");
+            files = string(files);
             fullpaths = fullfile(path, files);
-            % add new STORMImage for each file
-            obj.Project.addImagesFromPaths(fullpaths);
-            desmostorm.Log.INFO(sprintf("Loaded %d image(s).",numel(fullpaths)));
+            images = desmostorm.model.STORMImage.empty();
+            for i = 1:numel(fullpaths)
+                desmostorm.runtime.updateProgress(progress, ...
+                    sprintf('Image %d/%d: %s\nReading channel metadata...', ...
+                    i,numel(files),files(i)),.7*(i-1)/numel(files));
+                images(i) = desmostorm.model.STORMImage(obj.Project,files(i), ...
+                    fullpaths(i),matlabx.utils.text.uniqueID());
+            end
+            [names,colors] = desmostorm.app.channelDialog(obj.Project,images, ...
+                ProgressDialog=progress,Parent=fig);
+            clear cleanupProgress
+            clear restoreVisibility
+            if isempty(names), return, end
+            obj.Project.importImages(images,names,colors);
+            desmostorm.Log.INFO(sprintf("Imported %d image(s).",numel(images)));
+        end
+
+        function onEditChannels(obj)
+            if isempty(obj.Project.Channels), return, end
+            [names,colors] = desmostorm.app.channelDialog(obj.Project);
+            if ~isempty(names)
+                obj.Project.editChannels(names{1},colors{1});
+            end
         end
 
     end
@@ -2651,42 +2658,69 @@ classdef GUI < handle
     %% Per-image settings
     methods (Access=private)
 
-        function onIntensitySliderChanging(obj,~,C)
-            % get the active image
-            img = obj.Project.ActiveImage;
-            if isempty(img), return; end
-
-            % set MaxRenderedResolution for smoother updates in ImageViewer, RegionViewer
+        function dragDisplayLimits(obj,c,value)
             obj.ImageViewer.MaxRenderedResolution = obj.ImageViewer.CDataSize(1)/4;
             obj.RegionViewer.MaxRenderedResolution = obj.Settings.Analysis.BoxSize/4;
-
-            % set the new CLim for the ImageViewer, linked RegionViewer will update
-            clim = obj.IntensitySliders(C).Value;
-            obj.ImageViewer.setComponentCLim(clim,C);
+            obj.previewDisplayLimits(c,value);
         end
 
-        function onIntensitySliderChanged(obj,~,C)
-            % get the active image
+        function previewDisplayLimits(obj,c,value)
+            if value(1) >= value(2), return, end
+            previous = obj.isSyncingChannelDisplay;
+            obj.isSyncingChannelDisplay = true;
+            guard = onCleanup(@() obj.setChannelDisplaySyncFlag(previous));
+            obj.ImageViewer.setComponentCLim(value,c);
+        end
+
+        function storeManualDisplayLimits(obj,img,c,value)
+            id = img.ChannelIDs(c);
+            policy = obj.Settings.Display.channelPolicy(id);
+            img.setDisplayRange(value,c);
+            policy.KeepAuto = false;
+            if policy.Lock, policy.LockedRange = value; end
+            obj.Settings.Display.setChannelPolicy(policy);
+            obj.markProjectDirty();
+        end
+
+        function commitDisplayLimits(obj,c,value)
             img = obj.Project.ActiveImage;
-            if isempty(img), return; end
-
-            % update model with slider value
-            newVal = obj.IntensitySliders(C).Value;
-            img.setDisplayRange(newVal,C);
-
-            % update view
-            obj.ImageViewer.setComponentCLim(newVal,C);
-
-            % disable AutoScaleDisplayIntensity if enabled
-            if obj.Settings.Display.AutoScaleDisplayIntensity
-                obj.Settings.Display.AutoScaleDisplayIntensity = false;
-            end
-
-            % reset MaxRenderedResolution
             obj.ImageViewer.MaxRenderedResolution = 'none';
             obj.RegionViewer.MaxRenderedResolution = 'none';
+            if value(1) >= value(2)
+                policy = obj.Settings.Display.channelPolicy(img.ChannelIDs(c));
+                obj.previewDisplayLimits(c,img.displayLimits(c,policy));
+            else
+                value = img.normalizeDisplayRange(c,value);
+                obj.storeManualDisplayLimits(img,c,value);
+                obj.previewDisplayLimits(c,value);
+            end
+            obj.refreshDisplayLimits();
+        end
 
+        function applyDisplayLimitAction(obj,c,action)
+            img = obj.Project.ActiveImage;
+            policy = obj.Settings.Display.channelPolicy(img.ChannelIDs(c));
+            [~,~,value] = img.displayLimits(c,policy);
+            if action == "Auto"
+                value = img.automaticDisplayRange(c,policy.Method,value);
+            end
+            obj.commitDisplayLimits(c,value);
+        end
+
+        function changeDisplayLimitPolicy(obj,c,field,value)
+            img = obj.Project.ActiveImage;
+            policy = obj.Settings.Display.channelPolicy(img.ChannelIDs(c));
+            if field == "Lock" && value
+                policy.LockedRange = img.displayLimits(c,policy);
+                policy.KeepAuto = false;
+            elseif field == "KeepAuto" && value
+                policy.Lock = false;
+            end
+            policy.(field) = value;
+            obj.Settings.Display.setChannelPolicy(policy);
             obj.markProjectDirty();
+            obj.previewDisplayLimits(c,img.displayLimits(c,policy));
+            obj.refreshDisplayLimits();
         end
 
     end
@@ -2709,8 +2743,7 @@ classdef GUI < handle
         function processAllRegions(obj)
             % create progress dialog
             desmostorm.Log.INFO("Analyzing region measurements...");
-            h = uiprogressdlg(obj.Fig,"Message",'Analyzing ROIs. Please wait...','Indeterminate','on');
-            cleanupProgress = onCleanup(@() closeProgressDialog(h));
+            [h,cleanupProgress] = obj.createProgressDialog("Analyzing ROIs. Please wait...");
             % re-process everything
             obj.Project.processAll(obj.getRunConfig(), ...
                 "ProgressDialog",h)
@@ -2723,12 +2756,7 @@ classdef GUI < handle
         function onAutoFitAllROIs(obj)
             % create progress dialog
             desmostorm.Log.INFO("Fitting ROIs for all regions...");
-            h = uiprogressdlg(obj.Fig, ...
-                "Title","Auto-Fit Region ROIs", ...
-                "Message",'Preparing ROI auto-fit...', ...
-                "Indeterminate",'off', ...
-                "Value",0);
-            cleanup = onCleanup(@() closeProgressDialog(h));
+            [h,cleanup] = obj.createProgressDialog('Preparing ROI auto-fit...',0);
             % re-process everything
             summary = obj.Project.autofitAllRegionROIs(obj.getRunConfig(), ...
                 "ProgressDialog",h);
@@ -2753,12 +2781,7 @@ classdef GUI < handle
 
             % create progress dialog
             desmostorm.Log.INFO(sprintf("Fitting ROI for region: %s",reg.Name));
-            h = uiprogressdlg(obj.Fig, ...
-                "Title","Auto-Fit Region ROI", ...
-                "Message",'Preparing ROI auto-fit...', ...
-                "Indeterminate",'off', ...
-                "Value",0);
-            cleanup = onCleanup(@() closeProgressDialog(h));
+            [h,cleanup] = obj.createProgressDialog('Preparing ROI auto-fit...',0);
             % re-process everything
             ok = img.autofitRegionROI(reg,obj.getRunConfig(), ...
                 "ProgressDialog",h);
@@ -2848,11 +2871,7 @@ classdef GUI < handle
 
             % Create one dialog for the whole classifier run. The ML layer
             % updates it with per-image proposal-generation details.
-            h = uiprogressdlg(obj.Fig, ...
-                "Message",'Preparing classifier proposals...', ...
-                "Indeterminate",'off', ...
-                "Value",0);
-            cleanupProgress = onCleanup(@() closeProgressDialog(h));
+            [h,cleanupProgress] = obj.createProgressDialog('Preparing classifier proposals...',0);
 
             desmostorm.Log.INFO(sprintf([ ...
                 'Proposal options: BoxSize=%d, CandidateMode=%s, Stride=%d, ' ...
@@ -2869,9 +2888,8 @@ classdef GUI < handle
             N = numel(imgs);
             for i = 1:N
                 progressPrefix = sprintf("Image %d/%d: %s | ",i,N,imgs(i).Name);
-                h.Message = sprintf("%sRunning classifier...",progressPrefix);
-                h.Value = (i-1) / N;
-                propOpts.ProgressDialog = h;
+                desmostorm.runtime.updateProgress(h,progressPrefix + "Running classifier...",(i-1)/N);
+                propOpts.ProgressDialog = @(message,value) reportClassifierProgress(h,message,value,i,N);
                 propOpts.ProgressMessagePrefix = string(progressPrefix);
                 desmostorm.Log.INFO(sprintf("Running classifier on image (%i/%i): %s",i,N,imgs(i).Name));
                 imgs(i).runClassifier(net,propOpts);
@@ -2881,8 +2899,7 @@ classdef GUI < handle
             % --- sync UI ---
             obj.syncActiveImageToView();
             obj.markProjectDirty();
-            h.Value = 1;
-            h.Message = "Classifier run complete.";
+            desmostorm.runtime.updateProgress(h,"Classifier run complete.",1);
 
         end
 
@@ -2909,10 +2926,7 @@ classdef GUI < handle
 
             % Show coarse progress around setup, training, packaging, and save.
             % MATLAB's training-progress window still owns iteration details.
-            h = uiprogressdlg(obj.Fig, ...
-                "Message","Preparing classifier training...", ...
-                "Indeterminate","on");
-            cleanupProgress = onCleanup(@() closeProgressDialog(h));
+            [h,cleanupProgress] = obj.createProgressDialog("Preparing classifier training...");
 
             % --- train a new classifier ---
             desmostorm.Log.INFO(sprintf("Training new classifier: %s",params.BaseName));
@@ -2966,10 +2980,7 @@ classdef GUI < handle
 
             % Show coarse progress around setup, training, packaging, and save.
             % MATLAB's training-progress window still owns iteration details.
-            h = uiprogressdlg(obj.Fig, ...
-                "Message","Preparing classifier retraining...", ...
-                "Indeterminate","on");
-            cleanupProgress = onCleanup(@() closeProgressDialog(h));
+            [h,cleanupProgress] = obj.createProgressDialog("Preparing classifier retraining...");
 
             % --- continue training classifier ---
             desmostorm.Log.INFO(sprintf("Continuing training from: %s",classifierFile));
@@ -3023,10 +3034,7 @@ classdef GUI < handle
 
             % Show coarse progress around split, training, packaging, and save.
             % MATLAB's training-progress window still owns iteration details.
-            h = uiprogressdlg(obj.Fig, ...
-                "Message","Preparing fresh classifier retraining...", ...
-                "Indeterminate","on");
-            cleanupProgress = onCleanup(@() closeProgressDialog(h));
+            [h,cleanupProgress] = obj.createProgressDialog("Preparing fresh classifier retraining...");
 
             % --- retrain classifier from accumulated package data ---
             desmostorm.Log.INFO(sprintf("Retraining classifier from scratch: %s",classifierFile));
@@ -3112,43 +3120,19 @@ classdef GUI < handle
             end
         end
 
-        function onBoxActivated(obj, data)
-            % return if no active image
-            img = obj.Project.ActiveImage; if isempty(img), return; end
-            % get region id from box id
-            regionID = data.ID;
-            % if region exists in active image
-            if img.hasRegion(regionID)
-                % update listbox
-                obj.RegionListBox.Value = regionID;
-                % set it as the active region
-                img.setActiveRegion(regionID);
-            else
-                % update listbox
-                obj.RegionListBox.Value = {};
-                % set active region to empty
-                img.setActiveRegion(string.empty());
-            end
+        function onBoxActivated(obj,data)
+            if obj.isSyncingSelection || isempty(obj.Project), return, end
+            img = obj.Project.ActiveImage;
+            if ~isempty(img), img.setActiveRegion(data.ID); end
         end
 
-        function onBoxSelectionChanged(obj, data)
-            if obj.isSyncingSelection
-                return
-            end
-
-            ids = string(data.IDs);
+        function onBoxSelectionChanged(obj,data)
+            if obj.isSyncingSelection || isempty(obj.Project), return, end
             img = obj.Project.ActiveImage;
-            if isempty(img), return; end
-
+            if isempty(img), return, end
             obj.isSyncingSelection = true;
-
-            if isempty(ids)
-                img.clearRegionSelection();
-            else
-                img.setRegionSelection(ids);
-            end
-
-            obj.isSyncingSelection = false;
+            guard = onCleanup(@() obj.setBoxSelectionSync(false));
+            img.setRegionSelection(data.IDs);
         end
 
     end
@@ -3199,38 +3183,36 @@ classdef GUI < handle
     methods
 
         function onExportMeasurements(obj, ~, ~)
+            restoreFocus = onCleanup(@desmostorm.app.focusMainFigure);
 
             desmostorm.Log.INFO("Exporting region measurements...");
             try
-                [h,cleanupProgress] = obj.createExportProgressDialog("Preparing region measurements export..."); %#ok<ASGLU>
                 success = desmostorm.export.Exporter.exportRegionMeasurements(obj.Project,obj.Settings, ...
-                    "ProgressDialog",h);
+                    "ProgressFactory",@(message) obj.createProgressDialog(message));
                 if success
                     desmostorm.Log.INFO("Success.");
                 else
                     desmostorm.Log.INFO("Export cancelled.");
                 end
             catch ME
-                clear cleanupProgress
                 desmostorm.Log.EXCEPTION(ME);
                 obj.guialert("Title",'Error',"Message",ME.message,"Icon",'error');
             end
         end
 
         function onExportSummaryPDF(obj, ~, ~)
+            restoreFocus = onCleanup(@desmostorm.app.focusMainFigure);
 
             desmostorm.Log.INFO("Exporting summary PDF...");
             try
-                [h,cleanupProgress] = obj.createExportProgressDialog("Preparing summary PDF export..."); %#ok<ASGLU>
                 success = desmostorm.export.Exporter.exportSummaryPDF(obj.Project,obj.Settings, ...
-                    "ProgressDialog",h);
+                    "ProgressFactory",@(message) obj.createProgressDialog(message));
                 if success
                     desmostorm.Log.INFO("Success.");
                 else
                     desmostorm.Log.INFO("Export cancelled.");
                 end
             catch ME
-                clear cleanupProgress
                 desmostorm.Log.EXCEPTION(ME);
                 obj.guialert("Title",'Error',"Message",ME.message,"Icon",'error');
             end
@@ -3238,77 +3220,76 @@ classdef GUI < handle
         end
 
         function onExportRegionImages(obj, ~, ~)
+            restoreFocus = onCleanup(@desmostorm.app.focusMainFigure);
 
             desmostorm.Log.INFO("Exporting region images...");
             try
-                [h,cleanupProgress] = obj.createExportProgressDialog("Preparing region image export..."); %#ok<ASGLU>
                 success = desmostorm.export.Exporter.exportRegionImages(obj.Project,obj.Settings, ...
-                    "ProgressDialog",h);
+                    "CurrentChannel",obj.RegionViewer.C, ...
+                    "ProgressFactory",@(message) obj.createProgressDialog(message));
                 if success
                     desmostorm.Log.INFO("Success.");
                 else
                     desmostorm.Log.INFO("Export cancelled.");
                 end
             catch ME
-                clear cleanupProgress
                 desmostorm.Log.EXCEPTION(ME);
                 obj.guialert("Title",'Error',"Message",ME.message,"Icon",'error');
             end
         end
 
         function onExportImagesWithRegionBoxes(obj, ~, ~)
+            restoreFocus = onCleanup(@desmostorm.app.focusMainFigure);
 
             desmostorm.Log.INFO("Exporting images with region box overlays...");
             try
-                [h,cleanupProgress] = obj.createExportProgressDialog("Preparing image region box overlay export..."); %#ok<ASGLU>
                 success = desmostorm.export.Exporter.exportImagesWithRegionBoxes(obj.Project,obj.Settings, ...
-                    "ProgressDialog",h);
+                    "CurrentChannel",obj.ImageViewer.C, ...
+                    "ProgressFactory",@(message) obj.createProgressDialog(message));
                 if success
                     desmostorm.Log.INFO("Success.");
                 else
                     desmostorm.Log.INFO("Export cancelled.");
                 end
             catch ME
-                clear cleanupProgress
                 desmostorm.Log.EXCEPTION(ME);
                 obj.guialert("Title",'Error',"Message",ME.message,"Icon",'error');
             end
         end
 
         function onExportLinescanPlot(obj, ~, ~)
+            restoreFocus = onCleanup(@desmostorm.app.focusMainFigure);
 
             desmostorm.Log.INFO("Exporting region linescan plot...");
             try
-                [h,cleanupProgress] = obj.createExportProgressDialog("Preparing linescan plot export..."); %#ok<ASGLU>
                 success = desmostorm.export.Exporter.exportRegionLinescanPlot(obj.Project,obj.Settings, ...
                     "CurrentChannel",obj.ImageViewer.C, ...
-                    "ProgressDialog",h);
+                    "ProgressFactory",@(message) obj.createProgressDialog(message));
                 if success
                     desmostorm.Log.INFO("Success.");
                 else
                     desmostorm.Log.INFO("Export cancelled.");
                 end
             catch ME
-                clear cleanupProgress
                 desmostorm.Log.EXCEPTION(ME);
                 obj.guialert("Title",'Error',"Message",ME.message,"Icon",'error');
             end
         end
 
         function onExportRegionSubimageWithROI(obj, ~, ~)
+            restoreFocus = onCleanup(@desmostorm.app.focusMainFigure);
 
             desmostorm.Log.INFO("Exporting region subimage with ROI overlay...");
             try
-                [h,cleanupProgress] = obj.createExportProgressDialog("Preparing region image export..."); %#ok<ASGLU>
                 success = desmostorm.export.Exporter.exportRegionSubimageWithROI(obj.Project,obj.Settings, ...
-                    "ProgressDialog",h);
+                    "CurrentChannel",obj.RegionViewer.C, ...
+                    "ProgressFactory",@(message) obj.createProgressDialog(message));
                 if success
                     desmostorm.Log.INFO("Success.");
                 else
                     desmostorm.Log.INFO("Export cancelled.");
                 end
             catch ME
-                clear cleanupProgress
                 desmostorm.Log.EXCEPTION(ME);
                 obj.guialert("Title",'Error',"Message",ME.message,"Icon",'error');
             end
@@ -3316,18 +3297,20 @@ classdef GUI < handle
 
     end
 
-    %% Export helpers
+    %% Progress dialogs
     methods (Access=private)
 
-        function [h,cleanupProgress] = createExportProgressDialog(obj,msg)
+        function [h,cleanupProgress] = createProgressDialog(obj,msg,initialValue)
+            if nargin < 3, initialValue = []; end
             h = matlab.ui.dialog.ProgressDialog.empty();
-            if ~isempty(obj.Fig) && isvalid(obj.Fig)
+            if ~isempty(obj.Fig) && isvalid(obj.Fig) && obj.Fig.Visible == "on"
                 h = uiprogressdlg(obj.Fig, ...
-                    "Message",msg, ...
+                    "Title","DesmoSTORM","Message",msg, ...
                     "Indeterminate","on");
             end
 
             cleanupProgress = onCleanup(@() closeProgressDialog(h));
+            desmostorm.runtime.updateProgress(h,msg,initialValue);
         end
 
     end
@@ -3355,4 +3338,66 @@ end
 function searchRoot = resolveMissingImages(progress, names, folder)
     closeProgressDialog(progress);
     searchRoot = desmostorm.app.promptMissingImageRoot(names, folder);
+end
+
+function [name,category] = identifyColormap(map)
+    name = "";
+    category = "";
+    for candidateCategory = reshape(matlabx.colors.maps.Registry.categories(),1,[])
+        for candidateName = reshape(matlabx.colors.maps.Registry.names(candidateCategory),1,[])
+            candidate = matlabx.colors.maps.Registry.map(candidateName,candidateCategory);
+            if isequal(size(candidate),size(map)) && ...
+                    max(abs(double(candidate(:))-double(map(:)))) <= 1e-12
+                name = candidateName;
+                category = candidateCategory;
+                return
+            end
+        end
+    end
+end
+
+function ids = nodeIDs(nodes)
+    if isempty(nodes)
+        ids = strings(1,0);
+        return
+    end
+    ids = reshape(string({nodes.NodeData}),1,[]);
+end
+
+function deleteTreeNodes(nodes)
+    if isempty(nodes), return, end
+    for k = 1:numel(nodes)
+        menu = nodes(k).ContextMenu;
+        if ~isempty(menu) && isvalid(menu), delete(menu); end
+    end
+    delete(nodes);
+end
+
+function syncTreeSelection(tree,activeID,selectedIDs)
+    nodes = tree.Children;
+    ids = nodeIDs(nodes);
+    active = find(ismember(ids,activeID),1);
+    if isempty(active)
+        if ~isempty(tree.SelectedNodes), tree.SelectedNodes = []; end
+    elseif ~isequal(tree.SelectedNodes,nodes(active))
+        tree.SelectedNodes = nodes(active);
+    end
+
+    checked = ismember(ids,selectedIDs);
+    if ~any(checked)
+        if ~isempty(tree.CheckedNodes), tree.CheckedNodes = []; end
+    else
+        checkedNodes = nodes(checked);
+        if ~isequal(tree.CheckedNodes(:),checkedNodes(:))
+            tree.CheckedNodes = checkedNodes(:)';
+        end
+    end
+end
+
+function reportClassifierProgress(sink,message,value,index,count)
+    if isempty(value)
+        desmostorm.runtime.updateProgress(sink,message);
+    else
+        desmostorm.runtime.updateProgress(sink,message,(index-1+value)/count);
+    end
 end

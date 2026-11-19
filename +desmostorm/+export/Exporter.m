@@ -20,7 +20,8 @@ classdef Exporter
             arguments
                 project (1,1) desmostorm.model.STORMProject
                 config  (1,1) desmostorm.config.Settings
-                opts.ProgressDialog = matlab.ui.dialog.ProgressDialog.empty()
+                opts.ProgressDialog = []
+                opts.ProgressFactory = []
             end
 
             result = false;
@@ -32,9 +33,9 @@ classdef Exporter
 
             if isequal(file,0), return; end
 
-            setProgressMessage(opts.ProgressDialog,'Writing region measurements...');
+            [progress,cleanupProgress] = startExportProgress(opts,'Writing region measurements...'); %#ok<NASGU>
             desmostorm.export.regionMeasurementsXlsx(project, fullfile(path, file), ...
-                "ProgressDialog",opts.ProgressDialog);
+                "ProgressDialog",progress);
             result = true;
         end
 
@@ -42,39 +43,42 @@ classdef Exporter
             arguments
                 project (1,1) desmostorm.model.STORMProject
                 config  (1,1) desmostorm.config.Settings
-                opts.ProgressDialog = matlab.ui.dialog.ProgressDialog.empty()
+                opts.ProgressDialog = []
+                opts.ProgressFactory = []
             end
 
             result = false;
 
-            maxChannel = max(1, project.MaxSizeC);
-            channelChoices = [string(1:maxChannel), "all"];
-            params = matlabx.app.ParamsDialog.prompt( ...
-                'Summary PDF export options', ...
-                {'ImageChannel','Image channel','choice',"1",cellstr(channelChoices)}, ...
-                {'ScalingMode','Image scaling','choice',"data",{"data","auto","user"}}, ...
-                {'ColorSource','Color source','choice',config.PeaksPlot.ColorSource,{"channel","manual"}}, ...
-                {'Color','Plot color','color',config.PeaksPlot.Color}, ...
-                {'AnnotationColorMode','Annotation color mode','choice',config.PeaksPlot.AnnotationColorMode,{"auto","manual"}}, ...
-                {'AnnotationColor','Annotation color','color',config.PeaksPlot.AnnotationColor}, ...
-                {'BackgroundColor','Background color','color',config.PeaksPlot.BackgroundColor}, ...
-                {'ForegroundColor','Foreground color','color',config.PeaksPlot.ForegroundColor}, ...
-                {'RawLineWidth','Raw line width','double',config.PeaksPlot.RawLineWidth,@(x) x>0,'Line width must be positive'}, ...
-                {'SmoothLineWidth','Smooth line width','double',config.PeaksPlot.SmoothLineWidth,@(x) x>0,'Line width must be positive'}, ...
-                {'DistanceAnnotations','Distance annotations','choice',config.PeaksPlot.DistanceAnnotations,{"on","off"}}, ...
-                {'DistanceAnnotationsMode','Distance mode','choice',config.PeaksPlot.DistanceAnnotationsMode,{"lanes","data"}}, ...
-                {'WidthAnnotations','Width annotations','choice',config.PeaksPlot.WidthAnnotations,{"on","off"}}, ...
-                {'ROIFaceAlpha','ROI opacity','double',config.ROI.ROIFaceAlpha,@(x) x>=0 && x<=1,'ROI opacity must be between 0 and 1'}, ...
-                {'RotationAngleVisible','Angle label','choice',config.ROI.RotationAngleVisible,{"on","off"}}, ...
-                {'PageWidthInches','Page width (inches)','double',11,@(x) x>0,'PageWidthInches must be a positive number'}, ...
-                {'FontSizePoints','Font size (points)','double',8,@(x) x>0,'FontSizePoints must be a positive integer'}...
-                );
+            if isempty(project.Channels), return, end
+            channelChoices = ["All channels", projectChannelChoices(project)];
+            params = desmostorm.export.ExportDialog.prompt("Export Summary PDF", {
+                "Export Options", {
+                    choiceField("ImageChannel","Channel",channelChoices,channelChoices(1))
+                    numberField("PageWidthInches","Page width (inches)",11)
+                    numberField("FontSizePoints","Summary text size (points)",8)
+                    sizingField("StyleSizing","Style sizing")
+                }
+                "Plot Options", plotFields(config.PeaksPlot)
+                "Image Options", {
+                    numberField("ImageResolution","Image resolution (DPI)",600)
+                    scalingField()
+                }
+            });
             desmostorm.app.focusMainFigure();
 
             if isempty(params), return; end
+            selected = find(channelChoices == string(params.ImageChannel),1);
+            if selected == 1
+                params.ImageChannel = "all";
+            else
+                params.ImageChannel = string(selected - 1);
+            end
+            params = inheritPlotStyle(params,config.PeaksPlot);
+            params = inheritROIVisibility(params,config.ROI);
             params.WidthAnnotationsMode = "normal";
+            params.PlotFontSize = params.FontSize;
+            params = rmfield(params,"FontSize");
             params.ScalingMode = string(params.ScalingMode);
-            params.RotationAngleVisible = matlab.lang.OnOffSwitchState(params.RotationAngleVisible);
 
             defaultName = fullfile(config.IO.DefaultFolder, [char(project.Name),'_summary.pdf']);
             [file, path] = uiputfile('*.pdf', ...
@@ -83,12 +87,12 @@ classdef Exporter
 
             if isequal(file,0), return; end
 
-            setProgressMessage(opts.ProgressDialog,'Exporting summary PDF...');
+            [progress,cleanupProgress] = startExportProgress(opts,'Exporting summary PDF...'); %#ok<NASGU>
 
             paramsCell = matlabx.struct.toKeyValueCell(params);
 
             desmostorm.export.summaryPDF(project, fullfile(path,file), config, ...
-                "ProgressDialog", opts.ProgressDialog, paramsCell{:});
+                "ProgressDialog", progress, paramsCell{:});
 
             result = true;
         end
@@ -97,19 +101,23 @@ classdef Exporter
             arguments
                 project (1,1) desmostorm.model.STORMProject
                 config  (1,1) desmostorm.config.Settings
-                opts.ProgressDialog = matlab.ui.dialog.ProgressDialog.empty()
+                opts.CurrentChannel (1,1) double {mustBeInteger,mustBePositive} = 1
+                opts.ProgressDialog = []
+                opts.ProgressFactory = []
             end
 
             result = false;
 
-            maxChannel = max(1,project.MaxSizeC);
-            channelChoices = cellstr(string(1:maxChannel));
-            options = matlabx.app.ParamsDialog.prompt( ...
-                'Region image export options', ...
-                {'Channel','Channel','choice','1',channelChoices}, ...
-                {'OutputFormat','Output format','choice',"grayscale TIFF",{"grayscale TIFF","RGB PNG"}}, ...
-                {'ScalingMode','Scaling mode','choice','data',{'data','auto','user'}}, ...
-                {'TiledSummary','Tiled summary','choice',"off",{"on","off"}});
+            if isempty(project.Channels), return, end
+            channelChoices = projectChannelChoices(project);
+            options = desmostorm.export.ExportDialog.prompt("Export Region Images", {
+                "Export Options", {
+                    channelField(project,opts.CurrentChannel,channelChoices)
+                    choiceField("OutputFormat","Format",["grayscale TIFF","RGB PNG"],"grayscale TIFF")
+                    toggleField("TiledSummary","Tiled summary",false)
+                }
+                "Image Options", {scalingField()}
+            });
             desmostorm.app.focusMainFigure();
 
             if isempty(options), return; end
@@ -119,14 +127,15 @@ classdef Exporter
 
             if ~isfolder(folderName), return; end
 
-            setProgressMessage(opts.ProgressDialog,'Writing region images...');
+            [progress,cleanupProgress] = startExportProgress(opts,'Writing region images...'); %#ok<NASGU>
             desmostorm.export.regionImages(project, folderName, ...
-                "Channel",str2double(string(options.Channel)), ...
+                "Channel",find(channelChoices == string(options.Channel),1), ...
                 "ScalingMode",string(options.ScalingMode), ...
+                "DisplaySettings",config.Display, ...
                 "OutputFormat",string(options.OutputFormat), ...
                 "ChannelColorMode",config.Display.ChannelColorMode, ...
-                "TiledSummary",matlab.lang.OnOffSwitchState(options.TiledSummary), ...
-                "ProgressDialog",opts.ProgressDialog);
+                "TiledSummary",options.TiledSummary, ...
+                "ProgressDialog",progress);
             result = true;
         end
 
@@ -134,47 +143,54 @@ classdef Exporter
             arguments
                 project (1,1) desmostorm.model.STORMProject
                 config  (1,1) desmostorm.config.Settings
-                opts.ProgressDialog = matlab.ui.dialog.ProgressDialog.empty()
+                opts.CurrentChannel (1,1) double {mustBeInteger,mustBePositive} = 1
+                opts.ProgressDialog = []
+                opts.ProgressFactory = []
             end
 
             result = false;
 
-            maxChannel = max(1,project.MaxSizeC);
-            channelChoices = cellstr(string(1:maxChannel));
-            options = matlabx.app.ParamsDialog.prompt( ...
-                'Image with region box overlay export options', ...
-                {'Scope','Images','choice',"active",{"active","all"}}, ...
-                {'Channel','Channel','choice',"1",channelChoices}, ...
-                {'ScalingMode','Scaling mode','choice',"data",{"data","auto","user"}}, ...
-                {'ColorMode','Box colors','choice',"label",{"label","manual"}}, ...
-                {'Color','Manual color','color',config.Box.EdgeColor}, ...
-                {'RegionNamesVisible','Region names','choice',matlab.lang.OnOffSwitchState(config.Box.ShowTitle),{"on","off"}}, ...
-                {'BoxLineWidth','Box line width','double',1,@(x) x>0,'Line width must be positive'}, ...
-                {'BoxFaceAlpha','Box opacity','double',0,@(x) x>=0 && x<=1,'Box opacity must be between 0 and 1'}, ...
-                {'Units','Units','choice',"inches",{"inches","points","pixels"}}, ...
-                {'Size','Long side size','double',7,@(x) x>0,'Size must be positive'}, ...
-                {'FontSize','Font size','double',10,@(x) x>0 && x==round(x),'FontSize must be a positive integer'}, ...
-                {'Resolution','Resolution (dpi)','double',600,@(x) x >= 150 && x <= 600,'Resolution must be between 150 and 600'});
+            if isempty(project.Channels), return, end
+            channelChoices = projectChannelChoices(project);
+            options = desmostorm.export.ExportDialog.prompt("Export Images with Region Boxes", {
+                "Export Options", [
+                    {
+                        choiceField("Scope","Images",["active","all"],"active")
+                        channelField(project,opts.CurrentChannel,channelChoices)
+                    }
+                    imageFileFields(7)
+                ]
+                "Image Options", {scalingField()}
+                "Region Boxes", {
+                    colorModeField("ColorMode","Box colors",["label","manual"],"label","Color",config.Box.EdgeColor)
+                    toggleField("RegionNamesVisible","Show region names",config.Box.ShowTitle)
+                    opacityField("BoxFaceAlpha","Box opacity",0)
+                    numberField("FontSize","Font size",10)
+                }
+            });
             desmostorm.app.focusMainFigure();
 
             if isempty(options), return; end
 
             options.Scope = string(options.Scope);
-            options.Channel = str2double(string(options.Channel));
+            options.Channel = find(channelChoices == string(options.Channel),1);
             options.ScalingMode = string(options.ScalingMode);
             options.ColorMode = string(options.ColorMode);
-            options.RegionNamesVisible = matlab.lang.OnOffSwitchState(options.RegionNamesVisible);
             options.Colormap = project.getChannelColormap(options.Channel);
+            if config.Display.ChannelColorMode == "colors"
+                options.Colormap = linspace(0,1,256).' .* project.getChannelRGB(options.Channel);
+            end
 
             folderName = uigetdir(config.IO.DefaultFolder, 'Export images with region box overlays');
             desmostorm.app.focusMainFigure();
 
             if ~isfolder(folderName), return; end
 
-            setProgressMessage(opts.ProgressDialog,'Writing image region box overlays...');
+            [progress,cleanupProgress] = startExportProgress(opts,'Writing image region box overlays...'); %#ok<NASGU>
             optionsCell = matlabx.struct.toKeyValueCell(options);
             summary = desmostorm.export.imagesWithRegionBoxes(project,folderName, ...
-                "ProgressDialog",opts.ProgressDialog, ...
+                "ProgressDialog",progress, ...
+                "DisplaySettings",config.Display, ...
                 optionsCell{:});
             desmostorm.Log.INFO(sprintf( ...
                 "Image + region box overlay export complete: %d exported, %d skipped.", ...
@@ -188,7 +204,8 @@ classdef Exporter
                 project (1,1) desmostorm.model.STORMProject
                 config  (1,1) desmostorm.config.Settings
                 opts.CurrentChannel (1,1) double {mustBeInteger,mustBePositive} = 1
-                opts.ProgressDialog = matlab.ui.dialog.ProgressDialog.empty()
+                opts.ProgressDialog = []
+                opts.ProgressFactory = []
             end
 
             % export success indicator, false unless end of function is reached
@@ -202,33 +219,20 @@ classdef Exporter
                 error('desmostorm:export:Exporter:NoActiveRegion','No active region')
             end
 
-            nChannels = max(numel(region.LinescanResults),1);
-            channelChoices = ["current","all",string(1:nChannels)];
-            defaultChannels = "all";
-            if config.PeaksPlot.ShownPlots == "current"
-                defaultChannels = "current";
-            end
-
-            % --- get export/plot options ---
-            % get options using ParamsDialog
-            options = matlabx.app.ParamsDialog.prompt( ...
-                'Linescan plot export options', ...
-                {'TitleVisible','Title','choice',"off",{"on","off"}}, ...
-                {'Channels','Channels','choice',defaultChannels,cellstr(channelChoices)}, ...
-                {'ColorSource','Color source','choice',config.PeaksPlot.ColorSource,{"channel","manual"}}, ...
-                {'Color','Plot color','color',config.PeaksPlot.Color}, ...
-                {'AnnotationColorMode','Annotation color mode','choice',config.PeaksPlot.AnnotationColorMode,{"auto","manual"}}, ...
-                {'AnnotationColor','Annotation color','color',config.PeaksPlot.AnnotationColor}, ...
-                {'BackgroundColor','Background color','color',config.PeaksPlot.BackgroundColor}, ...
-                {'ForegroundColor','Foreground color','color',config.PeaksPlot.ForegroundColor}, ...
-                {'RawLineWidth','Raw line width','double',config.PeaksPlot.RawLineWidth,@(x) x>0,'Line width must be positive'}, ...
-                {'SmoothLineWidth','Smooth line width','double',config.PeaksPlot.SmoothLineWidth,@(x) x>0,'Line width must be positive'}, ...
-                {'DistanceAnnotations','Distance annotations','choice',config.PeaksPlot.DistanceAnnotations,{"on","off"}}, ...
-                {'DistanceAnnotationsMode','Distance mode','choice',config.PeaksPlot.DistanceAnnotationsMode,{"lanes","data"}}, ...
-                {'WidthAnnotations','Width annotations','choice',config.PeaksPlot.WidthAnnotations,{"on","off"}}, ...
-                {'Units','Units','choice',"inches",{"inches","points","pixels"}}, ...
-                {'Height','Height','double',3,@(x) isempty(x) || x>0,'Height must be positive'}, ...
-                {'Width','Width','double',6.5,@(x) isempty(x) || x>0,'Width must be positive'});
+            names = region.Parent.channelNames();
+            channelChoices = ["current","all","C" + (1:numel(names)) + " — " + names];
+            options = desmostorm.export.ExportDialog.prompt("Export Linescan Plot", {
+                "Export Options", {
+                    choiceField("Channels","Channels",channelChoices,"all")
+                    choiceField("Format","Format",["SVG","PDF","EPS"],"SVG")
+                    choiceField("Units","Units",["inches","centimeters","pixels","points"],"inches")
+                    numberField("Width","Width",6.5)
+                    numberField("Height","Height",3)
+                    toggleField("PreserveAspectRatio","Preserve aspect ratio",false)
+                    sizingField("StyleSizing","Style sizing")
+                }
+                "Plot Options", plotFields(config.PeaksPlot)
+            });
 
             if isempty(options), return; end % return on cancel
 
@@ -239,23 +243,30 @@ classdef Exporter
                 options.YLabel = "Intensity";
             end
             options.XLabel = sprintf("Distance (%s)",region.PixelSize.Unit);
+            selected = find(channelChoices == string(options.Channels),1);
+            if selected > 2
+                options.Channels = selected - 2;
+            end
             options.CurrentChannel = opts.CurrentChannel;
+            options = inheritPlotStyle(options,config.PeaksPlot);
             options.WidthAnnotationsMode = "normal";
 
             % --- get filename ---
             name = region.getBaseExportName() + "_linescan-plot";
-            defaultName = fullfile(config.IO.DefaultFolder, name);
-            [file, path] = uiputfile({'*.svg';'*.eps';'*.pdf'}, 'Export linescan plot', defaultName);
+            extension = "." + lower(options.Format);
+            options = rmfield(options,"Format");
+            defaultName = fullfile(config.IO.DefaultFolder,name + extension);
+            [file,path] = uiputfile(char("*"+extension),'Export linescan plot',defaultName);
             desmostorm.app.focusMainFigure();
-
-            if isequal(file,0), return; end % return on cancel
-            filename = fullfile(path,file);            
+            if isequal(file,0), return; end
+            [~,stem] = fileparts(file);
+            filename = fullfile(path,string(stem) + extension);
 
             % --- export ---
-            setProgressMessage(opts.ProgressDialog,'Writing linescan plot...');
+            [progress,cleanupProgress] = startExportProgress(opts,'Writing linescan plot...'); %#ok<NASGU>
             optionsCell = matlabx.struct.toKeyValueCell(options);
             desmostorm.export.regionLinescanPlot(region,filename, ...
-                "ProgressDialog",opts.ProgressDialog, ...
+                "ProgressDialog",progress, ...
                 optionsCell{:});
 
             result = true;
@@ -266,7 +277,9 @@ classdef Exporter
             arguments
                 project (1,1) desmostorm.model.STORMProject
                 config  (1,1) desmostorm.config.Settings
-                opts.ProgressDialog = matlab.ui.dialog.ProgressDialog.empty()
+                opts.CurrentChannel (1,1) double {mustBeInteger,mustBePositive} = 1
+                opts.ProgressDialog = []
+                opts.ProgressFactory = []
             end
 
             % export success indicator, false unless end of function is reached
@@ -274,30 +287,32 @@ classdef Exporter
 
             % --- get export/plot options ---
             % get options using ParamsDialog
-            maxChannel = max(1,project.MaxSizeC);
-            channelChoices = cellstr(string(1:maxChannel));
-            options = matlabx.app.ParamsDialog.prompt( ...
-                'Region image with ROI overlay export options', ...
-                {'Scope','Regions','choice',"active",{"active","all"}}, ...
-                {'Channel','Channel','choice',"1",channelChoices}, ...
-                {'ScalingMode','Scaling mode','choice',"data",{"data","auto","user"}}, ...
-                {'ROIFaceAlpha','ROI opacity','double',config.ROI.ROIFaceAlpha,@(x) x>=0 && x<=1,'ROI opacity must be between 0 and 1'}, ...
-                {'RotationAngleVisible','Angle label','choice',config.ROI.RotationAngleVisible,{"on","off"}}, ...
-                {'TiledSummary','Tiled summary','choice',"off",{"on","off"}}, ...
-                {'Units','Units','choice',"inches",{"inches","points","pixels"}}, ...
-                {'Size','Size','double',3,@(x) x>0,'Size must be positive'}, ...
-                {'FontSize','Font size','double',config.ROI.FontSize,@(x) x>0 && x==round(x),'FontSize must be a positive integer'}, ...
-                {'Resolution','Resolution (dpi)','double',600,@(x) x >= 150 && x <= 600,'Resolution must be between 150 and 600'});
+            if isempty(project.Channels), return, end
+            channelChoices = projectChannelChoices(project);
+            options = desmostorm.export.ExportDialog.prompt("Export Region Images with ROI", {
+                "Export Options", [
+                    {
+                        choiceField("Scope","Regions",["active","all"],"active")
+                        channelField(project,opts.CurrentChannel,channelChoices)
+                    }
+                    imageFileFields(3)
+                    {toggleField("TiledSummary","Tiled summary",false)}
+                ]
+                "Image Options", {scalingField()}
+                "Linescan ROI", {numberField("FontSize","Font size (points)",config.ROI.FontSize)}
+            });
 
             if isempty(options), return; end % return on cancel
 
             % get extra options (without dialog)
-            options.Channel = str2double(string(options.Channel));
+            options.Channel = find(channelChoices == string(options.Channel),1);
             options.Scope = string(options.Scope);
             options.ScalingMode = string(options.ScalingMode);
-            options.RotationAngleVisible = matlab.lang.OnOffSwitchState(options.RotationAngleVisible);
-            options.TiledSummary = matlab.lang.OnOffSwitchState(options.TiledSummary);
             options.Colormap = project.getChannelColormap(options.Channel);
+            if config.Display.ChannelColorMode == "colors"
+                options.Colormap = linspace(0,1,256).' .* project.getChannelRGB(options.Channel);
+            end
+            options = inheritROIVisibility(options,config.ROI);
             options.ROIColor = config.ROI.ROIColor;
             options.ROILineWidth = config.ROI.ROILineWidth;
             options.ROIMarkerSize = config.ROI.ROIMarkerSize;
@@ -323,10 +338,11 @@ classdef Exporter
 
             if ~isfolder(folderName), return; end
 
-            setProgressMessage(opts.ProgressDialog,'Writing region images...');
+            [progress,cleanupProgress] = startExportProgress(opts,'Writing region images...'); %#ok<NASGU>
             optionsCell = matlabx.struct.toKeyValueCell(rmfield(options,"Scope"));
             summary = desmostorm.export.regionSubimagesWithROI(exportSource,folderName, ...
-                "ProgressDialog",opts.ProgressDialog, ...
+                "ProgressDialog",progress, ...
+                "DisplaySettings",config.Display, ...
                 optionsCell{:});
             desmostorm.Log.INFO(sprintf( ...
                 "Region image + ROI overlay export complete: %d exported, %d skipped.", ...
@@ -337,9 +353,122 @@ classdef Exporter
     end
 end
 
-function setProgressMessage(h,msg)
-    if ~isempty(h) && isvalid(h)
-        h.Message = msg;
-        drawnow limitrate
+function [progress,cleanup] = startExportProgress(opts,message)
+    if isempty(opts.ProgressFactory)
+        progress = opts.ProgressDialog;
+        cleanup = [];
+        desmostorm.runtime.updateProgress(progress,message);
+    else
+        [progress,cleanup] = opts.ProgressFactory(message);
     end
+end
+
+function choices = projectChannelChoices(project)
+    names = string({project.Channels.Name});
+    choices = "C" + (1:numel(names)) + " — " + names;
+end
+
+function fields = plotFields(plot)
+    fields = {
+        numberField("AnnotationFontSize","Annotation font size (points)",plot.AnnotationFontSize)
+        toggleField("DistanceAnnotations","Show distance labels",logical(plot.DistanceAnnotations))
+        toggleField("WidthAnnotations","Show width labels",logical(plot.WidthAnnotations))
+        toggleField("TitleVisible","Show title",logical(plot.TitleVisible))
+        numberField("FontSize","Axes font size (points)",plot.FontSize)
+        numberField("TitleFontSizeMultiplier","Title font size multiplier",1)
+        numberField("LabelFontSizeMultiplier","Label font size multiplier",1)
+    };
+end
+
+function options = inheritPlotStyle(options,plot)
+    options.ColorSource = plot.ColorSource;
+    options.Color = plot.Color;
+    options.AnnotationColorMode = plot.AnnotationColorMode;
+    options.AnnotationColor = plot.AnnotationColor;
+    options.BackgroundColor = plot.BackgroundColor;
+    options.ForegroundColor = plot.ForegroundColor;
+    options.DistanceAnnotationsMode = plot.DistanceAnnotationsMode;
+    options.RawLineWidth = plot.RawLineWidth;
+    options.SmoothLineWidth = plot.SmoothLineWidth;
+    options.AnnotationLineWidth = plot.AnnotationLineWidth;
+end
+
+function options = inheritROIVisibility(options,roi)
+    options.ROIFaceAlpha = roi.ROIFaceAlpha;
+    options.RotationAngleVisible = roi.RotationAngleVisible;
+end
+
+function field = channelField(project,currentChannel,choices)
+    field = choiceField("Channel","Channel",choices,activeImageChannel(project,currentChannel,choices));
+end
+
+function choice = activeImageChannel(project,currentChannel,choices)
+    index = 1;
+    img = project.ActiveImage;
+    if ~isempty(img) && currentChannel <= numel(img.ChannelIDs)
+        match = find(string({project.Channels.ID}) == img.ChannelIDs(currentChannel),1);
+        if ~isempty(match), index = match; end
+    end
+    choice = choices(index);
+end
+
+function field = scalingField()
+    field = choiceField("ScalingMode","Display limits", ...
+        ["Auto","Current limits","Data range"],"Auto");
+    field.OutputValues = ["auto","user","data"];
+end
+
+function fields = imageFileFields(sizeValue)
+    fields = [
+        {choiceField("Format","Format",["PNG","TIFF","JPEG"],"PNG")}
+        dimensionsFields(sizeValue,sizeValue,600)
+        {
+            toggleField("PreserveAspectRatio","Preserve aspect ratio",true)
+            sizingField("OverlaySizing","Overlay sizing")
+        }
+    ];
+end
+
+function fields = dimensionsFields(width,height,dpi)
+    fields = {
+        choiceField("Units","Units",["inches","centimeters","pixels","points"],"inches")
+        numberField("Width","Width",width)
+        numberField("Height","Height",height)
+        numberField("Resolution","Resolution (DPI)",dpi)
+    };
+end
+
+function field = sizingField(name,label)
+    field = choiceField(name,label,["Preserve physical sizes","Scale with output"], ...
+        "Preserve physical sizes");
+    field.OutputValues = ["physical","scale"];
+end
+
+function field = choiceField(name,label,items,value)
+    field = struct("Name",name,"Label",label,"Type","choice", ...
+        "Items",items,"Value",value,"OutputValues",items);
+end
+
+function field = numberField(name,label,value)
+    field = struct("Name",name,"Label",label,"Type","number","Value",value, ...
+        "Limits",[0 Inf],"LowerLimitInclusive","off");
+end
+
+function field = opacityField(name,label,value)
+    field = struct("Name",name,"Label",label,"Type","number","Value",value, ...
+        "Limits",[0 1],"LowerLimitInclusive","on");
+end
+
+function field = toggleField(name,label,value)
+    field = struct("Name",name,"Label",label,"Type","toggle","Value",logical(value));
+end
+
+function field = colorField(name,label,value)
+    field = struct("Name",name,"Label",label,"Type","color","Value",value);
+end
+
+
+function field = colorModeField(name,label,modes,value,colorName,color)
+    field = choiceField(name,label,modes,value);
+    field.Companion = colorField(colorName,label,color);
 end

@@ -51,7 +51,7 @@ row.ROIWidth_phys = ps.px2phys(ROI.Width);
 row.ROIHeight_phys = ps.px2phys(ROI.Height);
 row.ROIRotationAngle = round(ROI.RotationAngle,2);
 
-nChannels = proj.MaxSizeC;
+nChannels = numel(proj.Channels);
 nResults = length(L);
 
 for i = 1:nChannels
@@ -61,19 +61,20 @@ for i = 1:nChannels
     rightPeakLocation_px = NaN;
     peakDistance_px = NaN;
 
-    if i <= nResults
-        if L(i).hasLeftPeak
-            leftPeakFWHM_px = round(L(i).LeftPeakWidth,2);
-            leftPeakLocation_px = round(L(i).LeftPeakLocation,2);
+    c = region.Parent.sourceChannelIndex(i);
+    if ~isempty(c) && c <= nResults
+        if L(c).hasLeftPeak
+            leftPeakFWHM_px = round(L(c).LeftPeakWidth,2);
+            leftPeakLocation_px = round(L(c).LeftPeakLocation,2);
         end
 
-        if L(i).hasRightPeak
-            rightPeakFWHM_px = round(L(i).RightPeakWidth,2);
-            rightPeakLocation_px = round(L(i).RightPeakLocation,2);
+        if L(c).hasRightPeak
+            rightPeakFWHM_px = round(L(c).RightPeakWidth,2);
+            rightPeakLocation_px = round(L(c).RightPeakLocation,2);
         end
 
-        if L(i).hasCentralPeakPair
-            peakDistance_px = round(L(i).CentralPeakPairDistance,2);
+        if L(c).hasCentralPeakPair
+            peakDistance_px = round(L(c).CentralPeakPairDistance,2);
         end
     end
 

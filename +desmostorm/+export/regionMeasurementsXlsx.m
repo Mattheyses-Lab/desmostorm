@@ -23,7 +23,7 @@ arguments
     opts.ProgressDialog = matlab.ui.dialog.ProgressDialog.empty()
 end
 
-setProgressMessage(opts.ProgressDialog,'Building region measurement table...');
+desmostorm.runtime.updateProgress(opts.ProgressDialog,'Building region measurement table...');
 T = desmostorm.export.regionTable(project);
 
 if isempty(T)
@@ -35,16 +35,17 @@ desc = cellfun(@desmostorm.utils.formatColumnName, ...
     T.Properties.VariableNames, 'UniformOutput', false);
 T.Properties.VariableNames = desc;
 
-setProgressMessage(opts.ProgressDialog,'Writing region measurement file...');
+desmostorm.runtime.updateProgress(opts.ProgressDialog,'Writing region measurement file...');
 writetable(T, filename, ...
     'WriteMode', 'replacefile', ...
     'WriteVariableNames', true);
 
-end
+% Keep the existing measurement headers and identify their project channels.
+channels = project.Channels;
+indices = "C" + (1:numel(channels)).';
+channelNames = reshape(string({channels.Name}),[],1);
+channelIDs = reshape(string({channels.ID}),[],1);
+writetable(table(indices,channelNames,channelIDs, ...
+    'VariableNames',{'Channel','Name','ID'}),filename,'Sheet','Channels');
 
-function setProgressMessage(h,msg)
-    if ~isempty(h) && isvalid(h)
-        h.Message = msg;
-        drawnow limitrate
-    end
 end

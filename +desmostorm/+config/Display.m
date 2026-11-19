@@ -22,7 +22,9 @@ classdef Display < handle
         ColormapName_     string = "turbo"    % selection name
         ColormapCategory_ string = "MATLAB"   % selection category
         ChannelColorMode_ string = "colors"     % "colors" or "luts"
-        AutoScaleDisplayIntensity_ logical = true     % whether to automatically set display limits
+        DefaultKeepAuto_ (1,1) logical = true
+        ChannelPolicies_ struct = struct('ID',{},'KeepAuto',{},'Lock',{}, ...
+            'LockedRange',{},'Method',{})
     end
 
     properties (Dependent)
@@ -30,7 +32,6 @@ classdef Display < handle
         ColormapName
         ColormapCategory
         ChannelColorMode
-        AutoScaleDisplayIntensity
     end
 
     events
@@ -50,7 +51,6 @@ classdef Display < handle
         function s = get.ColormapCategory(this), s = this.ColormapCategory_; end
         function s = get.ChannelColorMode(this), s = this.ChannelColorMode_; end
 
-        function s = get.AutoScaleDisplayIntensity(this),   s = this.AutoScaleDisplayIntensity_; end
 
 
         % ---------- Setters ----------
@@ -75,8 +75,20 @@ classdef Display < handle
             notify(this,'Changed',ev);
         end
 
-        function set.AutoScaleDisplayIntensity(this, v)
-            this.setValue("AutoScaleDisplayIntensity",v);
+        function policy = channelPolicy(this,id)
+            index = find(string({this.ChannelPolicies_.ID}) == id,1);
+            if isempty(index)
+                policy = struct('ID',id,'KeepAuto',this.DefaultKeepAuto_, ...
+                    'Lock',false,'LockedRange',[],'Method',"Light contrast");
+            else
+                policy = this.ChannelPolicies_(index);
+            end
+        end
+
+        function setChannelPolicy(this,policy)
+            index = find(string({this.ChannelPolicies_.ID}) == policy.ID,1);
+            if isempty(index), index = numel(this.ChannelPolicies_)+1; end
+            this.ChannelPolicies_(index) = policy;
         end
 
         function set.ChannelColorMode(this, v)
@@ -91,7 +103,8 @@ classdef Display < handle
                 'ColormapName',     this.ColormapName, ...
                 'ColormapCategory', this.ColormapCategory, ...
                 'ChannelColorMode', this.ChannelColorMode, ...
-                'AutoScaleDisplayIntensity', this.AutoScaleDisplayIntensity);
+                'DefaultKeepAuto',this.DefaultKeepAuto_, ...
+                'ChannelPolicies',this.ChannelPolicies_);
         end
 
         function fromStruct(this,S)
@@ -99,8 +112,16 @@ classdef Display < handle
 
             for i = 1:numel(f)
                 prop = [f{i}, '_'];  % append underscore
-                if isprop(this, prop) && isfield(S,f{i})
+                if strcmp(f{i},'ChannelPolicies') && isfield(S,f{i}) && isempty(S.(f{i}))
+                    this.ChannelPolicies_ = this.ChannelPolicies_([]);
+                elseif isprop(this, prop) && isfield(S,f{i})
                     this.(prop) = S.(f{i});
+                    if strcmp(f{i},'ChannelPolicies')
+                        for k = 1:numel(this.ChannelPolicies_)
+                            this.ChannelPolicies_(k).LockedRange = ...
+                                reshape(this.ChannelPolicies_(k).LockedRange,1,[]);
+                        end
+                    end
                 end
             end
         end

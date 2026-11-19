@@ -20,7 +20,7 @@ classdef ROI < handle
     properties (Access=private)
         ROIColor_ (1,3) double {mustBeInRange(ROIColor_,0,1)} = [1 1 1]
         ROILineWidth_ (1,1) double {mustBePositive} = 1
-        ROIFaceAlpha_ (1,1) double {mustBeInRange(ROIFaceAlpha_,0,1)} = 0.1
+        ROIFaceAlpha_ (1,1) double {mustBeInRange(ROIFaceAlpha_,0,1)} = 0
         ROIMarkerSize_ (1,1) double {mustBePositive} = 8
         AnnotationLineColor_ (1,3) double {mustBeInRange(AnnotationLineColor_,0,1)} = [1 1 1]
         AnnotationLineWidth_ (1,1) double {mustBePositive} = 0.5

@@ -24,20 +24,30 @@ arguments
     opts.ProgressDialog = matlab.ui.dialog.ProgressDialog.empty()
     opts.ImageChannel (1,1) string = "1"
     opts.ScalingMode (1,1) string {mustBeMember(opts.ScalingMode,["data","auto","user"])} = "data"
-    opts.ColorSource (1,1) string {mustBeMember(opts.ColorSource,["channel","manual"])} = "channel"
+    opts.ColorSource (1,1) string {mustBeMember(opts.ColorSource,["channel","manual"])} = "manual"
     opts.Color (1,3) double = [0 0 0]
     opts.AnnotationColorMode (1,1) string {mustBeMember(opts.AnnotationColorMode,["auto","manual"])} = "auto"
     opts.AnnotationColor (1,3) double = [0 0 0]
     opts.BackgroundColor (1,3) double = [1 1 1]
     opts.ForegroundColor (1,3) double = [0 0 0]
     opts.DistanceAnnotations (1,1) matlab.lang.OnOffSwitchState = "on"
-    opts.DistanceAnnotationsMode (1,1) string {mustBeMember(opts.DistanceAnnotationsMode,["data","lanes"])} = "lanes"
+    opts.DistanceAnnotationsMode (1,1) string {mustBeMember(opts.DistanceAnnotationsMode,["data","lanes"])} = "data"
     opts.WidthAnnotations (1,1) matlab.lang.OnOffSwitchState = "on"
     opts.WidthAnnotationsMode (1,1) string {mustBeMember(opts.WidthAnnotationsMode,["normal","hover"])} = "normal"
-    opts.ROIFaceAlpha (1,1) double = 0.1
+    opts.ROIFaceAlpha (1,1) double = 0
     opts.RotationAngleVisible (1,1) matlab.lang.OnOffSwitchState = "on"
-    opts.RawLineWidth (1,1) double = 1
+    opts.RawLineWidth (1,1) double = 0.5
     opts.SmoothLineWidth (1,1) double = 2
+    opts.AnnotationLineWidth (1,1) double {mustBePositive,mustBeFinite} = 0.5
+    opts.AnnotationFontSize (1,1) double {mustBePositive,mustBeFinite} = 10
+    opts.TitleVisible (1,1) matlab.lang.OnOffSwitchState = "off"
+    opts.TitleFontSizeMultiplier (1,1) double {mustBePositive,mustBeFinite} = 1
+    opts.LabelFontSizeMultiplier (1,1) double {mustBePositive,mustBeFinite} = 1
+    opts.ContentType (1,1) string {mustBeMember(opts.ContentType,["vector","image"])} = "vector"
+    opts.ImageResolution (1,1) double {mustBePositive,mustBeFinite} = 600
+    opts.Resolution (1,1) double {mustBePositive,mustBeFinite} = 300
+    opts.StyleSizing (1,1) string {mustBeMember(opts.StyleSizing,["physical","scale"])} = "physical"
+    opts.PlotFontSize (1,1) double {mustBePositive,mustBeFinite} = config.PeaksPlot.FontSize
     opts.PageWidthInches (1,1) double = 11
     opts.FontSizePoints (1,1) double = 8
 end
@@ -50,31 +60,31 @@ end
     % Convert page and text settings to pixels because uifigure layout uses
     % screen units, while the export dialog exposes print-oriented units.
     fontSizePx = matlabx.UICal.pt2px(opts.FontSizePoints);
-    pageWidthPx = opts.PageWidthInches * matlabx.UICal.pixelsPerInch();
+    layoutWidth = opts.PageWidthInches;
+    if opts.StyleSizing == "scale", layoutWidth = 11; end
+    pageWidthPx = layoutWidth * matlabx.UICal.pixelsPerInch();
 
     % Keep the page compact and predictable: the export figure is a single
     % row with linescan plot, region image, and per-channel summary text.
     padding = 5;
     spacing = 5;
 
-    % ImageAxes is hosted in a uipanel with a title bar. Include that chrome
-    % in the column height so the displayed image area stays square.
-    panelTop = matlabx.UICal.uipanelTopChromeHeightPx(fontSizePx);
-    usableWidth = pageWidthPx-padding*2-spacing*2;
-    plotWidth = usableWidth/2;
-    tableWidth = usableWidth/4;
-    
     figHeight = pageWidthPx/4;
     gridHeight = figHeight-padding*2;
 
-    imgWidth = gridHeight-panelTop;
+    % The embedded image contains only the axes view and fills a square.
+    imgWidth = gridHeight;
+    remainingWidth = pageWidthPx-2*padding-2*spacing-imgWidth;
+    if imgWidth <= 0 || remainingWidth <= 0
+        error('desmostorm:export:summaryPDF:PageTooSmall','Increase the page width.');
+    end
+    plotWidth = 2*remainingWidth/3;
+    tableWidth = remainingWidth-plotWidth;
 
     % Initialize temporary files and folder for PDF export
-    tempFiles = {};
     tempFolder = char(tempname);
     mkdir(tempFolder);
     cleanupTempFolder = onCleanup(@() removeTempFolder(tempFolder));
-    cleanupTemp = onCleanup(@() deleteTempFiles(tempFiles));
 
     % Expand the requested channel selection into concrete pages. "all"
     % becomes one page per region per available channel.
@@ -82,6 +92,14 @@ end
     if isempty(pages)
         return
     end
+
+    layoutSize = [pageWidthPx figHeight];
+    pageSize = 72 * opts.PageWidthInches * [1 figHeight/pageWidthPx];
+    plotRect = [padding padding plotWidth gridHeight];
+    imageRect = [padding+plotWidth+spacing padding imgWidth imgWidth];
+    pointScale = [pageSize./layoutSize pageSize./layoutSize];
+    pdfCommand = summaryPDFCommand(tempFolder,numel(pages),pageSize, ...
+        plotRect .* pointScale,imageRect .* pointScale);
 
     % Use first page content to initialize graphics components
     img = pages(1).Image;
@@ -107,42 +125,40 @@ end
         "Padding",repmat(padding,1,4), ...
         "BackgroundColor",[1 1 1]);
     
-    plotColor = resolvePlotColor(project, channel, opts.Color, opts.ColorSource);
-
-    p = desmostorm.widgets.PeaksPlotContainer(g, ...
-        "Data",reg.LinescanResults(channel), ...
-        "RawLineWidth",opts.RawLineWidth, ...
-        "SmoothLineWidth",opts.SmoothLineWidth, ...
-        "Color",plotColor, ...
-        "Colors",plotColor, ...
-        "ColorMode",'auto', ...
-        "AlphaMode",'auto', ...
-        "AnnotationColorMode",char(opts.AnnotationColorMode), ...
-        "AnnotationColor",opts.AnnotationColor, ...
-        "DistanceAnnotations",opts.DistanceAnnotations, ...
-        "DistanceAnnotationsMode",char(opts.DistanceAnnotationsMode), ...
-        "WidthAnnotations",opts.WidthAnnotations, ...
-        "WidthAnnotationsMode",char(opts.WidthAnnotationsMode), ...
-        "BackgroundColor",opts.BackgroundColor, ...
-        "ForegroundColor",opts.ForegroundColor, ...
-        "XLabel",sprintf("Distance (%s)",config.Analysis.PixelSizeUnit), ...
-        "YLabel","Normalized Intensity", ...
-        "FontSize",fontSizePx);
+    annotationColors = zeros(0,3);
+    if opts.AnnotationColorMode == "manual", annotationColors = opts.AnnotationColor; end
+    style = desmostorm.plot.PeaksPlotStyle( ...
+        AnnotationColors=annotationColors,RawLineWidth=opts.RawLineWidth, ...
+        SmoothLineWidth=opts.SmoothLineWidth,AnnotationLineWidth=opts.AnnotationLineWidth, ...
+        AnnotationsFontSize=opts.AnnotationFontSize, ...
+        BackgroundColor=opts.BackgroundColor,ForegroundColor=opts.ForegroundColor, ...
+        DistanceAnnotations=opts.DistanceAnnotations,DistanceAnnotationsMode=opts.DistanceAnnotationsMode, ...
+        WidthAnnotations=opts.WidthAnnotations,WidthAnnotationsMode=opts.WidthAnnotationsMode);
+    p = matlabx.ui.axes.PlotAxes(g,FontName="Arial",FontSize=opts.PlotFontSize, ...
+        FontUnits="points",TitleVisible=opts.TitleVisible,ToolbarVisible="off", ...
+        TitleFontSizeMultiplier=opts.TitleFontSizeMultiplier,LabelFontSizeMultiplier=opts.LabelFontSizeMultiplier);
     p.Layout.Row = 1;
     p.Layout.Column = 1;
-    
+    renderer = desmostorm.plot.PeaksPlotRenderer();
+    cleanupRenderer = onCleanup(@() delete(renderer));
+    renderer.update(desmostorm.plot.PeaksPlotData(),style);
+    p.mount(renderer);
+    yLabel = "Intensity";
+    if config.Analysis.Normalize, yLabel = "Normalized intensity"; end
+    ylabel(p.Axes,yLabel);
+
     ax = matlabx.ui.axes.ImageAxes(g, ...
         'ImageData',regImageData, ...
         'Name','RegionViewer', ...
         'Tools',{'DrawRectangle'}, ...
-        'Colormap',project.getChannelColormap(channel), ...
+        'Colormap',project.getChannelColormap(img.ChannelIDs(channel)), ...
         'ComponentColorMode',config.Display.ChannelColorMode, ...
         'FontSize', fontSizePx);
 
     ax.Layout.Row = 1;
     ax.Layout.Column = 2;
-    applyROISettings(ax.Tools.DrawRectangle,config.ROI,opts,fontSizePx);
-    ax.setComponentCLim(imageExportCLim(img,channel,opts.ScalingMode),channel);
+    applyROISettings(ax.Tools.DrawRectangle,config.ROI,opts);
+    ax.setComponentCLim(desmostorm.export.imageDisplayLimits(img,channel,opts.ScalingMode,config.Display),channel);
 
     ax.Tools.DrawRectangle.setROIPosition(reg.ROI);
 
@@ -175,24 +191,24 @@ end
         reg = pages(pageIdx).Region;
         channel = pages(pageIdx).Channel;
     
-        if ~isempty(opts.ProgressDialog) && isvalid(opts.ProgressDialog)
-            opts.ProgressDialog.Message = sprintf('Exporting peak plots (%i/%i): %s | %s | C%i', ...
-                pageIdx, numel(pages), img.Name, reg.Name, channel);
-        end
-    
+        desmostorm.runtime.updateProgress(opts.ProgressDialog, ...
+            sprintf('Exporting peak plots (%i/%i): %s | %s | C%i', ...
+            pageIdx,numel(pages),img.Name,reg.Name,channel),pageIdx-1,numel(pages));
+
         % --- Linescan plot ---
         % data
         if channel <= numel(reg.LinescanResults)
-            p.Data = reg.LinescanResults(channel);
+            data = desmostorm.plot.PeaksPlotData(reg.LinescanResults(channel), ...
+                ChannelIDs=img.ChannelIDs(channel),Names=img.channelName(channel));
         else
-            p.Data = desmostorm.analysis.PeaksData.empty();
+            data = desmostorm.plot.PeaksPlotData();
         end
-        % title
-        p.Title = sprintf("%s | %s | C%i", matlabx.utils.text.texFriendly(img.Name), reg.Name, channel);
-        % plot color
-        plotColor = resolvePlotColor(project, channel, opts.Color, opts.ColorSource);
-        p.Color = plotColor;
-        p.Colors = plotColor;
+
+        title(p.Axes,sprintf("%s | %s | %s",matlabx.utils.text.texFriendly(img.Name), ...
+            matlabx.utils.text.texFriendly(reg.Name),matlabx.utils.text.texFriendly(img.channelName(channel))));
+        xlabel(p.Axes,"Distance (" + img.PixelSize.Unit + ")");
+        style.Colors = resolvePlotColor(project,img.ChannelIDs(channel),opts.Color,opts.ColorSource);
+        renderer.update(data,style);
 
         % ImageAxes handles multi-component images as a cell array and the
         % active component is selected with C. Keep display scaling matched
@@ -201,19 +217,17 @@ end
         ax.CData = Icell;
         ax.C = channel;
 
-        ax.setComponentCLim(imageExportCLim(img,channel,opts.ScalingMode),channel);
+        ax.setComponentCLim(desmostorm.export.imageDisplayLimits(img,channel,opts.ScalingMode,config.Display),channel);
 
         switch config.Display.ChannelColorMode
             case 'colors'
-                ax.setComponentColor(project.getChannelColorName(channel),channel);
+                ax.setComponentColor(project.getChannelColorName(img.ChannelIDs(channel)),channel);
             case 'luts'
-                ax.setComponentColormap(project.getChannelColormap(channel),channel);
+                ax.setComponentColormap(project.getChannelColormap(img.ChannelIDs(channel)),channel);
         end
     
         ax.Tools.DrawRectangle.setROIPosition(reg.ROI);
         l.Text = reg.TextSummaryTable(channel);
-
-        tempName = char(fullfile(tempFolder,[matlabx.utils.text.uniqueID("char"),'.pdf']));
 
         % Give graphics objects a short beat to settle before exportapp
         % snapshots the UI. The first page needs the full component warm-up.
@@ -224,29 +238,84 @@ end
             pause(0.1)
         end
     
-        exportapp(f,tempName);
-        tempFiles{end+1} = tempName;
-    end
-    
-    if isempty(tempFiles)
-        return
-    end
-    
-    closeFigure(f);
-    mergeTempPDFs(tempFiles, filename);
+        % Export the plot independently so a vector plot remains vector
+        % when placed alongside the captured image and summary text.
+        plotInches = plotRect(3:4) ./ layoutSize .* (pageSize / 72);
+        renderInches = plotRect(3:4) / matlabx.UICal.pixelsPerInch();
+        plotDPI = opts.Resolution * plotInches(1) / renderInches(1);
+        plotFile = fullfile(tempFolder,sprintf('plot-%d.pdf',pageIdx));
+        baseFile = fullfile(tempFolder,sprintf('layout-%d.pdf',pageIdx));
+        p.exportPlot(plotFile,ContentType=opts.ContentType, ...
+            Units="inches",Width=renderInches(1),Height=renderInches(2), ...
+            Resolution=plotDPI,BackgroundColor=opts.BackgroundColor);
+        % Render the region image and ROI directly from the image axes.
+        % Render at the layout size and adjust DPI for the final PDF scale.
+        imageInches = imgWidth / matlabx.UICal.pixelsPerInch();
+        imageDPI = opts.ImageResolution * opts.PageWidthInches / layoutWidth;
+        imageFile = fullfile(tempFolder,sprintf('image-%d.png',pageIdx));
+        screenSize = ax.getOnScreenSize();
+        imageStyleScale = desmostorm.export.physicalStyleScale(screenSize.Inches, ...
+            [imageInches imageInches],"inches",imageDPI,"on");
+        ax.Tools.DrawRectangle.FontSize = config.ROI.FontSize * imageStyleScale;
+        ax.exportView(imageFile,Units="inches",Width=imageInches,Height=imageInches, ...
+            Resolution=imageDPI,PreserveAspectRatio="on",OverlaySizing="scale");
+        p.Visible = "off";
+        ax.Visible = "off";
+        drawnow
+        exportapp(f,baseFile);
+        ax.Visible = "on";
+        p.Visible = "on";
 
+    end
+
+    closeFigure(f);
+    desmostorm.runtime.updateProgress(opts.ProgressDialog,"Assembling summary PDF...");
+    logFile = fullfile(tempFolder,'pdfbox.log');
+    pdfCommand.redirectErrorStream(true);
+    pdfCommand.redirectOutput(java.io.File(logFile));
+    try
+        process = pdfCommand.start();
+    catch cause
+        failure = MException('desmostorm:export:summaryPDF:JavaLaunchFailed', ...
+            'Could not start Java for Summary PDF export. %s',cause.message);
+        throw(addCause(failure,cause));
+    end
+    if process.waitFor() ~= 0
+        error('desmostorm:export:summaryPDF:AssemblyFailed', ...
+            'PDFBox could not assemble the summary PDF. %s',strtrim(fileread(logFile)));
+    end
+    output = fullfile(tempFolder,'summary.pdf');
+    [ok,message] = movefile(output,filename,'f');
+    if ~ok, error('desmostorm:export:summaryPDF:WriteFailed','%s',message); end
+    desmostorm.runtime.updateProgress(opts.ProgressDialog,"Summary PDF complete.",1);
 end
 
-function mergeTempPDFs(fileNames, filename)
-    memSet = org.apache.pdfbox.io.MemoryUsageSetting.setupMainMemoryOnly();
-    merger = org.apache.pdfbox.multipdf.PDFMergerUtility;
-    
-    for i = 1:numel(fileNames)
-        merger.addSource(java.io.File(fileNames{i}));
+function command = summaryPDFCommand(folder,pageCount,pageSize,plotRect,imageRect)
+    appRoot = fileparts(fileparts(fileparts(which('desmostorm.export.summaryPDF'))));
+    dependencyFolder = fullfile(appRoot,'external','pdfbox');
+    jars = fullfile(dependencyFolder,["pdfbox-app-3.0.8.jar","desmostorm-summary-pdf.jar"]);
+    if ~all(isfile(jars))
+        error('desmostorm:export:summaryPDF:MissingPDFBox', ...
+            'Summary PDF export is missing a bundled JAR in %s.',dependencyFolder);
     end
-    
-    merger.setDestinationFileName(char(filename));
-    merger.mergeDocuments(memSet);
+    if ~usejava('jvm')
+        error('desmostorm:export:summaryPDF:JavaUnavailable', ...
+            'Summary PDF export requires MATLAB to run with Java enabled.');
+    end
+    executable = "java";
+    if ispc, executable = "java.exe"; end
+    javaHome = char(javaMethod('getProperty','java.lang.System','java.home'));
+    launcher = fullfile(javaHome,"bin",executable);
+    if ~isfile(launcher), launcher = executable; end
+
+    values = compose("%.17g",[pageCount pageSize plotRect imageRect]);
+    args = [launcher,"-Djava.awt.headless=true","-cp",join(jars,pathsep), ...
+        "SummaryPDF",string(folder),values];
+    commandArgs = java.util.ArrayList();
+    for i = 1:numel(args)
+        commandArgs.add(java.lang.String(char(args(i))));
+    end
+    command = javaObject('java.lang.ProcessBuilder',commandArgs);
 end
 
 function pages = collectPages(imgs, imageChannel)
@@ -269,10 +338,8 @@ function pages = collectPages(imgs, imageChannel)
     
         if exportAll
             channels = 1:imgs(i).SizeC;
-        elseif channel <= imgs(i).SizeC
-            channels = channel;
         else
-            channels = [];
+            channels = imgs(i).sourceChannelIndex(channel);
         end
     
         for j = 1:numel(regs)
@@ -291,11 +358,10 @@ function color = resolvePlotColor(project,channel,manualColor,colorSource)
         return
     end
 
-    colorName = project.getChannelColorName(channel);
-    color = matlabx.colors.names.toRGB(char(colorName),"Palette","MATLAB");
+    color = project.getChannelRGB(channel);
 end
 
-function applyROISettings(tool,roiConfig,opts,fontSizePx)
+function applyROISettings(tool,roiConfig,opts)
     tool.ROIColor = roiConfig.ROIColor;
     tool.ROILineWidth = roiConfig.ROILineWidth;
     tool.ROIFaceAlpha = opts.ROIFaceAlpha;
@@ -304,35 +370,8 @@ function applyROISettings(tool,roiConfig,opts,fontSizePx)
     tool.AnnotationLineWidth = roiConfig.AnnotationLineWidth;
     tool.RotationAngleMode = roiConfig.RotationAngleMode;
     tool.RotationAngleVisible = opts.RotationAngleVisible;
-    tool.FontSize = fontSizePx;
+    tool.FontSize = roiConfig.FontSize;
     tool.FontColor = roiConfig.FontColor;
-end
-
-function clim = imageExportCLim(img,channel,scalingMode)
-    switch string(scalingMode)
-        case "data"
-            clim = img.getDataRange(channel);
-        case "auto"
-            clim = img.getAutoDisplayRange(channel);
-        case "user"
-            clim = img.getDisplayRange(channel);
-    end
-
-    clim = double(clim);
-    if any(~isfinite(clim)) || clim(1) == clim(2)
-        v = clim(find(isfinite(clim),1,'first'));
-        if isempty(v), v = 0; end
-        clim = [v-0.5 v+0.5];
-    end
-    clim = sort(clim);
-end
-
-function deleteTempFiles(fileNames)
-    for i = 1:numel(fileNames)
-        if isfile(fileNames{i})
-            delete(fileNames{i});
-        end
-    end
 end
 
 function closeFigure(f)

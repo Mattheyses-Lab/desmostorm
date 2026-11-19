@@ -37,7 +37,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
     properties (Access=private)
         ImagesDict = dictionary   % string ID -> desmostorm.model.STORMImage
         ImageOrder (:,1) string = string.empty(0,1)
-        ActiveImageID (:,1) string = string.empty(0,1)
+        ActiveImageID (1,1) string = ""
     end
 
     properties (Access=private)
@@ -48,6 +48,10 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
     properties (Dependent)
         ImageNames
         ImageIDs
+    end
+
+    properties (SetAccess=private)
+        SelectedImageIDs (:,1) string = strings(0,1)
     end
 
     %% ergonomic array view, public, editor-friendly
@@ -66,10 +70,10 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
         MaxSizeC (1,1) double = 0
     end
 
-    properties
-        ChannelColormapNames (1,:) string = string.empty(1,0)
-        ChannelColormapCategories (1,:) string = string.empty(1,0)
-        ChannelColorNames (1,:) string = string.empty(1,0)
+    properties (SetAccess=private)
+        % Registry order is independent of each image's source component order.
+        Channels struct = struct('ID',{},'Name',{},'Color',{}, ...
+            'ColormapName',{},'ColormapCategory',{})
     end
 
     properties (Access=private)
@@ -84,6 +88,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
         ImageAdded
         ImageRemoved
         ActiveImageChanged
+        ImageSelectionChanged
         MaxSizeCChanged
 
         RegionAdded
@@ -92,6 +97,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
         RegionSelectionChanged
 
         LabelsChanged
+        ChannelsChanged
 
         DirtyStateChanged
     end
@@ -190,25 +196,171 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             % create a STORMImage object with new unique ID
             img = desmostorm.model.STORMImage(obj, string(name)+string(ext), string(filePath), matlabx.utils.text.uniqueID());  % NO imread
 
-            % bind to dictionary and emit ImageAdded
-            obj.ImagesDict(img.ID) = img;
-            obj.ImageOrder(end+1) = img.ID;
-
+            names = "Channel " + (1:img.SizeC);
+            obj.importImages(img,{names},{strings(size(names))});
             imageID = img.ID;
-            notify(obj,'ImageAdded',desmostorm.model.events.ImageAdded(imageID));
+        end
+
+        function addImagesFromPaths(obj, filePaths)
+            for filePath = reshape(string(filePaths),1,[])
+                obj.addImageFromPath(filePath);
+            end
+        end
+
+        function importImages(obj,images,names,colors)
+            % Validate the complete mapping before changing the project.
+            if isempty(images), return, end
+            assert(numel(images) == numel(names) && numel(images) == numel(colors), ...
+                'Each imported image needs one channel mapping.');
+            assert(numel(unique(string({images.ID}))) == numel(images), ...
+                'Each imported image must have a distinct image ID.');
+            channels = obj.Channels;
+            originalCount = numel(channels);
+            assignments = cell(size(images));
+            palette = matlabx.image.componentColorNames();
+            for i = 1:numel(images)
+                names{i} = reshape(strtrim(string(names{i})),1,[]);
+                colors{i} = reshape(string(colors{i}),1,[]);
+                assert(images(i).Parent == obj && ~isKey(obj.ImagesDict,images(i).ID), ...
+                    'Imported images must be new images owned by this project.');
+                assert(numel(names{i}) == images(i).SizeC && ...
+                    numel(colors{i}) == images(i).SizeC && ...
+                    all(~ismissing(names{i}) & strlength(names{i}) > 0) && ...
+                    numel(unique(lower(names{i}))) == images(i).SizeC, ...
+                    'Each source component needs a distinct channel name.');
+
+                ids = strings(1,images(i).SizeC);
+                for c = 1:images(i).SizeC
+                    name = names{i}(c);
+                    index = find(strcmpi(string({channels.Name}),name),1);
+                    color = colors{i}(c);
+                    if color ~= ""
+                        color = matlabx.image.normalizeComponentColor(color);
+                    end
+                    if isempty(index)
+                        index = numel(channels) + 1;
+                        if color == ""
+                            color = palette(1 + mod(index-1,numel(palette)));
+                        end
+                        channels(index) = struct('ID',matlabx.utils.text.uniqueID(), ...
+                            'Name',name,'Color',color, ...
+                            'ColormapName',obj.DefaultChannelColormapName, ...
+                            'ColormapCategory',obj.DefaultChannelColormapCategory);
+                    elseif index > originalCount && color ~= "" && color ~= channels(index).Color
+                        error('desmostorm:import:ConflictingColor', ...
+                            'Choose one color for the new channel "%s".',name);
+                    end
+                    ids(c) = channels(index).ID;
+                end
+                assignments{i} = ids;
+            end
+
+            changed = ~isequal(channels,obj.Channels);
+            obj.Channels = channels;
+            for i = 1:numel(images)
+                img = images(i);
+                img.setChannelIDs(assignments{i});
+                obj.ImagesDict(img.ID) = img;
+                obj.ImageOrder(end+1) = img.ID;
+                notify(obj,'ImageAdded',desmostorm.model.events.ImageAdded(img.ID));
+            end
+            if changed
+                notify(obj,'ChannelsChanged');
+            end
             obj.markDirty();
         end
 
-        % add a new desmostorm.model.STORMImage for each of the images located at the paths in the cell array, filePaths
-        function addImagesFromPaths(obj, filePaths)
-            %ADDIMAGESFROMPATHS Add a new STORMImage for each of the images specified by filePath
-            % convert char/string to cell if not already cell
-            if ~iscell(filePaths)
-                filePaths = cellstr(filePaths);
+        function editChannels(obj,names,colors)
+            names = reshape(strtrim(string(names)),1,[]);
+            colors = reshape(string(colors),1,[]);
+            assert(numel(names) == numel(obj.Channels) && numel(colors) == numel(names) && ...
+                all(~ismissing(names) & strlength(names) > 0) && ...
+                numel(unique(lower(names))) == numel(names), ...
+                'Channel names must be nonempty and unique.');
+
+            channels = obj.Channels;
+            for c = 1:numel(channels)
+                channels(c).Name = names(c);
+                channels(c).Color = matlabx.image.normalizeComponentColor(colors(c));
             end
-            % for each path in the cell, add a new desmostorm.model.STORMImage
-            for i = 1:numel(filePaths)
-                obj.addImageFromPath(filePaths{i});
+            if ~isequal(obj.Channels,channels)
+                obj.Channels = channels;
+                images = obj.ImageArray;
+                for i = 1:numel(images)
+                    images(i).syncChannelNames();
+                end
+                obj.markDirty();
+                notify(obj,'ChannelsChanged');
+            end
+        end
+
+        function index = channelIndex(obj,channel)
+            if isnumeric(channel)
+                index = channel;
+            else
+                index = find(string({obj.Channels.ID}) == string(channel),1);
+            end
+        end
+
+        function name = getChannelName(obj,channel)
+            name = obj.Channels(obj.channelIndex(channel)).Name;
+        end
+
+        function replaceLabels(obj,labels,opts)
+            arguments
+                obj
+                labels struct
+                opts.SourceIDs string = strings(1,0)
+                opts.TargetIDs string = strings(1,0)
+                opts.ActivateID (1,1) string = ""
+            end
+            old = obj.LabelBank.toStruct();
+            ids = string({labels.ID});
+            oldIDs = string({old.Labels.ID});
+            assert(ismember("unlabeled",ids) && ~ismember("unlabeled",opts.SourceIDs), ...
+                'The Unlabeled entry is required and must retain its ID.');
+            assert(numel(unique(ids)) == numel(ids) && ...
+                numel(opts.SourceIDs) == numel(opts.TargetIDs) && ...
+                all(ismember(opts.SourceIDs,oldIDs)) && all(ismember(opts.TargetIDs,ids)), ...
+                'Label IDs and their replacements must be valid.');
+
+            targets = oldIDs;
+            targets(~ismember(oldIDs,ids)) = "unlabeled";
+            [~,indices] = ismember(opts.SourceIDs,oldIDs);
+            targets(indices) = opts.TargetIDs;
+            active = old.ActiveLabelID;
+            [found,index] = ismember(active,oldIDs);
+            if found, active = targets(index); end
+            [~,indices] = ismember(old.SelectedLabelIDs,oldIDs);
+            selected = targets(indices(indices > 0));
+            if opts.ActivateID ~= ""
+                active = opts.ActivateID;
+                selected = opts.ActivateID;
+            end
+            bank = desmostorm.model.LabelRegistry.fromStruct(struct( ...
+                'Labels',labels,'Order',ids,'ActiveLabelID',active,'SelectedLabelIDs',selected));
+
+            images = obj.ImageArray;
+            for i = 1:numel(images)
+                regs = images(i).RegionArray;
+                for k = 1:numel(regs)
+                    [found,index] = ismember(regs(k).LabelID,oldIDs);
+                    if found && targets(index) ~= regs(k).LabelID
+                        regs(k).LabelID = targets(index);
+                        regs(k).LabelSource = "user";
+                    end
+                end
+            end
+            obj.LabelBank = bank;
+            obj.attachLabelBankListener();
+            obj.onLabelBankChanged();
+        end
+
+        function setImageSelection(obj,ids)
+            ids = intersect(obj.ImageOrder,string(ids(:)),'stable');
+            if ~isequal(obj.SelectedImageIDs,ids)
+                obj.SelectedImageIDs = ids;
+                notify(obj,'ImageSelectionChanged');
             end
         end
 
@@ -220,6 +372,14 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
 
             obj.ImagesDict = obj.ImagesDict.remove(imageID);
             obj.ImageOrder = obj.ImageOrder(obj.ImageOrder ~= imageID);
+            obj.setImageSelection(obj.SelectedImageIDs);
+            if ismember(imageID,obj.ActiveImageID)
+                if isempty(obj.ImageOrder)
+                    obj.setActiveImage("");
+                else
+                    obj.setActiveImage(obj.ImageOrder(1));
+                end
+            end
 
             notify(obj,'ImageRemoved',desmostorm.model.events.ImageRemoved(imageID));
             obj.markDirty();
@@ -230,12 +390,13 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
 
             % store current active ID
             oldID = obj.ActiveImageID;
+            if isempty(oldID), oldID = ""; end
 
             % ID we are going to make active
             newID = string(imageID);
 
             % prevent unnecessary updates, return if image is already active
-            if newID == obj.ActiveImageID, return; end
+            if newID == oldID, return; end
 
             if strlength(newID)==0
                 obj.ActiveImageID = "";
@@ -302,16 +463,12 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
 
         % needs to be optimized
         function regs = getRegionsByLabelID(obj,labelID)
-
-            regs = [];
-
+            regs = desmostorm.model.STORMRegion.empty(0,1);
             imgs = obj.ImageArray;
-
             for i = 1:numel(imgs)
-                regs = [regs;imgs(i).getRegionsByLabelID(labelID)];
+                matches = imgs(i).getRegionsByLabelID(labelID);
+                if ~isempty(matches), regs = [regs;matches(:)]; end
             end
-
-
         end
 
 
@@ -351,13 +508,13 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
                 regs = regs(valid);
                 for j = 1:numel(regs)
                     n = n + 1;
-                    obj.updateAutofitProgress(opts.ProgressDialog, ...
+                    desmostorm.runtime.updateProgress(opts.ProgressDialog, ...
                         sprintf("Analyzing region %d/%d: %s",n,total,regs(j).Name), ...
                         (n - 1) / total);
                     arr(i).processRegionLinescan(regs(j),config, ...
                         "ProgressDialog",opts.ProgressDialog, ...
                         "ProgressMessagePrefix",sprintf("Region %d/%d: ",n,total));
-                    obj.updateAutofitProgress(opts.ProgressDialog, ...
+                    desmostorm.runtime.updateProgress(opts.ProgressDialog, ...
                         sprintf("Analyzed region %d/%d: %s",n,total,regs(j).Name), ...
                         n / total);
                 end
@@ -402,7 +559,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
                     progressPrefix = string(sprintf( ...
                         "Region %d/%d: %s", ...
                         summary.Attempted,total,regs(j).Name));
-                    obj.updateAutofitProgress(opts.ProgressDialog, ...
+                    desmostorm.runtime.updateProgress(opts.ProgressDialog, ...
                         progressPrefix + newline + "Starting ROI auto-fit...", ...
                         (summary.Attempted - 1) / total);
 
@@ -418,13 +575,13 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
                         summary.Failed = summary.Failed + 1;
                         finalMessage = progressPrefix + newline + "ROI auto-fit failed.";
                     end
-                    obj.updateAutofitProgress(opts.ProgressDialog, ...
+                    desmostorm.runtime.updateProgress(opts.ProgressDialog, ...
                         finalMessage, ...
                         summary.Attempted / total);
                 end
             end
 
-            obj.updateAutofitProgress(opts.ProgressDialog, ...
+            desmostorm.runtime.updateProgress(opts.ProgressDialog, ...
                 sprintf("ROI auto-fit complete: %d/%d succeeded.",summary.Succeeded,total), ...
                 1);
         end
@@ -436,7 +593,6 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
 
         function onMaxSizeCPostSet(obj)
 
-            obj.ensureChannelColormapCount();
             notify(obj,'MaxSizeCChanged');
 
         end
@@ -454,14 +610,9 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
 
         end
 
-        function onImageRemoved(obj,evt)
+        function onImageRemoved(obj,~)
 
             obj.updateImageStats();
-
-            % if removed image was active, clear active image ID
-            if obj.ActiveImageID == evt.ImageID
-                obj.setActiveImage("");
-            end
 
         end
 
@@ -576,151 +727,58 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
 
         end
 
-        function ensureChannelColormapCount(obj)
-        %ENSURECHANNELCOLORMAPCOUNT Keep project channel colormap storage sized to MaxSizeC
-            n = max(obj.MaxSizeC,0);
-            defaultColors = string(matlabx.ui.axes.ImageAxes.getColorNames());
-
-            obj.ChannelColormapNames = obj.ChannelColormapNames(:).';
-            obj.ChannelColormapCategories = obj.ChannelColormapCategories(:).';
-            obj.ChannelColorNames = desmostorm.model.STORMProject.normalizeChannelColorNames_( ...
-                obj.ChannelColorNames(:).');
-
-            if numel(obj.ChannelColormapNames) > n
-                obj.ChannelColormapNames = obj.ChannelColormapNames(1:n);
-            end
-            if numel(obj.ChannelColormapCategories) > n
-                obj.ChannelColormapCategories = obj.ChannelColormapCategories(1:n);
-            end
-            if numel(obj.ChannelColorNames) > n
-                obj.ChannelColorNames = obj.ChannelColorNames(1:n);
-            end
-
-            if numel(obj.ChannelColormapNames) < n
-                obj.ChannelColormapNames(end+1:n) = obj.DefaultChannelColormapName;
-            end
-            if numel(obj.ChannelColormapCategories) < n
-                obj.ChannelColormapCategories(end+1:n) = obj.DefaultChannelColormapCategory;
-            end
-            for c = numel(obj.ChannelColorNames)+1:n
-                obj.ChannelColorNames(c) = defaultColors(1 + mod(c-1,numel(defaultColors)));
-            end
-        end
-
         function setDefaultChannelColormap(obj,name,category)
-        %SETDEFAULTCHANNELCOLORMAP Set the colormap used for newly discovered channels.
-            arguments
-                obj
-                name (1,1) string
-                category (1,1) string
-            end
-
-            assert(matlabx.colors.maps.Registry.has(name, category), ...
-                'Colormap "%s" not found in category "%s".', name, category);
-
+            assert(matlabx.colors.maps.Registry.has(name,category), ...
+                'Colormap "%s" not found in category "%s".',name,category);
             obj.DefaultChannelColormapName = name;
             obj.DefaultChannelColormapCategory = category;
         end
 
-        function setChannelColormap(obj,c,name,category)
-        %SETCHANNELCOLORMAP Store the selected colormap for one project channel
-            arguments
-                obj
-                c (1,1) double {mustBeInteger, mustBePositive}
-                name (1,1) string
-                category (1,1) string
+        function setChannelColormap(obj,channel,name,category)
+            index = obj.channelIndex(channel);
+            assert(matlabx.colors.maps.Registry.has(name,category), ...
+                'Colormap "%s" not found in category "%s".',name,category);
+            if obj.Channels(index).ColormapName ~= name || ...
+                    obj.Channels(index).ColormapCategory ~= category
+                obj.Channels(index).ColormapName = string(name);
+                obj.Channels(index).ColormapCategory = string(category);
+                obj.markDirty();
             end
-
-            obj.ensureChannelColormapCount();
-            if c > numel(obj.ChannelColormapNames), return; end
-
-            assert(matlabx.colors.maps.Registry.has(name, category), ...
-                'Colormap "%s" not found in category "%s".', name, category);
-
-            if obj.ChannelColormapNames(c) == name && obj.ChannelColormapCategories(c) == category
-                return
-            end
-
-            obj.ChannelColormapNames(c) = name;
-            obj.ChannelColormapCategories(c) = category;
-            obj.markDirty();
         end
 
-        function [name,category] = getChannelColormapInfo(obj,c)
-        %GETCHANNELCOLORMAPINFO Return saved colormap name/category for one channel
-            arguments
-                obj
-                c (1,1) double {mustBeInteger, mustBePositive}
-            end
-
-            obj.ensureChannelColormapCount();
-            if c > numel(obj.ChannelColormapNames)
-                name = "gray";
-                category = "MATLAB";
-                return
-            end
-
-            name = obj.ChannelColormapNames(c);
-            category = obj.ChannelColormapCategories(c);
+        function [name,category] = getChannelColormapInfo(obj,channel)
+            definition = obj.Channels(obj.channelIndex(channel));
+            name = definition.ColormapName;
+            category = definition.ColormapCategory;
         end
 
-        function cmap = getChannelColormap(obj,c)
-        %GETCHANNELCOLORMAP Resolve one channel's saved colormap
-            [name,category] = obj.getChannelColormapInfo(c);
+        function cmap = getChannelColormap(obj,channel)
+            [name,category] = obj.getChannelColormapInfo(channel);
             cmap = matlabx.colors.maps.Registry.map(name,category);
         end
 
         function cmaps = getChannelColormaps(obj,n)
-        %GETCHANNELCOLORMAPS Resolve saved colormaps for channels 1:n
-            arguments
-                obj
-                n (1,1) double {mustBeInteger, mustBeNonnegative} = obj.MaxSizeC
-            end
+            if nargin < 2, n = numel(obj.Channels); end
+            cmaps = arrayfun(@(c) obj.getChannelColormap(c),1:n,'UniformOutput',false);
+        end
 
-            obj.ensureChannelColormapCount();
-            cmaps = cell(1,n);
-            for c = 1:n
-                cmaps{c} = obj.getChannelColormap(c);
+        function setChannelColor(obj,channel,color)
+            index = obj.channelIndex(channel);
+            color = matlabx.image.normalizeComponentColor(color);
+            if obj.Channels(index).Color ~= color
+                obj.Channels(index).Color = color;
+                obj.markDirty();
+                notify(obj,'ChannelsChanged');
             end
         end
 
-        function setChannelColor(obj,c,name)
-        %SETCHANNELCOLOR Store the selected color name for one project channel
-            arguments
-                obj
-                c (1,1) double {mustBeInteger, mustBePositive}
-                name (1,1) string
-            end
-
-            obj.ensureChannelColormapCount();
-            if c > numel(obj.ChannelColorNames), return; end
-
-            name = desmostorm.model.STORMProject.normalizeChannelColorName_(name);
-            if obj.ChannelColorNames(c) == name
-                return
-            end
-
-            obj.ChannelColorNames(c) = name;
-            obj.markDirty();
+        function color = getChannelColorName(obj,channel)
+            color = obj.Channels(obj.channelIndex(channel)).Color;
         end
 
-        function name = getChannelColorName(obj,c)
-        %GETCHANNELCOLORNAME Return saved color name for one channel
-            arguments
-                obj
-                c (1,1) double {mustBeInteger, mustBePositive}
-            end
-
-            obj.ensureChannelColormapCount();
-            if c > numel(obj.ChannelColorNames)
-                defaultColors = string(matlabx.ui.axes.ImageAxes.getColorNames());
-                name = defaultColors(1 + mod(c-1,numel(defaultColors)));
-                return
-            end
-
-            name = obj.ChannelColorNames(c);
+        function rgb = getChannelRGB(obj,channel)
+            [~,rgb] = matlabx.image.normalizeComponentColor(obj.getChannelColorName(channel));
         end
-
 
     end
 
@@ -751,29 +809,31 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
                 settings (1,1) desmostorm.config.Settings
             end
 
-            [folder,name,~] = fileparts(file);
+            [folder,name,extension] = fileparts(file);
+            if extension == "", file = file + ".mat"; end
+            if isfolder(file)
+                error('desmostorm:project:SaveFailed','The destination is a folder: %s',file);
+            end
             if strlength(folder) > 0 && ~exist(folder,'dir')
                 mkdir(folder);
             end
 
-            % set Name to match file short name
-            obj.Name = name;
-            obj.SourcePath = file;
+            desmostorm.Log.INFO(sprintf("Saving project: %s",name));
+            Project = obj.toStruct(settings);
+            Project.Project.Name = name;
+            Project.Project.SourcePath = file;
 
-            % update log
-            desmostorm.Log.INFO(sprintf("Saving project: %s",obj.Name))
-            % attempt to save the project
-            try
-                % get save struct
-                Project = obj.toStruct(settings);
-                % save it
-                save(file, 'Project', '-mat');
-            catch ME
-                desmostorm.Log.EXCEPTION(ME);
-                rethrow(ME);
+            if folder == "", folder = string(pwd); end
+            temporary = string(tempname(folder)) + ".mat";
+            cleanup = onCleanup(@() deleteTemporaryProjectFile(temporary));
+            save(temporary,'Project','-mat');
+            [written,message] = movefile(temporary,file,'f');
+            if ~written
+                error('desmostorm:project:SaveFailed','%s',message);
             end
 
-            % indicate that it is now on disk
+            obj.Name = name;
+            obj.SourcePath = file;
             obj.isOnDisk = true;
             obj.markClean();
 
@@ -844,21 +904,28 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
 
             if isfield(P.Project,'LabelBank') && ~isempty(P.Project.LabelBank)
                 proj.LabelBank = desmostorm.model.LabelRegistry.fromStruct(P.Project.LabelBank);
+                fallback = proj.LabelBank.getByID("unlabeled");
+                if desmostorm.Version.compare(proj.Version,"1.2.0") < 0 && ...
+                        isequal(fallback.Color,[0.7 0.7 0.7])
+                    fallback.Color = [1 1 1];
+                end
             else
                 proj.LabelBank = desmostorm.model.LabelRegistry.default();
             end
             proj.attachLabelBankListener();
 
-            % Resolve image paths
-            desmostorm.Log.DEBUG("Resolving image paths...")
-            resolved = desmostorm.io.resolveImagePaths(P.Images, projectFolder, ...
-                "MissingImageResolver", opts.MissingImageResolver);
-
-            % If resolved comes back empty -> return empty, load fails
-            if isempty(resolved)
-                delete(proj); delete(settings);
-                proj = []; settings = [];
-                return
+            resolved = struct.empty();
+            if isfield(P,'Images') && ~isempty(P.Images)
+                desmostorm.Log.DEBUG("Resolving image paths...");
+                resolved = desmostorm.io.resolveImagePaths(P.Images, projectFolder, ...
+                    "MissingImageResolver", opts.MissingImageResolver);
+                if isempty(resolved)
+                    delete(proj);
+                    delete(settings);
+                    proj = [];
+                    settings = [];
+                    return
+                end
             end
 
             % Rebuild images/regions without eager pixel loads
@@ -874,37 +941,31 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
                 proj.ImageOrder(end+1) = img.ID;
             end
 
-            % Restore active selection
-            if isfield(P,'ActiveImageID') && strlength(string(P.ActiveImageID))>0
+            proj.updateImageStats();
+            if isfield(P.Project,'Channels')
+                proj.Channels = P.Project.Channels;
+            else
+                proj.Channels = proj.legacyChannels(P.Project);
+            end
+
+            for k = 1:nResolved
+                img = proj.ImagesDict(proj.ImageOrder(k));
+                if isfield(resolved,'ChannelIDs')
+                    ids = resolved(k).ChannelIDs;
+                else
+                    ids = string({proj.Channels(1:img.SizeC).ID});
+                end
+                assert(all(ismember(ids,string({proj.Channels.ID}))), ...
+                    'An image refers to an unknown project channel.');
+                img.setChannelIDs(ids);
+            end
+
+            if isfield(P,'SelectedImageIDs')
+                proj.setImageSelection(P.SelectedImageIDs);
+            end
+            if isfield(P,'ActiveImageID') && strlength(string(P.ActiveImageID)) > 0
                 proj.setActiveImage(string(P.ActiveImageID));
             end
-
-            % update project-wide image stats
-            proj.updateImageStats();
-
-            if isfield(P.Project,'ChannelDisplay') && ~isempty(P.Project.ChannelDisplay)
-                if isfield(P.Project.ChannelDisplay,'ColormapNames')
-                    proj.ChannelColormapNames = string(P.Project.ChannelDisplay.ColormapNames);
-                end
-                if isfield(P.Project.ChannelDisplay,'ColormapCategories')
-                    proj.ChannelColormapCategories = string(P.Project.ChannelDisplay.ColormapCategories);
-                end
-                if isfield(P.Project.ChannelDisplay,'ColorNames')
-                    proj.ChannelColorNames = desmostorm.model.STORMProject.normalizeChannelColorNames_( ...
-                        string(P.Project.ChannelDisplay.ColorNames));
-                end
-            elseif isfield(P.Project,'ChannelColormaps') && ~isempty(P.Project.ChannelColormaps)
-                if isfield(P.Project.ChannelColormaps,'Names')
-                    proj.ChannelColormapNames = string(P.Project.ChannelColormaps.Names);
-                end
-                if isfield(P.Project.ChannelColormaps,'Categories')
-                    proj.ChannelColormapCategories = string(P.Project.ChannelColormaps.Categories);
-                end
-            else
-                proj.ChannelColormapNames = repmat("gray",1,proj.MaxSizeC);
-                proj.ChannelColormapCategories = repmat("MATLAB",1,proj.MaxSizeC);
-            end
-            proj.ensureChannelColormapCount();
 
             % indicate file exists on disk at SourcePath
             proj.isOnDisk = true;
@@ -915,19 +976,6 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
     end
 
     methods (Access=private)
-
-        function updateAutofitProgress(~,h,msg,value)
-        %UPDATEAUTOFITPROGRESS Best-effort progress feedback for GUI callers.
-            if isempty(h), return; end
-
-            try
-                h.Message = msg;
-                h.Indeterminate = "off";
-                h.Value = value;
-                drawnow limitrate
-            catch
-            end
-        end
 
         function P = toStruct(obj, settings)
             % Project meta
@@ -941,12 +989,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             % Label bank
             P.Project.LabelBank = obj.LabelBank.toStruct();
 
-            % Project-wide per-channel display choices
-            obj.ensureChannelColormapCount();
-            P.Project.ChannelDisplay = struct( ...
-                'ColormapNames',obj.ChannelColormapNames, ...
-                'ColormapCategories',obj.ChannelColormapCategories, ...
-                'ColorNames',obj.ChannelColorNames);
+            P.Project.Channels = obj.Channels;
 
             % Settings snapshot (portable)
             P.Settings = settings.toStruct();
@@ -955,28 +998,52 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             imgs = obj.ImageArray;
             P.ImageOrder     = obj.ImageOrder;
             P.ActiveImageID  = obj.ActiveImageID;
+            P.SelectedImageIDs = obj.SelectedImageIDs;
 
-            for k = 1:numel(imgs)
-                im = imgs(k);
-                P.Images(k) = im.toStruct();
+            if isempty(imgs)
+                P.Images = struct.empty();
+            else
+                P.Images = arrayfun(@(img) img.toStruct(),imgs);
             end
         end
 
     end
 
-    methods (Static, Access=private)
+    methods (Access=private)
 
-        function names = normalizeChannelColorNames_(names)
-        %NORMALIZECHANNELCOLORNAMES_ Canonicalize saved channel color names.
-            names = string(names);
-            for i = 1:numel(names)
-                names(i) = desmostorm.model.STORMProject.normalizeChannelColorName_(names(i));
+        function channels = legacyChannels(obj,project)
+            channels = obj.Channels;
+            display = struct();
+            if isfield(project,'ChannelDisplay') && isstruct(project.ChannelDisplay) && ...
+                    isscalar(project.ChannelDisplay)
+                display = project.ChannelDisplay;
+            elseif isfield(project,'ChannelColormaps') && isstruct(project.ChannelColormaps) && ...
+                    isscalar(project.ChannelColormaps)
+                maps = project.ChannelColormaps;
+                if isfield(maps,'Names'), display.ColormapNames = maps.Names; end
+                if isfield(maps,'Categories'), display.ColormapCategories = maps.Categories; end
             end
-        end
-
-        function name = normalizeChannelColorName_(name)
-        %NORMALIZECHANNELCOLORNAME_ Delegate channel color policy to ImageAxes.
-            name = matlabx.ui.axes.ImageAxes.canonicalComponentColorName(name);
+            palette = matlabx.image.componentColorNames();
+            for c = 1:obj.MaxSizeC
+                color = palette(1 + mod(c-1,numel(palette)));
+                if isfield(display,'ColorNames') && numel(string(display.ColorNames)) >= c
+                    colors = string(display.ColorNames);
+                    color = matlabx.image.normalizeComponentColor(colors(c));
+                end
+                name = "gray";
+                category = "MATLAB";
+                if isfield(display,'ColormapNames') && isfield(display,'ColormapCategories')
+                    names = string(display.ColormapNames);
+                    categories = string(display.ColormapCategories);
+                    if c <= min(numel(names),numel(categories))
+                        name = names(c);
+                        category = categories(c);
+                    end
+                end
+                channels(c) = struct('ID',matlabx.utils.text.uniqueID(), ...
+                    'Name',"Channel " + c,'Color',color, ...
+                    'ColormapName',name,'ColormapCategory',category);
+            end
         end
 
     end
@@ -1004,4 +1071,8 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
 
     end
 
+end
+
+function deleteTemporaryProjectFile(file)
+    if isfile(file), delete(file); end
 end

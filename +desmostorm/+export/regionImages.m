@@ -21,6 +21,7 @@ arguments
     project (1,1) desmostorm.model.STORMProject
     folderName {mustBeTextScalar}
     opts.Channel (1,1) double {mustBeInteger,mustBePositive} = 1
+    opts.DisplaySettings (1,1) desmostorm.config.Display = desmostorm.config.Display()
     opts.ScalingMode (1,1) string {mustBeMember(opts.ScalingMode,["data","auto","user"])} = "data"
     opts.OutputFormat (1,1) string {mustBeMember(opts.OutputFormat,["grayscale TIFF","RGB PNG"])} = "grayscale TIFF"
     opts.ChannelColorMode (1,1) string {mustBeMember(opts.ChannelColorMode,["colors","luts"])} = "colors"
@@ -40,6 +41,7 @@ regionsDone = 0;
 exportedFiles = {};
 for i = 1:numel(project.ImageArray)
     img = project.ImageArray(i);
+    sourceIndex = img.sourceChannelIndex(opts.Channel);
 
     for j = 1:numel(img.RegionArray)
         reg = img.RegionArray(j);
@@ -47,11 +49,11 @@ for i = 1:numel(project.ImageArray)
         fullName = fullfile(folderName,fileName);
 
         regionsDone = regionsDone + 1;
-        updateProgress(opts.ProgressDialog, ...
+        desmostorm.runtime.updateProgress(opts.ProgressDialog, ...
             sprintf('Exporting region image (%d/%d): %s',regionsDone,regionsTotal,reg.Name), ...
             regionsDone, regionsTotal);
 
-        if opts.Channel > img.SizeC
+        if isempty(sourceIndex)
             summary.Skipped = summary.Skipped + 1;
             desmostorm.Log.WARN(sprintf( ...
                 "Skipping region image export for %s: channel %d does not exist.", ...
@@ -60,8 +62,8 @@ for i = 1:numel(project.ImageArray)
         end
 
         Icell = img.regionSubimageCell(reg);
-        I = Icell{opts.Channel};
-        clim = imageExportCLim(img,opts.Channel,opts.ScalingMode);
+        I = Icell{sourceIndex};
+        clim = desmostorm.export.imageDisplayLimits(img,sourceIndex,opts.ScalingMode,opts.DisplaySettings);
         switch opts.OutputFormat
             case "grayscale TIFF"
                 matlabx.image.io.write16BitTiff(scaleFor16BitExport(I,clim),fullName);
@@ -74,14 +76,14 @@ for i = 1:numel(project.ImageArray)
 end
 
 if opts.TiledSummary == "on" && ~isempty(exportedFiles)
-    updateProgress(opts.ProgressDialog, ...
+    desmostorm.runtime.updateProgress(opts.ProgressDialog, ...
         'Building tiled region image summary...', ...
         regionsTotal, regionsTotal);
     summaryFile = fullfile(folderName,tiledSummaryFileName(opts.Channel,opts.OutputFormat));
     writeTiledSummary(exportedFiles,summaryFile);
 end
 
-updateProgress(opts.ProgressDialog, ...
+desmostorm.runtime.updateProgress(opts.ProgressDialog, ...
     sprintf('Region image export complete: %d exported, %d skipped.', ...
     summary.Exported,summary.Skipped), ...
     regionsTotal, regionsTotal);
@@ -107,8 +109,7 @@ function RGB = renderRegionRGB(I,project,channel,clim,channelColorMode)
 
     switch string(channelColorMode)
         case "colors"
-            colorName = project.getChannelColorName(channel);
-            color = matlabx.colors.names.toRGB(char(colorName),"Palette","MATLAB");
+            color = project.getChannelRGB(channel);
             RGB = uint8(round(255 * A .* reshape(color,1,1,3)));
 
         case "luts"
@@ -117,38 +118,6 @@ function RGB = renderRegionRGB(I,project,channel,clim,channelColorMode)
             RGB = reshape(cmap(idx(:),:),size(A,1),size(A,2),3);
             RGB = uint8(round(255 * RGB));
     end
-end
-
-function clim = imageExportCLim(img,channel,scalingMode)
-    switch string(scalingMode)
-        case "data"
-            clim = img.getDataRange(channel);
-        case "auto"
-            clim = img.getAutoDisplayRange(channel);
-        case "user"
-            clim = img.getDisplayRange(channel);
-    end
-
-    clim = double(clim);
-    if any(~isfinite(clim)) || clim(1) == clim(2)
-        v = clim(find(isfinite(clim),1,'first'));
-        if isempty(v), v = 0; end
-        clim = [v-0.5 v+0.5];
-    end
-    clim = sort(clim);
-end
-
-function updateProgress(h,msg,idx,total)
-    if isempty(h) || ~isvalid(h)
-        return
-    end
-
-    h.Message = msg;
-    if total > 0
-        h.Indeterminate = 'off';
-        h.Value = idx/total;
-    end
-    drawnow limitrate
 end
 
 function fileName = regionImageFileName(img,reg,channel,outputFormat)

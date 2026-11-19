@@ -54,9 +54,14 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
             'NativeDisplayRange', {}, ...
             'AutoDisplayRange', {}, ...
             'DisplayRange', {}, ...
-            'DataRange', {})
+            'DataRange', {}, ...
+            'ContrastPercentiles', {})
     end
 
+
+    properties (SetAccess=private)
+        ChannelIDs (1,:) string = strings(1,0)
+    end
 
     properties (Dependent, SetAccess=private)
         isLoaded (1,1) logical
@@ -116,16 +121,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
                 c (1,1)
             end
 
-            val = sort(val);
-            nativeRange = obj.Channels_(c).NativeDisplayRange;
-
-            % If NativeDisplayRange known, clamp; otherwise accept as-is.
-            if ~any(isnan(nativeRange))
-                val(1) = max(val(1), nativeRange(1));
-                val(2) = min(val(2), nativeRange(2));
-            end
-
-            obj.Channels_(c).DisplayRange = val;
+            obj.Channels_(c).DisplayRange = sort(val);
         end
 
         % --- getDisplayRanges ---
@@ -149,6 +145,72 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
             out = cell(1,obj.SizeC);
             for C = 1:obj.SizeC
                 out{C} = obj.getAutoDisplayRange(C);
+            end
+        end
+
+        function [value,bounds,reset] = displayLimits(obj,c,policy)
+            bounds = obj.getDataRange(c);
+            if any(~isfinite(bounds)), bounds = [0 1]; end
+            if bounds(1) >= bounds(2)
+                bounds(2) = bounds(1)+max(1,eps(bounds(1)));
+            end
+            bounds = obj.normalizeDisplayRange(c,bounds);
+            reset = bounds;
+            if policy.KeepAuto
+                value = obj.automaticDisplayRange(c,policy.Method,bounds);
+            elseif policy.Lock && ~isempty(policy.LockedRange)
+                value = policy.LockedRange;
+            else
+                value = obj.getDisplayRange(c);
+                if any(~isfinite(value)) || value(1) >= value(2)
+                    value = bounds;
+                end
+            end
+            value = obj.normalizeDisplayRange(c,value);
+            bounds = [min(bounds(1),value(1)),max(bounds(2),value(2))];
+        end
+
+        function value = normalizeDisplayRange(obj,c,value)
+            if ~any(startsWith(string(obj.Channels_(c).Class),["int","uint"]))
+                return
+            end
+            native = obj.Channels_(c).NativeDisplayRange;
+            value = min(max(round(value),native(1)),native(2));
+            if value(1) == value(2)
+                if value(2) < native(2)
+                    value(2) = value(2)+1;
+                else
+                    value(1) = value(1)-1;
+                end
+            end
+        end
+
+        function value = automaticDisplayRange(obj,c,method,bounds)
+            switch string(method)
+                case "Zero to max"
+                    value = [0 bounds(2)];
+                case "Data range"
+                    value = bounds;
+                otherwise
+                    if isempty(obj.Channels_(c).ContrastPercentiles)
+                        pixels = double(obj.getPlane(c));
+                        pixels = pixels(isfinite(pixels));
+                        if isempty(pixels), pixels = bounds; end
+                        obj.Channels_(c).ContrastPercentiles = ...
+                            prctile(pixels(:),[0.5 1 99.5 99.9 99.95]);
+                    end
+                    cuts = obj.Channels_(c).ContrastPercentiles;
+                    switch string(method)
+                        case "Light contrast"
+                            value = cuts([1 5]);
+                        case "Medium contrast"
+                            value = cuts([1 4]);
+                        case "Strong contrast"
+                            value = cuts([2 3]);
+                    end
+            end
+            if any(~isfinite(value)) || value(1) >= value(2)
+                value = bounds;
             end
         end
 
@@ -314,6 +376,46 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
 
     end
 
+    methods
+        function setChannelIDs(obj,ids)
+            ids = reshape(string(ids),1,[]);
+            assert(numel(ids) == obj.SizeC && all(strlength(ids) > 0) && ...
+                numel(unique(ids)) == numel(ids), ...
+                'Each source component needs one distinct project channel ID.');
+            obj.ChannelIDs = ids;
+            obj.syncChannelNames();
+        end
+
+        function index = sourceChannelIndex(obj,channel)
+            if isnumeric(channel)
+                if channel > numel(obj.Parent.Channels)
+                    index = [];
+                    return
+                end
+                channel = obj.Parent.Channels(channel).ID;
+            end
+            index = find(obj.ChannelIDs == string(channel),1);
+        end
+
+        function name = channelName(obj,c)
+            name = obj.Parent.getChannelName(obj.ChannelIDs(c));
+        end
+
+        function names = channelNames(obj)
+            names = strings(1,obj.SizeC);
+            for c = 1:obj.SizeC
+                names(c) = obj.channelName(c);
+            end
+        end
+
+        function syncChannelNames(obj)
+            components = obj.ImageData.Components;
+            for c = 1:numel(components)
+                components(c).Name = obj.channelName(c);
+            end
+        end
+    end
+
     %% CData lazy access + buffer management
     methods
 
@@ -355,7 +457,12 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
                 obj.Channels_(c).NativeDisplayRange = obj.ImageData_.Components(c).NativeDisplayRange;
                 I = obj.getPlane(c);
                 obj.Channels_(c).AutoDisplayRange = (stretchlim(I,[0.1 0.9999])).' * obj.Channels_(c).NativeDisplayRange(2);
-                obj.Channels_(c).DataRange = [min(I(:)) max(I(:))];
+                finitePixels = I(isfinite(I));
+                if isempty(finitePixels)
+                    obj.Channels_(c).DataRange = [0 1];
+                else
+                    obj.Channels_(c).DataRange = double([min(finitePixels),max(finitePixels)]);
+                end
                 if isempty(obj.Channels_(c).DisplayRange)
                     obj.Channels_(c).DisplayRange = obj.Channels_(c).DataRange;
                 end
@@ -509,8 +616,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
         function setRegionSelection(obj,IDs)
             if isempty(IDs), obj.clearRegionSelection(); return; end
             oldIDs = obj.SelectedRegionIDs;
-            validIDs = IDs(obj.hasRegion(IDs));
-            validIDs = string(validIDs(:));
+            validIDs = intersect(obj.RegionOrder,string(IDs(:)),'stable');
             if isequal(validIDs, oldIDs)
                 return
             end
@@ -865,6 +971,8 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
             I.Name       = obj.Name;
             I.SourcePath = obj.SourcePath;
             I.FileType   = obj.FileType;
+            I.ChannelIDs = obj.ChannelIDs;
+            I.DisplayRanges = {obj.Channels_.DisplayRange};
             I.CreatedAt  = obj.CreatedAt;
 
             % Fingerprint hints in case we need to locate missing image files on load
@@ -885,6 +993,8 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
             % Regions
             I.NextRegionOrdinal = obj.NextRegionOrdinal;
             I.RegionOrder = obj.RegionOrder;
+            I.ActiveRegionID = obj.ActiveRegionID;
+            I.SelectedRegionIDs = obj.SelectedRegionIDs;
 
             % get Region objects
             regs = obj.RegionArray;
@@ -930,6 +1040,14 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
                 img.PixelSizeOverride = desmostorm.model.units.PixelSize(S.PixelSizeOverride.Value, S.PixelSizeOverride.Unit);
             end
 
+            if isfield(S,'DisplayRanges')
+                for c = 1:min(img.SizeC,numel(S.DisplayRanges))
+                    if ~isempty(S.DisplayRanges{c})
+                        img.setDisplayRange(S.DisplayRanges{c},c);
+                    end
+                end
+            end
+
             img.NextRegionOrdinal = S.NextRegionOrdinal;
 
             % rebuild regions
@@ -952,6 +1070,13 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
                 if isfield(S,'RegionOrder')
                     img.RegionOrder = string(S.RegionOrder);
                 end
+            end
+
+            if isfield(S,'ActiveRegionID') && isscalar(S.ActiveRegionID)
+                img.setActiveRegion(S.ActiveRegionID);
+            end
+            if isfield(S,'SelectedRegionIDs')
+                img.setRegionSelection(S.SelectedRegionIDs);
             end
 
         end
