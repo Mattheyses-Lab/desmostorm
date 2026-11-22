@@ -114,6 +114,14 @@ classdef PeaksPlotRenderer < matlabx.ui.axes.PlotContent
             end
         end
 
+        function cleanup = beginExportStyleScale(obj,scale)
+            graphics = cell(1,0);
+            for k = 1:numel(obj.PeaksPlot)
+                graphics = [graphics,obj.PeaksPlot(k).exportGraphics()]; %#ok<AGROW>
+            end
+            cleanup = matlabx.ui.axes.internal.scaleExportGraphics(graphics,scale);
+        end
+
         function delete(obj)
             obj.detach();
             delete(obj.PeaksPlot);

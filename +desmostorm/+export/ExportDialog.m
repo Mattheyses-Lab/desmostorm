@@ -94,6 +94,10 @@ classdef ExportDialog
                 BackgroundColor=[.18 .42 .68],FontColor=[1 1 1], ...
                 ButtonPushedFcn=@(~,~) acceptDialog());
             proceed.Layout.Column = 3;
+            if isfield(controls,"StyleSizing") && isfield(controls,"PreserveAspectRatio")
+                controls.StyleSizing.ValueChangedFcn = @(~,~) updateAspectControl();
+                updateAspectControl();
+            end
             movegui(fig,"center");
             fig.Visible = "on";
             uiwait(fig);
@@ -119,6 +123,13 @@ classdef ExportDialog
                 end
                 controls.(spec.Name) = control;
                 fields.(spec.Name) = spec;
+            end
+
+            function updateAspectControl()
+                aspect = controls.PreserveAspectRatio;
+                physical = string(controls.StyleSizing.Value) == "Preserve physical sizes";
+                if physical, aspect.Value = true; end
+                aspect.Enable = ~physical;
             end
 
             function acceptDialog()

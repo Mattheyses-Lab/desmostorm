@@ -61,6 +61,7 @@ classdef Exporter
                 "Plot Options", plotFields(config.PeaksPlot)
                 "Image Options", {
                     numberField("ImageResolution","Image resolution (DPI)",600)
+                    numberField("AngleLabelFontSize","Angle label font size (points)",config.ROI.FontSize)
                     scalingField()
                 }
             });
@@ -228,7 +229,7 @@ classdef Exporter
                     choiceField("Units","Units",["inches","centimeters","pixels","points"],"inches")
                     numberField("Width","Width",6.5)
                     numberField("Height","Height",3)
-                    toggleField("PreserveAspectRatio","Preserve aspect ratio",false)
+                    toggleField("PreserveAspectRatio","Preserve aspect ratio",true)
                     sizingField("StyleSizing","Style sizing")
                 }
                 "Plot Options", plotFields(config.PeaksPlot)
@@ -299,7 +300,7 @@ classdef Exporter
                     {toggleField("TiledSummary","Tiled summary",false)}
                 ]
                 "Image Options", {scalingField()}
-                "Linescan ROI", {numberField("FontSize","Font size (points)",config.ROI.FontSize)}
+                "Linescan ROI", {numberField("FontSize","Angle label font size (points)",config.ROI.FontSize)}
             });
 
             if isempty(options), return; end % return on cancel

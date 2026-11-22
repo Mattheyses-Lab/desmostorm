@@ -145,16 +145,6 @@ for k = 1:numel(regions)
     height = opts.Height;
     if width == 0, width = opts.Size; end
     if height == 0, height = opts.Size; end
-    if opts.OverlaySizing == "physical"
-        screenSize = ax.getOnScreenSize();
-        scale = desmostorm.export.physicalStyleScale(screenSize.Inches, ...
-            [width height],opts.Units,opts.Resolution,opts.PreserveAspectRatio);
-        tool = ax.Tools.DrawRectangle;
-        tool.ROILineWidth = opts.ROILineWidth * scale;
-        tool.ROIMarkerSize = opts.ROIMarkerSize * scale;
-        tool.AnnotationLineWidth = opts.AnnotationLineWidth * scale;
-        tool.FontSize = opts.FontSize * scale;
-    end
     ax.exportView(filename,Units=opts.Units,Width=width,Height=height, ...
         PreserveAspectRatio=opts.PreserveAspectRatio,Resolution=opts.Resolution, ...
         OverlaySizing=opts.OverlaySizing);

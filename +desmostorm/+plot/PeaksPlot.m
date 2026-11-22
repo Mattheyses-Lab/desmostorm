@@ -308,6 +308,16 @@ classdef PeaksPlot < handle & matlab.mixin.SetGetExactNames
             obj.updateWidthAnnotationVisibility();
         end
 
+        function graphics = exportGraphics(obj)
+            items = obj.primitives();
+            graphics = cell(1,0);
+            for k = 1:numel(items)
+                for j = 1:numel(items{k})
+                    graphics{end+1} = items{k}(j); %#ok<AGROW>
+                end
+            end
+        end
+
         function clearPeakLock(obj)
             obj.LockedPeakIndices_ = [];
             obj.updatePeakPatchAppearance();

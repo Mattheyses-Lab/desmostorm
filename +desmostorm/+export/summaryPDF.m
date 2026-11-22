@@ -36,6 +36,7 @@ arguments
     opts.WidthAnnotationsMode (1,1) string {mustBeMember(opts.WidthAnnotationsMode,["normal","hover"])} = "normal"
     opts.ROIFaceAlpha (1,1) double = 0
     opts.RotationAngleVisible (1,1) matlab.lang.OnOffSwitchState = "on"
+    opts.AngleLabelFontSize (1,1) double {mustBePositive,mustBeFinite} = config.ROI.FontSize
     opts.RawLineWidth (1,1) double = 0.5
     opts.SmoothLineWidth (1,1) double = 2
     opts.AnnotationLineWidth (1,1) double {mustBePositive,mustBeFinite} = 0.5
@@ -247,18 +248,14 @@ end
         baseFile = fullfile(tempFolder,sprintf('layout-%d.pdf',pageIdx));
         p.exportPlot(plotFile,ContentType=opts.ContentType, ...
             Units="inches",Width=renderInches(1),Height=renderInches(2), ...
-            Resolution=plotDPI,BackgroundColor=opts.BackgroundColor);
+            Resolution=plotDPI,BackgroundColor=opts.BackgroundColor,StyleSizing=opts.StyleSizing);
         % Render the region image and ROI directly from the image axes.
         % Render at the layout size and adjust DPI for the final PDF scale.
         imageInches = imgWidth / matlabx.UICal.pixelsPerInch();
         imageDPI = opts.ImageResolution * opts.PageWidthInches / layoutWidth;
         imageFile = fullfile(tempFolder,sprintf('image-%d.png',pageIdx));
-        screenSize = ax.getOnScreenSize();
-        imageStyleScale = desmostorm.export.physicalStyleScale(screenSize.Inches, ...
-            [imageInches imageInches],"inches",imageDPI,"on");
-        ax.Tools.DrawRectangle.FontSize = config.ROI.FontSize * imageStyleScale;
         ax.exportView(imageFile,Units="inches",Width=imageInches,Height=imageInches, ...
-            Resolution=imageDPI,PreserveAspectRatio="on",OverlaySizing="scale");
+            Resolution=imageDPI,PreserveAspectRatio="on",OverlaySizing=opts.StyleSizing);
         p.Visible = "off";
         ax.Visible = "off";
         drawnow
@@ -370,7 +367,7 @@ function applyROISettings(tool,roiConfig,opts)
     tool.AnnotationLineWidth = roiConfig.AnnotationLineWidth;
     tool.RotationAngleMode = roiConfig.RotationAngleMode;
     tool.RotationAngleVisible = opts.RotationAngleVisible;
-    tool.FontSize = roiConfig.FontSize;
+    tool.FontSize = opts.AngleLabelFontSize;
     tool.FontColor = roiConfig.FontColor;
 end
 
