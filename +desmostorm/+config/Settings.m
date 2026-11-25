@@ -199,15 +199,12 @@ classdef Settings < handle
                 opts.ApplyFactoryDefaults (1,1) logical = false
             end
 
-            migrated = false;
-
-            [S,schemaMigrated] = desmostorm.config.Settings.migrateSchema_(S);
-            migrated = migrated || schemaMigrated;
-
             if opts.ApplyFactoryDefaults
-                [S,defaultsMigrated] = desmostorm.config.Settings.migrateFactoryDefaults_(S);
-                migrated = migrated || defaultsMigrated;
+                [S,migrated] = desmostorm.config.Settings.migrateFactoryDefaults_(S);
+                if migrated, return; end
             end
+
+            [S,migrated] = desmostorm.config.Settings.migrateSchema_(S);
         end
 
         function restore()
@@ -330,29 +327,7 @@ classdef Settings < handle
             desmostorm.Log.WARN(sprintf( ...
                 "Updating app settings factory defaults from %s to %s.",old,target));
 
-            if desmostorm.Version.compare(old,"1.1.0") < 0
-                % First explicit factory-default generation. Refresh the app's
-                % tunable defaults to the current class defaults. Keep
-                % IO.DefaultFolder because it is a user/machine path, not really
-                % an analysis/display default.
-                oldDefaultFolder = "";
-                if isfield(S,'IO') && isfield(S.IO,'DefaultFolder')
-                    oldDefaultFolder = string(S.IO.DefaultFolder);
-                end
-
-                S.Analysis = defaults.Analysis.toStruct();
-                S.Display = defaults.Display.toStruct();
-                S.PeaksPlot = defaults.PeaksPlot.toStruct();
-                S.ROI = defaults.ROI.toStruct();
-                S.Box = defaults.Box.toStruct();
-                S.IO = defaults.IO.toStruct();
-
-                if oldDefaultFolder ~= ""
-                    S.IO.DefaultFolder = oldDefaultFolder;
-                end
-            end
-
-            S.FactoryDefaultsVersion = char(target);
+            S = defaults.toStruct();
             migrated = true;
         end
 

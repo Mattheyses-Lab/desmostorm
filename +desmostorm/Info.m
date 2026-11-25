@@ -36,6 +36,6 @@ classdef Info
         % settings. Bump this when early-development defaults should be pushed
         % into the app-level settings file. This is more opinionated than schema
         % migration and is not applied to settings embedded in project files.
-        FactoryDefaultsVersion string = "1.1.0"
+        FactoryDefaultsVersion string = "1.2.0"
     end
 end

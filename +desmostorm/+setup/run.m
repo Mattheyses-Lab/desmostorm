@@ -24,7 +24,7 @@ desmostorm.setup.setupSearchPath();
 desmostorm.Log.INFO("Setting up matlabx for desmostorm...");
 desmostorm.setup.matlabx();
 
-% create or migrate user settings without overwriting existing preferences
+% Load app settings and replace older factory-default generations.
 desmostorm.Log.INFO("Loading desmostorm settings...");
 desmostorm.config.Settings.load();
 

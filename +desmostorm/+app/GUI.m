@@ -2820,9 +2820,13 @@ classdef GUI < handle
 
             % get project filename
             obj.Fig.Visible = 'off';
-            [file, path] = uigetfile('*.mat','Select project file (.mat)','MultiSelect','off');
+            % Start in the last picker folder across projects and MATLAB sessions.
+            startFolder = desmostorm.Preferences.lastWorkingFolder(obj.Settings.IO.DefaultFolder);
+            [file, path] = uigetfile('*.mat','Select project file (.mat)', ...
+                char(startFolder + filesep),'MultiSelect','off');
             obj.Fig.Visible = 'on';
             if isequal(file,0), return; end % cancelled | no files selected -> return
+            desmostorm.Preferences.rememberWorkingFolder(path);
             % Filesystem path for fname.
             fname = fullfile(path, file);
 
@@ -2889,16 +2893,14 @@ classdef GUI < handle
 
             destination = obj.Project.SourcePath;
             if saveAs || ~obj.Project.isOnDisk || destination == ""
-                if destination == ""
-                    folder = obj.Settings.IO.DefaultFolder;
-                else
-                    folder = fileparts(destination);
-                end
+                % Use the last selected picker folder for first saves and Save As.
+                folder = desmostorm.Preferences.lastWorkingFolder(obj.Settings.IO.DefaultFolder);
                 % Filesystem path for suggested.
                 suggested = fullfile(folder,obj.Project.Name + ".mat");
                 [file,folder] = uiputfile('*.mat','Save DesmoSTORM project',char(suggested));
                 desmostorm.app.focusMainFigure();
                 if isequal(file,0), return, end
+                desmostorm.Preferences.rememberWorkingFolder(folder);
                 destination = string(fullfile(folder,file));
             end
 
@@ -2971,8 +2973,12 @@ classdef GUI < handle
             % Run cleanup when this scope exits.
             restoreVisibility = onCleanup(@() set(fig,'Visible',wasVisible));
             fig.Visible = 'off';
-            [files,path,~] = matlabx.image.io.uigetimagefile('MultiSelect','on');
+            % Reuse the same starting folder as the project and export pickers.
+            startFolder = desmostorm.Preferences.lastWorkingFolder(obj.Settings.IO.DefaultFolder);
+            [files,path,~] = matlabx.image.io.uigetimagefile([], "Select image file", ...
+                char(startFolder + filesep),MultiSelect="on");
             if isequal(files,0), return; end % cancelled | no files selected -> return
+            desmostorm.Preferences.rememberWorkingFolder(path);
             fig.Visible = wasVisible;
             [progress,cleanupProgress] = obj.createProgressDialog("Preparing image import...");
             files = string(files);

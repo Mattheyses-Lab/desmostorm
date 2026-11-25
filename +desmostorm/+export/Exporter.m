@@ -28,13 +28,15 @@ classdef Exporter
 
             result = false;
 
-            % Filesystem path for default name.
-            defaultName = fullfile(config.IO.DefaultFolder, [char(project.Name),'_region-measurements.xlsx']);
+            % Start in the last folder selected in a DesmoSTORM file picker.
+            startFolder = desmostorm.Preferences.lastWorkingFolder(config.IO.DefaultFolder);
+            defaultName = fullfile(startFolder, [char(project.Name),'_region-measurements.xlsx']);
             [file, path] = uiputfile('*.xlsx', ...
                 'Export region measurements', defaultName);
             desmostorm.app.focusMainFigure();
 
             if isequal(file,0), return; end
+            desmostorm.Preferences.rememberWorkingFolder(path);
 
             [progress,cleanupProgress] = startExportProgress(opts,'Writing region measurements...'); %#ok<NASGU>
             desmostorm.export.regionMeasurementsXlsx(project, fullfile(path, file), ...
@@ -87,13 +89,15 @@ classdef Exporter
             params = rmfield(params,"FontSize");
             params.ScalingMode = string(params.ScalingMode);
 
-            % Filesystem path for default name.
-            defaultName = fullfile(config.IO.DefaultFolder, [char(project.Name),'_summary.pdf']);
+            % Start in the last folder selected in a DesmoSTORM file picker.
+            startFolder = desmostorm.Preferences.lastWorkingFolder(config.IO.DefaultFolder);
+            defaultName = fullfile(startFolder, [char(project.Name),'_summary.pdf']);
             [file, path] = uiputfile('*.pdf', ...
                 'Export peak plots', defaultName);
             desmostorm.app.focusMainFigure();
 
             if isequal(file,0), return; end
+            desmostorm.Preferences.rememberWorkingFolder(path);
 
             [progress,cleanupProgress] = startExportProgress(opts,'Exporting summary PDF...'); %#ok<NASGU>
 
@@ -132,10 +136,13 @@ classdef Exporter
             if isempty(options), return; end
 
             % Destination folder for the exported files.
-            folderName = uigetdir(config.IO.DefaultFolder, 'Export region images');
+            % Start the destination picker in the last selected working folder.
+            startFolder = desmostorm.Preferences.lastWorkingFolder(config.IO.DefaultFolder);
+            folderName = uigetdir(char(startFolder), 'Export region images');
             desmostorm.app.focusMainFigure();
 
-            if ~isfolder(folderName), return; end
+            if isequal(folderName,0) || ~isfolder(folderName), return; end
+            desmostorm.Preferences.rememberDirectorySelection(folderName);
 
             [progress,cleanupProgress] = startExportProgress(opts,'Writing region images...'); %#ok<NASGU>
             desmostorm.export.regionImages(project, folderName, ...
@@ -194,10 +201,13 @@ classdef Exporter
             end
 
             % Destination folder for the exported files.
-            folderName = uigetdir(config.IO.DefaultFolder, 'Export images with region box overlays');
+            % Start the destination picker in the last selected working folder.
+            startFolder = desmostorm.Preferences.lastWorkingFolder(config.IO.DefaultFolder);
+            folderName = uigetdir(char(startFolder), 'Export images with region box overlays');
             desmostorm.app.focusMainFigure();
 
-            if ~isfolder(folderName), return; end
+            if isequal(folderName,0) || ~isfolder(folderName), return; end
+            desmostorm.Preferences.rememberDirectorySelection(folderName);
 
             [progress,cleanupProgress] = startExportProgress(opts,'Writing image region box overlays...'); %#ok<NASGU>
             optionsCell = matlabx.struct.toKeyValueCell(options);
@@ -283,11 +293,13 @@ classdef Exporter
             extension = "." + lower(options.Format);
             if options.Format == "TIFF", extension = ".tif"; end
             options = rmfield(options,"Format");
-            % Filesystem path for default name.
-            defaultName = fullfile(config.IO.DefaultFolder,name + extension);
+            % Start in the last folder selected in a DesmoSTORM file picker.
+            startFolder = desmostorm.Preferences.lastWorkingFolder(config.IO.DefaultFolder);
+            defaultName = fullfile(startFolder,name + extension);
             [file,path] = uiputfile(char("*"+extension),'Export linescan plot',defaultName);
             desmostorm.app.focusMainFigure();
             if isequal(file,0), return; end
+            desmostorm.Preferences.rememberWorkingFolder(path);
             [~,stem] = fileparts(file);
             % Filesystem path for filename.
             filename = fullfile(path,string(stem) + extension);
@@ -365,10 +377,13 @@ classdef Exporter
             end
 
             % Destination folder for the exported files.
-            folderName = uigetdir(config.IO.DefaultFolder, folderTitle);
+            % Start the destination picker in the last selected working folder.
+            startFolder = desmostorm.Preferences.lastWorkingFolder(config.IO.DefaultFolder);
+            folderName = uigetdir(char(startFolder), folderTitle);
             desmostorm.app.focusMainFigure();
 
-            if ~isfolder(folderName), return; end
+            if isequal(folderName,0) || ~isfolder(folderName), return; end
+            desmostorm.Preferences.rememberDirectorySelection(folderName);
 
             [progress,cleanupProgress] = startExportProgress(opts,'Writing region images...'); %#ok<NASGU>
             optionsCell = matlabx.struct.toKeyValueCell(rmfield(options,"Scope"));

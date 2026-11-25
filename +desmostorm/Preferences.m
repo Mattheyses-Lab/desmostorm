@@ -36,6 +36,37 @@ classdef Preferences
 
     methods (Static)
 
+        function folder = lastWorkingFolder(fallback)
+        %LASTWORKINGFOLDER Return the last valid folder used by a file picker.
+            folder = string(desmostorm.Preferences.get("LastWorkingFolder",""));
+            if isscalar(folder) && isfolder(folder), return; end
+
+            folder = string(fallback);
+            if ~isfolder(folder), folder = string(pwd); end
+        end
+
+        function rememberWorkingFolder(folder)
+        %REMEMBERWORKINGFOLDER Persist the folder from an accepted file picker.
+            if isfolder(folder)
+                desmostorm.Preferences.set("LastWorkingFolder",string(folder));
+            end
+        end
+
+        function rememberDirectorySelection(directory)
+        %REMEMBERDIRECTORYSELECTION Remember the parent of an accepted directory.
+            [parent,name,extension] = fileparts(directory);
+            if strlength(string(name) + string(extension)) == 0 && ...
+                    strlength(string(parent)) > 0 && ~strcmp(parent,directory)
+                % Discard the empty final component of a path with a trailing separator.
+                parent = fileparts(parent);
+            end
+            if ~isfolder(parent)
+                % A volume root may have no usable parent.
+                parent = directory;
+            end
+            desmostorm.Preferences.rememberWorkingFolder(parent);
+        end
+
         function value = get(name, defaultValue)
         %GET  Retrieve a preference value.
         %
@@ -182,6 +213,8 @@ classdef Preferences
             catalog = [
                 desmostorm.Preferences.entry_("SetupVersion", "Setup", ...
                     "Last desmostorm setup version applied to this MATLAB preferences group.")
+                desmostorm.Preferences.entry_("LastWorkingFolder", "Runtime", ...
+                    "Last folder selected in a project, image import, or export picker.")
                 desmostorm.Preferences.entry_("DeveloperMode", "Runtime", ...
                     "Use developer-oriented runtime defaults, currently focused on logging.")
                 desmostorm.Preferences.entry_("AnalysisDebugOutput", "Analysis", ...
@@ -224,6 +257,7 @@ classdef Preferences
             % Struct for defaults.
             defaults = struct( ...
                 "SetupVersion", "0.0.0", ...
+                "LastWorkingFolder", "", ...
                 "DeveloperMode", false, ...
                 "AnalysisDebugOutput", devMode, ...
                 "LoggingLevel", logging.Level, ...
