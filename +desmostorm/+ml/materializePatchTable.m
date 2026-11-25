@@ -39,6 +39,7 @@ matlabx.utils.files.ensureDir(outDir);
 
 Pout = P;
 n = height(Pout);
+% Filesystem path for patch filename.
 patchFilename = strings(n,1);
 
 if n == 0
@@ -59,6 +60,7 @@ for i = 1:n
         source = safeToken(string(Pout.source(i)));
     end
 
+    % Filesystem path for patch.
     patchFile = fullfile(outDir,sprintf("patch_%05d_%s_%s.tif",i,label,source));
     if ~opts.Overwrite && isfile(patchFile)
         patchFilename(i) = string(patchFile);
@@ -84,6 +86,7 @@ end
 function patch = readPatchForMaterialization(P,rowIndex,boxSize)
 %READPATCHFORMATERIALIZATION Read from a prior patch file or crop source data.
     if ismember("patchFilename",string(P.Properties.VariableNames))
+        % Filesystem path for existing.
         existingFile = string(P.patchFilename(rowIndex));
         if ~isfile(existingFile) && isstruct(P.Properties.UserData) && ...
                 isfield(P.Properties.UserData,"PatchRoot")
@@ -97,6 +100,7 @@ function patch = readPatchForMaterialization(P,rowIndex,boxSize)
         end
     end
 
+    % Filesystem path for image.
     imageFile = string(P.imageFilename(rowIndex));
     if ~isfile(imageFile)
         error("materializePatchTable:MissingSourceImage", ...
@@ -104,6 +108,7 @@ function patch = readPatchForMaterialization(P,rowIndex,boxSize)
             rowIndex,imageFile);
     end
 
+    % Pixel data for the image being processed.
     I = imread(imageFile);
     I = firstPlane(I);
 
@@ -111,7 +116,9 @@ function patch = readPatchForMaterialization(P,rowIndex,boxSize)
     cy = P.centerY(rowIndex);
     s = boxSize;
 
+    % Inclusive pixel columns covered by the box.
     c1 = ceil(cx - s/2); c2 = floor(cx + s/2);
+    % Inclusive pixel rows covered by the box.
     r1 = ceil(cy - s/2); r2 = floor(cy + s/2);
 
     if r1 < 1 || c1 < 1 || r2 > size(I,1) || c2 > size(I,2)
@@ -127,6 +134,7 @@ end
 function I = firstPlane(I)
 %FIRSTPLANE Match current training behavior by using the first image plane.
     if ~ismatrix(I)
+        % Pixel data for the image being processed.
         I = I(:,:,1);
     end
 end
@@ -134,6 +142,7 @@ end
 function Iout = toWritableImage(I)
 %TOWRITABLEIMAGE Convert common numeric image classes to TIFF-safe data.
     if isa(I,"uint8") || isa(I,"uint16")
+        % Pixel array returned by this operation.
         Iout = I;
     elseif isinteger(I)
         Iout = uint16(rescale(double(I),0,double(intmax("uint16"))));
@@ -161,6 +170,7 @@ end
 
 function store = makePatchStore(outDir,manifestFile,n)
 %MAKEPATCHSTORE Build package metadata describing the materialized patch set.
+    % Struct for store.
     store = struct();
     store.Mode = "materialized";
     store.Root = string(outDir);

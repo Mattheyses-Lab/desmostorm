@@ -15,16 +15,25 @@
 % with this program; if not, see <https://www.gnu.org/licenses/>.
 
 classdef Analysis < handle
+%ANALYSIS Settings for image analysis, ROI geometry, and peak detection.
 
     % Group analysis parameters; validate on set; raise Changed.
     properties (Access=private)
+        % Min peak distance.
         MinPeakDistance_    (1,1) double {mustBeNonnegative} = 15
+        % Min peak height.
         MinPeakHeight_      (1,1) double {mustBeNonnegative} = 0.4
+        % Min peak prominence.
         MinPeakProminence_  (1,1) double {mustBeNonnegative} = 0
+        % Side length of the square region box in pixels.
         BoxSize_            (1,1) double {mustBePositive}    = 300
+        % Whether to normalize intensities before peak detection.
         Normalize_          (1,1) logical = true
+        % Peak smoothing.
         PeakSmoothing_      (1,1) double {mustBeNonnegative} = 15
+        % Pixel size value.
         PixelSizeValue_     (1,1) double {mustBePositive} = 1
+        % Pixel size unit.
         PixelSizeUnit_      (1,:) char = 'px'
     end
 
@@ -34,39 +43,63 @@ classdef Analysis < handle
     end
 
     properties (Dependent)
+        % Min peak distance.
         MinPeakDistance
+        % Min peak height.
         MinPeakHeight
+        % Min peak prominence.
         MinPeakProminence
+        % Side length of the square region box in pixels.
         BoxSize
+        % Normalize.
         Normalize
+        % Peak smoothing.
         PeakSmoothing
+        % Pixel size value.
         PixelSizeValue   % numeric, e.g. 4
+        % Pixel size unit.
         PixelSizeUnit    % string, e.g. 'nm'
     end
 
     methods
         % Getters
         function v = get.MinPeakDistance(this),     v = this.MinPeakDistance_;      end
+        %GET.MINPEAKHEIGHT Return the min peak height.
         function v = get.MinPeakHeight(this),       v = this.MinPeakHeight_;        end
+        %GET.MINPEAKPROMINENCE Return the min peak prominence.
         function v = get.MinPeakProminence(this),   v = this.MinPeakProminence_;    end
+        %GET.BOXSIZE Return the box size.
         function v = get.BoxSize(this),             v = this.BoxSize_;              end
+        %GET.NORMALIZE Return the normalize.
         function v = get.Normalize(this),           v = this.Normalize_;            end
+        %GET.PEAKSMOOTHING Return the peak smoothing.
         function v = get.PeakSmoothing(this),       v = this.PeakSmoothing_;        end
+        %GET.PIXELSIZEVALUE Return the pixel size value.
         function v = get.PixelSizeValue(this),      v = this.PixelSizeValue_;       end
+        %GET.PIXELSIZEUNIT Return the pixel size unit.
         function v = get.PixelSizeUnit(this),       v = this.PixelSizeUnit_;        end
 
         % Setters
         function set.MinPeakDistance(this,v),     this.setValue("MinPeakDistance",v);     end
+        %SET.MINPEAKHEIGHT Set the min peak height.
         function set.MinPeakHeight(this,v),       this.setValue("MinPeakHeight",v);       end
+        %SET.MINPEAKPROMINENCE Set the min peak prominence.
         function set.MinPeakProminence(this,v),   this.setValue("MinPeakProminence",v);   end
+        %SET.BOXSIZE Set the box size.
         function set.BoxSize(this,v),             this.setValue("BoxSize",v);             end
+        %SET.NORMALIZE Set the normalize.
         function set.Normalize(this,v),           this.setValue("Normalize",v);           end
+        %SET.PEAKSMOOTHING Set the peak smoothing.
         function set.PeakSmoothing(this,v),       this.setValue("PeakSmoothing",v);       end
+        %SET.PIXELSIZEVALUE Set the pixel size value.
         function set.PixelSizeValue(this,v),      this.setValue("PixelSizeValue",v);      end
+        %SET.PIXELSIZEUNIT Set the pixel size unit.
         function set.PixelSizeUnit(this,v),       this.setValue("PixelSizeUnit",v);       end
 
         % Serialization helpers
         function S = toStruct(this)
+        %TOSTRUCT Serialize the current values into a plain MATLAB structure.
+            % Struct carrying serialized or resolved settings.
             S = struct( ...
                 'MinPeakDistance',      this.MinPeakDistance, ...
                 'MinPeakHeight',        this.MinPeakHeight, ...
@@ -79,6 +112,7 @@ classdef Analysis < handle
         end
         
         function fromStruct(this,S)
+        %FROMSTRUCT Read saved values from a MATLAB structure.
             f = fieldnames(this.toStruct());
             for i=1:numel(f)
                 if isfield(S,f{i}), this.(f{i}) = S.(f{i}); end
@@ -91,6 +125,8 @@ classdef Analysis < handle
     methods
 
         function ps = getDefaultPixelSize(this)
+        %GETDEFAULTPIXELSIZE Return default pixel size.
+            % Physical calibration used to convert pixel measurements.
             ps = desmostorm.model.units.PixelSize(this.PixelSizeValue, this.PixelSizeUnit);
         end
         
@@ -98,6 +134,7 @@ classdef Analysis < handle
 
     methods (Access=private)
         function setValue(this,name,value)
+        %SETVALUE Update a stored value and notify listeners when it changes.
             prop = char(name + "_");
             old = this.(prop);
             if isequaln(old,value)

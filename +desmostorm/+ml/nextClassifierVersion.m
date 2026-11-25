@@ -38,6 +38,7 @@ function [nextVersion, stem] = nextClassifierVersion(saveDir, baseName)
     files = dir(fullfile(saveDir, sprintf("classifier_%s_v*.mat", stem)));
     
     versions = 0;
+    % Process files in order.
     for i = 1:numel(files)
         tok = regexp(files(i).name, "_v(\d+)\.mat$", "tokens", "once");
         if ~isempty(tok)

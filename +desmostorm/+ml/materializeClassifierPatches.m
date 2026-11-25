@@ -51,6 +51,7 @@ if opts.PatchDir == ""
     opts.PatchDir = fullfile(folder,stem + "_patches");
 end
 
+% Filesystem path for manifest.
 manifestFile = fullfile(opts.PatchDir,"patch_manifest.csv");
 
 desmostorm.Log.INFO(sprintf( ...

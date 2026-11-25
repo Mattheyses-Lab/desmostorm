@@ -17,10 +17,12 @@
 classdef (ConstructOnLoad) ImageAdded < event.EventData
 % event data class for ImageAdded events
     properties
+        % Image ID.
         ImageID string
     end
     methods
         function this = ImageAdded(imageID)
+        %IMAGEADDED Package the added image for project listeners.
             this.ImageID = imageID;
         end
     end

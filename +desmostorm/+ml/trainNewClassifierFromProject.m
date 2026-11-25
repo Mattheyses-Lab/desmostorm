@@ -127,9 +127,13 @@ function [pkg, out] = trainNewClassifierFromProject(project, opts)
     % Build filenames before packaging so the materialized patch folder can sit
     % next to the classifier MAT-file using the same versioned stem.
     classifierFile = fullfile(opts.SaveDir, sprintf("classifier_%s_v%03d.mat", stem, nextVersion));
+    % Filesystem path for project patch.
     projectPatchFile = fullfile(opts.SaveDir, sprintf("patchTable_%s_v%03d_project.csv", stem, nextVersion));
+    % Filesystem path for training patch.
     trainingPatchFile = fullfile(opts.SaveDir, sprintf("patchTable_%s_v%03d_training.csv", stem, nextVersion));
+    % Filesystem path for patch dir.
     patchDir = fullfile(opts.SaveDir, sprintf("classifier_%s_v%03d_patches", stem, nextVersion));
+    % Filesystem path for manifest.
     manifestFile = fullfile(patchDir,"patch_manifest.csv");
 
     % Materialize the exact training table used for this classifier version.

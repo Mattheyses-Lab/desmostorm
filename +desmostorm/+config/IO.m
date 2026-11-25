@@ -15,9 +15,12 @@
 % with this program; if not, see <https://www.gnu.org/licenses/>.
 
 classdef IO < handle
+%IO Settings for project file handling.
 
     properties (Access=private)
+        % Filesystem location for default.
         DefaultFolder_ string = desmostorm.Paths.user
+        % Whether the application saves projects automatically.
         AutoSave_      logical = true
     end
 
@@ -27,7 +30,9 @@ classdef IO < handle
     end
 
     properties (Dependent)
+        % Filesystem location for default.
         DefaultFolder
+        % Auto save.
         AutoSave
     end
 
@@ -35,10 +40,12 @@ classdef IO < handle
         
         % Getters
         function v = get.DefaultFolder(this), v = this.DefaultFolder_; end
+        %GET.AUTOSAVE Return the auto save.
         function v = get.AutoSave(this),      v = this.AutoSave_;      end
 
         % Setters (with validation)
         function set.DefaultFolder(this, v)
+        %SET.DEFAULTFOLDER Set the default folder.
             arguments
                 this
                 v string
@@ -54,17 +61,21 @@ classdef IO < handle
         end
         
         function set.AutoSave(this, v)
+        %SET.AUTOSAVE Set the auto save.
             this.setValue("AutoSave",logical(v));
         end
 
         % Serialization helpers
         function S = toStruct(this)
+        %TOSTRUCT Serialize the current values into a plain MATLAB structure.
+            % Struct carrying serialized or resolved settings.
             S = struct( ...
                 'DefaultFolder', this.DefaultFolder, ...
                 'AutoSave', this.AutoSave);
         end
 
         function fromStruct(this,S)
+        %FROMSTRUCT Read saved values from a MATLAB structure.
             f = fieldnames(this.toStruct());
             for i=1:numel(f)
                 if isfield(S,f{i}), this.(f{i}) = S.(f{i}); end
@@ -75,6 +86,7 @@ classdef IO < handle
 
     methods (Access=private)
         function setValue(this,name,value)
+        %SETVALUE Update a stored value and notify listeners when it changes.
             prop = char(name + "_");
             old = this.(prop);
             if isequaln(old,value)

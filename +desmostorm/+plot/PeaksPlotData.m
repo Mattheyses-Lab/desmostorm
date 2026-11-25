@@ -18,13 +18,17 @@ classdef PeaksPlotData
 %PEAKSPLOTDATA Linescan results and optional channel identity in trace order.
 
     properties (SetAccess=private)
+        % Traces.
         Traces (:,1) desmostorm.analysis.PeaksData
+        % Project channel IDs in source component order.
         ChannelIDs (:,1) string
+        % Names.
         Names (:,1) string
     end
 
     methods
         function obj = PeaksPlotData(traces,opts)
+        %PEAKSPLOTDATA Associate linescan traces with their channel identities and names.
             arguments
                 traces desmostorm.analysis.PeaksData = desmostorm.analysis.PeaksData.empty()
                 opts.ChannelIDs string = strings(0,1)

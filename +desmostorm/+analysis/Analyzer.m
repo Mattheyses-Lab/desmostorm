@@ -15,8 +15,10 @@
 % with this program; if not, see <https://www.gnu.org/licenses/>.
 
 classdef Analyzer
+%ANALYZER Run region linescans and ROI fitting with an analysis settings snapshot.
     methods (Static)
         function out = analyzeRegionLinescan(I, data, rc, opts)
+        %ANALYZEREGIONLINESCAN Analyze region linescan.
             arguments
                 % image to analyze
                 I cell
@@ -37,8 +39,10 @@ classdef Analyzer
             end
 
             out = desmostorm.analysis.PeaksData.empty();
+            % Number of channels to process.
             nChannels = numel(I);
 
+            % Process each source channel in its original component order.
             for i = 1:nChannels
                 desmostorm.runtime.updateProgress(opts.ProgressDialog, ...
                     sprintf("%sAnalyzing channel %d/%d...", ...
@@ -67,6 +71,7 @@ classdef Analyzer
         end
 
         function [out,diagnostics] = autofitRegionROI(I, rc, opts)
+        %AUTOFITREGIONROI Fit a linescan rectangle to the supplied region image.
             arguments
                 % image to analyze
                 I (:,:) double

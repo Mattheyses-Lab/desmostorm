@@ -18,17 +18,22 @@ classdef PeaksPlotRenderer < matlabx.ui.axes.PlotContent
 %PEAKSPLOTRENDERER Mountable multi-channel linescan content.
 
     properties (SetAccess=private)
+        % Data.
         Data (1,1) desmostorm.plot.PeaksPlotData = desmostorm.plot.PeaksPlotData()
+        % Style.
         Style (1,1) desmostorm.plot.PeaksPlotStyle = desmostorm.plot.PeaksPlotStyle()
     end
 
     properties (Access=private)
+        % Peaks plot.
         PeaksPlot (:,1) desmostorm.plot.PeaksPlot = desmostorm.plot.PeaksPlot.empty(0,1)
+        % Whether the next render must recompute axes framing.
         UpdateLimits (1,1) logical = true
     end
 
     methods
         function update(obj,data,style)
+        %UPDATE Refresh the graphics using the current data and appearance.
             arguments
                 obj
                 data (1,1) desmostorm.plot.PeaksPlotData
@@ -45,14 +50,26 @@ classdef PeaksPlotRenderer < matlabx.ui.axes.PlotContent
         end
 
         function capabilities = axesCapabilities(obj)
+        %AXESCAPABILITIES Expose the host controls compatible with linescan annotation lanes.
             capabilities = axesCapabilities@matlabx.ui.axes.PlotContent(obj);
             capabilities = capabilities(~ismember(capabilities,["YLim","YTickInterval"]));
         end
 
+        function defaults = axesViewDefaults(obj)
+        %AXESVIEWDEFAULTS Declare the renderer’s X range and tick defaults for PlotAxes.
+            % Struct for defaults.
+            defaults = struct("XLim","auto","XTickInterval","auto");
+            if ~isempty(obj.Style.XLim)
+                defaults.XLim = obj.Style.XLim;
+            end
+        end
+
         function handleEvent(obj,kind,event)
+        %HANDLEEVENT Route pointer events to peak hover and selection behavior.
             switch kind
                 case "Move"
                     [trace,peak] = obj.pickPeak();
+                    % Visit each entry in peaks plot.
                     for k = 1:numel(obj.PeaksPlot)
                         if k == trace
                             obj.PeaksPlot(k).highlightPeak(peak);
@@ -61,6 +78,7 @@ classdef PeaksPlotRenderer < matlabx.ui.axes.PlotContent
                         end
                     end
                 case "Leave"
+                    % Visit each entry in peaks plot.
                     for k = 1:numel(obj.PeaksPlot)
                         obj.PeaksPlot(k).clearPeakHighlight();
                     end
@@ -71,6 +89,7 @@ classdef PeaksPlotRenderer < matlabx.ui.axes.PlotContent
                         obj.PeaksPlot(trace).togglePeakLock(peak);
                         event.stop();
                     else
+                        % Visit each entry in peaks plot.
                         for k = 1:numel(obj.PeaksPlot)
                             obj.PeaksPlot(k).clearPeakLock();
                         end
@@ -79,7 +98,9 @@ classdef PeaksPlotRenderer < matlabx.ui.axes.PlotContent
         end
 
         function cleanup = beginExportStyleScale(obj,scale)
+        %BEGINEXPORTSTYLESCALE Temporarily scale the renderer’s graphic styles for export.
             graphics = cell(1,0);
+            % Process peaks plot in order.
             for k = 1:numel(obj.PeaksPlot)
                 graphics = [graphics,obj.PeaksPlot(k).exportGraphics()]; %#ok<AGROW>
             end
@@ -87,6 +108,7 @@ classdef PeaksPlotRenderer < matlabx.ui.axes.PlotContent
         end
 
         function delete(obj)
+        %DELETE Release resources owned by this object.
             obj.detach();
             delete(obj.PeaksPlot);
         end
@@ -94,6 +116,7 @@ classdef PeaksPlotRenderer < matlabx.ui.axes.PlotContent
 
     methods (Access=protected)
         function refreshGraphics(obj)
+        %REFRESHGRAPHICS Render the stored traces and apply chart-defined framing.
             if isempty(obj.Host) || ~isvalid(obj.Host), return, end
             axes = obj.Host.Axes;
             obj.Host.BackgroundColor = obj.Style.BackgroundColor;
@@ -106,11 +129,13 @@ classdef PeaksPlotRenderer < matlabx.ui.axes.PlotContent
             excess = obj.PeaksPlot(count+1:end);
             delete(excess);
             obj.PeaksPlot = obj.PeaksPlot(1:min(count,numel(obj.PeaksPlot)));
+            % Process peaks plot in order.
             for k = numel(obj.PeaksPlot)+1:count
                 obj.PeaksPlot(k,1) = desmostorm.plot.PeaksPlot(axes);
             end
 
             limits = obj.getDistanceAnnotationAxisLimits();
+            % Vertical position of each distance annotation lane.
             laneY = obj.getDistanceAnnotationLanes(limits);
             for k = 1:count
                 obj.PeaksPlot(k).render(obj.Data.Traces(k),obj.Style,k,laneY(k), ...
@@ -139,6 +164,8 @@ classdef PeaksPlotRenderer < matlabx.ui.axes.PlotContent
         end
 
         function attachGraphics(obj,axes)
+        %ATTACHGRAPHICS Attach graphics.
+            % Visit each entry in peaks plot.
             for k = 1:numel(obj.PeaksPlot)
                 obj.PeaksPlot(k).attach(axes);
             end
@@ -146,6 +173,8 @@ classdef PeaksPlotRenderer < matlabx.ui.axes.PlotContent
         end
 
         function hideGraphics(obj)
+        %HIDEGRAPHICS Hide graphics.
+            % Visit each entry in peaks plot.
             for k = 1:numel(obj.PeaksPlot)
                 obj.PeaksPlot(k).hide();
             end
@@ -154,10 +183,12 @@ classdef PeaksPlotRenderer < matlabx.ui.axes.PlotContent
 
     methods (Access=private)
         function [trace,peak] = pickPeak(obj)
+        %PICKPEAK Pick peak.
             trace = 0;
             peak = NaN;
             distance = Inf;
             point = obj.Host.Axes.CurrentPoint;
+            % Process peaks plot in order.
             for k = 1:numel(obj.PeaksPlot)
                 candidates = obj.PeaksPlot(k).peakCandidatesAtPoint(point(1,1:2));
                 if isempty(candidates), continue, end
@@ -171,7 +202,10 @@ classdef PeaksPlotRenderer < matlabx.ui.axes.PlotContent
         end
 
         function laneY = getDistanceAnnotationLanes(obj,lims)
+        %GETDISTANCEANNOTATIONLANES Return distance annotation lanes.
+            % Number of plots.
             nPlots = numel(obj.PeaksPlot);
+            % Vertical position of each distance annotation lane.
             laneY = nan(nPlots,1);
 
             if isempty(lims)
@@ -184,6 +218,7 @@ classdef PeaksPlotRenderer < matlabx.ui.axes.PlotContent
                 return
             end
 
+            % Band height.
             bandHeight = bandMax - bandMin;
             lanePad = 0.18*bandHeight;
             laneStep = 0;
@@ -195,6 +230,7 @@ classdef PeaksPlotRenderer < matlabx.ui.axes.PlotContent
         end
 
         function lims = getDistanceAnnotationAxisLimits(obj)
+        %GETDISTANCEANNOTATIONAXISLIMITS Return distance annotation axis limits.
             lims = [];
             if ~obj.Style.DistanceAnnotations || obj.Style.DistanceAnnotationsMode ~= "lanes", return, end
             dataLim = obj.getDataYLim();
@@ -211,20 +247,24 @@ classdef PeaksPlotRenderer < matlabx.ui.axes.PlotContent
         end
 
         function bandFraction = getDistanceAnnotationBandFraction(obj)
+        %GETDISTANCEANNOTATIONBANDFRACTION Return distance annotation band fraction.
             nLanes = max(numel(obj.PeaksPlot),1);
             bandFraction = 0.10 + 0.075*(nLanes - 1);
             bandFraction = min(bandFraction,0.50);
         end
 
         function dataLim = getDataYLim(obj)
+        %GETDATAYLIM Return data y lim.
             yMin = Inf;
             yMax = -Inf;
 
+            % Visit each entry in traces.
             for i = 1:numel(obj.Data.Traces)
                 if isempty(obj.Data.Traces(i))
                     continue
                 end
 
+                % Raw and smoothed samples used to bound the current trace.
                 y = [obj.Data.Traces(i).SignalNorm; obj.Data.Traces(i).SignalSmooth];
                 y = y(isfinite(y));
                 if isempty(y)

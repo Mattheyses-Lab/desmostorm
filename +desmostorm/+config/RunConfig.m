@@ -18,16 +18,24 @@ classdef RunConfig
     %% RUNCONFIG  Value class with immutable snapshot of current Analysis settings for processing runs
 
     properties
+        % Min peak distance.
         MinPeakDistance     (1,1) double
+        % Min peak height.
         MinPeakHeight       (1,1) double
+        % Min peak prominence.
         MinPeakProminence   (1,1) double
+        % Side length of the square region box in pixels.
         BoxSize             (1,1) double
+        % Peak smoothing.
         PeakSmoothing       (1,1) double
+        % Whether to normalize intensities before peak detection.
         Normalize           (1,1) logical
     end
 
     methods(Static)
         function rc = fromSettings(S)
+        %FROMSETTINGS Create a value snapshot of the current analysis settings.
+            % Analysis settings snapshot for this run.
             rc = desmostorm.config.RunConfig;
             rc.MinPeakDistance      = S.Analysis.MinPeakDistance;
             rc.MinPeakHeight        = S.Analysis.MinPeakHeight;

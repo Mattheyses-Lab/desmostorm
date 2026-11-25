@@ -18,12 +18,15 @@ classdef PixelSize
 % desmostorm.model.units.PixelSize
 
     properties (SetAccess = immutable)
+        % Value.
         Value (1,1) double {mustBePositive} = 1  % units per pixel
+        % Unit.
         Unit  (1,:) char = 'px'                  % 'px','nm','µm'
     end
 
     methods
         function obj = PixelSize(Value, Unit)
+        %PIXELSIZE Create a calibration from the distance represented by one pixel.
             arguments
                 Value (1,1) double {mustBePositive} = 1
                 Unit  (1,:) char = 'px'
@@ -37,15 +40,18 @@ classdef PixelSize
         end
 
         function lenPhys = px2phys(obj, lenPx)
+        %PX2PHYS Convert pixel distances to the calibrated physical units.
             lenPhys = lenPx .* obj.Value;
         end
 
         function s = formatLength(obj, lenPx, mode)
+        %FORMATLENGTH Format length.
             if nargin < 3
                 mode = 'physical';
             end
 
             if isempty(lenPx) % default to NaN if length is empty
+                % Len pixels.
                 lenPx = NaN;
             end
 
@@ -71,6 +77,8 @@ classdef PixelSize
         end
 
         function c = charDisplay(obj)
+        %CHARDISPLAY Format the calibrated pixel size for display.
+            % Source channel index.
             c = sprintf('%.3g %s/px', obj.Value, obj.Unit);
         end
 
@@ -78,6 +86,7 @@ classdef PixelSize
 
     methods (Static, Access = private)
         function unitOut = normalizeUnit(unitIn)
+        %NORMALIZEUNIT Normalize unit.
             unitIn = strtrim(lower(unitIn));
             switch unitIn
                 case {'px','pixel','pixels'}

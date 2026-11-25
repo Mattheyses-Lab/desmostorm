@@ -51,6 +51,7 @@ function [centers, scores] = proposePatchCenters(imgOrPath, net, opts)
     
     % Load image
     if isa(imgOrPath, "desmostorm.model.STORMImage")
+        % Image pixels before transformation or normalization.
         I0 = imgOrPath.CData;
         H = imgOrPath.Height;
         W = imgOrPath.Width;
@@ -82,6 +83,7 @@ function [centers, scores] = proposePatchCenters(imgOrPath, net, opts)
             xs = xMin : opts.Stride : xMax;
             ys = yMin : opts.Stride : yMax;
             [XX,YY] = meshgrid(xs, ys);
+            % Index or count of source image components used in this operation.
             C = [XX(:) YY(:)];
         case {"ClusterCentroid","ClusterArea"}
             C = desmostorm.ml.detectPatchCenterCandidates(I0, ...
@@ -119,6 +121,7 @@ function [centers, scores] = proposePatchCenters(imgOrPath, net, opts)
     bs = opts.BatchSize;
     for k = 1:bs:M
         k2 = min(M, k+bs-1);
+        % Index of the matching entry.
         idx = k:k2;
         nb = numel(idx);
     
@@ -129,7 +132,9 @@ function [centers, scores] = proposePatchCenters(imgOrPath, net, opts)
             cx = C(idx(j),1);
             cy = C(idx(j),2);
     
+            % Inclusive pixel columns covered by the box.
             c1 = ceil(cx - s/2); c2 = floor(cx + s/2);
+            % Inclusive pixel rows covered by the box.
             r1 = ceil(cy - s/2); r2 = floor(cy + s/2);
     
             patch = I0(r1:r2, c1:c2); % s x s
@@ -173,6 +178,7 @@ function [centers, scores] = proposePatchCenters(imgOrPath, net, opts)
     B = centerToBBox(Ck, s);
     updateProgress(opts.ProgressDialog,opts.ProgressMessagePrefix, ...
         "Suppressing overlapping classifier proposals...");
+    % Index for keep.
     keepIdx = nmsFixedBoxes(B, Sk, opts.NmsIoU);
     
     centers = Ck(keepIdx,:);
@@ -186,8 +192,10 @@ end
 % ---- helpers ----
 
 function B = centerToBBox(C, s)
+%CENTERTOBBOX Convert box centers and dimensions to bounding box coordinates.
     x = C(:,1) - s/2;
     y = C(:,2) - s/2;
+    % Bounding boxes in top-left, width, and height format.
     B = [x y repmat([s s], size(C,1), 1)];
 end
 
@@ -200,6 +208,7 @@ function mode = normalizeCandidateMode(mode)
 end
 
 function C = keepCentersInsideBounds(C,xMin,xMax,yMin,yMax)
+%KEEPCENTERSINSIDEBOUNDS Keep candidate box centers within the usable image bounds.
     if isempty(C)
         return
     end
@@ -207,10 +216,12 @@ function C = keepCentersInsideBounds(C,xMin,xMax,yMin,yMax)
     keep = ...
         C(:,1) >= xMin & C(:,1) <= xMax & ...
         C(:,2) >= yMin & C(:,2) <= yMax;
+    % Index or count of source image components used in this operation.
     C = C(keep,:);
 end
 
 function updateProgress(h,prefix,msg,value)
+%UPDATEPROGRESS Update progress.
     arguments
         h = []
         prefix (1,1) string = ""
@@ -222,9 +233,11 @@ function updateProgress(h,prefix,msg,value)
 end
 
 function keepIdx = nmsFixedBoxes(B, S, iouThr)
+%NMSFIXEDBOXES Suppress overlapping candidate regions using fixed-size boxes.
     [~, order] = sort(S, "descend");
     keep = true(numel(order),1);
     
+    % Visit each entry in order.
     for ii = 1:numel(order)
         if ~keep(ii), continue; end
         bi = B(order(ii),:);
@@ -239,10 +252,12 @@ function keepIdx = nmsFixedBoxes(B, S, iouThr)
         keep(jj(iou > iouThr)) = false;
     end
     
+    % Index for keep.
     keepIdx = order(keep);
 end
 
 function iou = bboxIoU(b1, B)
+%BBOXIOU Measure intersection over union for bounding boxes.
     x1 = max(b1(1), B(:,1));
     y1 = max(b1(2), B(:,2));
     x2 = min(b1(1)+b1(3), B(:,1)+B(:,3));
@@ -255,5 +270,6 @@ function iou = bboxIoU(b1, B)
     a1 = b1(3) * b1(4);
     a2 = B(:,3) .* B(:,4);
     
+    % Overlap divided by union area for each candidate pair.
     iou = inter ./ (a1 + a2 - inter + eps);
 end

@@ -17,6 +17,7 @@
 function [ROI,info] = refineROIWidth(I,ROI,config)
 %REFINEROIWIDTH Fit left/right ROI edges from the rectified width profile.
 
+% Struct for info.
 info = struct( ...
     "Succeeded",false, ...
     "LeftMinIdx",NaN, ...
@@ -34,6 +35,7 @@ X = peaksData.Location;
     peaksData,"Mode","allpeaks");
 
 dWLeft = X(1) - X(leftMinIdx);
+% Linescan ROI geometry used for the current region.
 ROI = desmostorm.analysis.image.autofit.shiftLeftEdge(ROI,dWLeft);
 
 dWRight = X(rightMinIdx) - X(end);

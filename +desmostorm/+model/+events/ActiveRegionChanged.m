@@ -18,13 +18,17 @@ classdef (ConstructOnLoad) ActiveRegionChanged < event.EventData
 %ACTIVEREGIONCHANGED Event data for active-region transitions.
 
     properties
+        % Image ID.
         ImageID string
+        % New ID.
         NewID string
+        % Old ID.
         OldID string
     end
 
     methods
         function this = ActiveRegionChanged(imageID, newID, oldID)
+        %ACTIVEREGIONCHANGED Capture the previous and new active region identities for listeners.
             this.ImageID = string(imageID);
             this.NewID = string(newID);
             this.OldID = string(oldID);

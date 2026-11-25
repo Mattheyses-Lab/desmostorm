@@ -43,11 +43,13 @@ styleAngleScoreAxes(ax,opts.Title,opts.FontSize);
 
 oldNextPlot = ax.NextPlot;
 ax.NextPlot = "add";
+% Run cleanup when this scope exits.
 cleanup = onCleanup(@() set(ax,"NextPlot",oldNextPlot));
 
 [componentNames,componentValues,componentColors] = weightedScoreComponents(T);
 legendLabels = strings(0,1);
 
+% Process component names in order.
 for i = 1:numel(componentNames)
     h.ComponentLines(i,1) = plot(ax,T.Theta,componentValues(:,i), ...
         "Color",componentColors(i,:), ...

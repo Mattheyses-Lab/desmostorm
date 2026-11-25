@@ -55,6 +55,7 @@ end
 matlabx.utils.files.ensureDir(folderName);
 
 regions = collectRegions(source);
+% Counts of attempted, successful, and skipped export records.
 summary = struct("Attempted",numel(regions),"Exported",0,"Skipped",0);
 if isempty(regions)
     return
@@ -69,7 +70,9 @@ if isempty(firstRegion)
     return
 end
 
+% Source component index for the first exportable image.
 firstIndex = firstImage.sourceChannelIndex(opts.Channel);
+% Pixel data for the image being processed.
 I = getRegionChannelImage(firstRegion,firstIndex);
 
 [ax,fig] = matlabx.app.quickshow(I, ...
@@ -79,6 +82,7 @@ I = getRegionChannelImage(firstRegion,firstIndex);
     "Visible","off", ...
     "Size",3, ...
     "Units","inches");
+% Release the temporary object when this scope exits.
 c = onCleanup(@() delete(fig));
 
 ax.CLim = desmostorm.export.imageDisplayLimits(firstImage,firstIndex,opts.ScalingMode,opts.DisplaySettings,opts.AutoScalingMethod);
@@ -104,6 +108,7 @@ desmostorm.app.focusMainFigure();
 fig.Visible = "off";
 
 exportedFiles = {};
+% Process regions in order.
 for k = 1:numel(regions)
     region = regions(k);
     img = region.Parent;
@@ -112,6 +117,7 @@ for k = 1:numel(regions)
         sprintf('Exporting ROI overlay (%d/%d): %s',k,numel(regions),region.Name), ...
         k-1,numel(regions));
 
+    % Index of the channel in the source image.
     sourceIndex = img.sourceChannelIndex(opts.Channel);
     if isempty(sourceIndex)
         summary.Skipped = summary.Skipped + 1;
@@ -140,6 +146,7 @@ for k = 1:numel(regions)
     end
 
 
+    % Filesystem path for filename.
     filename = fullfile(folderName,sprintf('%s_%s_C%d_subimage-ROI-overlay.%s', ...
         safeFileStem(img.shortName),safeFileStem(region.Name),opts.Channel,lower(opts.Format)));
     width = opts.Width;
@@ -158,6 +165,7 @@ if opts.TiledSummary == "on" && ~isempty(exportedFiles)
     desmostorm.runtime.updateProgress(opts.ProgressDialog, ...
         'Building tiled ROI overlay summary...', ...
         numel(regions),numel(regions));
+    % Filesystem path for summary.
     summaryFile = fullfile(folderName,sprintf('ROI-overlay-tiled-summary_C%d.%s',opts.Channel,lower(opts.Format)));
     writeTiledSummary(exportedFiles,summaryFile);
 end
@@ -170,9 +178,11 @@ desmostorm.runtime.updateProgress(opts.ProgressDialog, ...
 end
 
 function regions = collectRegions(source)
+%COLLECTREGIONS Collect regions.
     if isa(source,'desmostorm.model.STORMProject')
         regions = desmostorm.model.STORMRegion.empty();
         imgs = source.ImageArray;
+        % Process imgs in order.
         for i = 1:numel(imgs)
             regs = imgs(i).RegionArray;
             if ~isempty(regs)
@@ -192,8 +202,10 @@ function regions = collectRegions(source)
 end
 
 function [region,img] = firstExportableRegion(regions,channel)
+%FIRSTEXPORTABLEREGION Find the first region with the requested channel and a valid ROI.
     region = desmostorm.model.STORMRegion.empty();
     img = desmostorm.model.STORMImage.empty();
+    % Process regions in order.
     for k = 1:numel(regions)
         candidate = regions(k);
         candidateImage = candidate.Parent;
@@ -206,6 +218,8 @@ function [region,img] = firstExportableRegion(regions,channel)
 end
 
 function tf = hasValidROI(region)
+%HASVALIDROI Check whether valid ROI is present.
+    % Linescan ROI geometry used for the current region.
     ROI = region.ROI;
     tf = isstruct(ROI) && ...
         all(isfield(ROI,{'CenterX','CenterY','Width','Height','RotationAngle'})) && ...
@@ -213,11 +227,14 @@ function tf = hasValidROI(region)
 end
 
 function I = getRegionChannelImage(region,channel)
+%GETREGIONCHANNELIMAGE Return region channel image.
     Icell = region.Parent.regionSubimageCell(region);
+    % Pixel data for the image being processed.
     I = Icell{channel};
 end
 
 function stem = safeFileStem(str)
+%SAFEFILESTEM Replace characters unsuitable for an export filename.
     stem = regexprep(char(str),'[^A-Za-z0-9_.-]','_');
     if isempty(stem)
         stem = 'region';
@@ -225,18 +242,23 @@ function stem = safeFileStem(str)
 end
 
 function writeTiledSummary(fileNames,filename)
+%WRITETILEDSUMMARY Write tiled summary.
     tiles = cell(size(fileNames));
     tileSize = 0;
 
+    % Process file names in order.
     for i = 1:numel(fileNames)
+        % Pixel data for the image being processed.
         I = ensureRGB(imread(fileNames{i}));
         tiles{i} = I;
         tileSize = max(tileSize,max(size(I,1),size(I,2)));
     end
 
+    % Number of tiles along each side of the square montage.
     n = ceil(sqrt(numel(tiles)));
     canvas = zeros(tileSize*n,tileSize*n,3,'uint8');
 
+    % Process tiles in order.
     for i = 1:numel(tiles)
         row = floor((i-1)/n) + 1;
         col = mod(i-1,n) + 1;
@@ -251,7 +273,9 @@ function writeTiledSummary(fileNames,filename)
 end
 
 function I = ensureRGB(I)
+%ENSURERGB Ensure RGB.
     if ismatrix(I)
+        % Pixel data for the image being processed.
         I = repmat(I,1,1,3);
         return
     end
@@ -262,8 +286,11 @@ function I = ensureRGB(I)
 end
 
 function tile = padToSquare(I,tileSize)
+%PADTOSQUARE Pad to square.
     tile = zeros(tileSize,tileSize,3,'like',I);
+    % First row for centering the original image in the padded tile.
     row0 = floor((tileSize - size(I,1))/2) + 1;
+    % First column for centering the original image in the padded tile.
     col0 = floor((tileSize - size(I,2))/2) + 1;
     rows = row0:(row0 + size(I,1) - 1);
     cols = col0:(col0 + size(I,2) - 1);

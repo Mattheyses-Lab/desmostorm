@@ -15,6 +15,7 @@
 % with this program; if not, see <https://www.gnu.org/licenses/>.
 
 classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
+%PEAKSPLOTCONTAINER Host and arrange the legacy per-channel linescan plots.
 
     
     %% data used to build the plot
@@ -78,7 +79,9 @@ classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
     end
 
     properties(Access=private)
+        % X lim.
         XLim_ (1,2) double = [0 1]
+        % Mode used for x lim.
         XLimMode_ (1,:) char {mustBeMember(XLimMode_,{'auto','manual'})} = 'auto'
     end
 
@@ -93,6 +96,7 @@ classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
         RawLineColors (:,3) double = zeros(0,3)
         % width of smoothed signal line
         SmoothLineWidth (1,1) double = 1
+        % Stroke width in points for annotation.
         AnnotationLineWidth (1,1) double {mustBePositive,mustBeFinite} = 1
         % color of smoothed signal line
         SmoothLineColor (1,3) double = [0 0 0]
@@ -128,11 +132,17 @@ classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
 
     %% graphics components
     properties(Access = private,Transient,NonCopyable)
+        % Root grid for the application layout.
         Grid        (1,1) matlab.ui.container.GridLayout
+        % UI handle for main axes.
         MainAxes    (1,1) matlab.ui.control.UIAxes
+        % Peaks plot.
         PeaksPlot   (:,1) desmostorm.widgets.PeaksPlot
+        % Rendered graphics for axes title.
         AxesTitle   (1,1) matlab.graphics.primitive.Text
+        % UI handle for hub.
         Hub          matlabx.ui.interaction.FigureEventHub
+        % Hub ID.
         HubID        double = NaN
     end
 
@@ -180,10 +190,12 @@ classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
         end
         
         function update(obj)
+        %UPDATE Refresh the graphics using the current data and appearance.
             obj.syncPeaksPlotCount();
 
             % --- PeaksPlot properties ---
             if ~isempty(obj.PeaksPlot)
+                % Vertical position of each distance annotation lane.
                 laneY = obj.getDistanceAnnotationLanes();
                 set(obj.PeaksPlot,...
                     "FontName",             obj.FontName,...
@@ -204,6 +216,7 @@ classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
                     "WidthAnnotations",     obj.WidthAnnotations,...
                     "WidthAnnotationsMode", obj.WidthAnnotationsMode);
 
+                % Process peaks plot in order.
                 for i = 1:numel(obj.PeaksPlot)
                     [color,rawColor,smoothColor,annotationsColor,areaColor] = obj.getPlotColors(i);
                     set(obj.PeaksPlot(i), ...
@@ -241,6 +254,7 @@ classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
     %% private helpers
     methods(Access=private)
         function registerFigureEventHub(obj)
+        %REGISTERFIGUREEVENTHUB Connect the main figure to the shared input event hub.
             fig = ancestor(obj,'figure');
             if isempty(fig) || ~isvalid(fig)
                 return
@@ -253,6 +267,7 @@ classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
         end
 
         function unregisterFigureEventHub(obj)
+        %UNREGISTERFIGUREEVENTHUB Release the main figure’s shared input event registration.
             if isempty(obj.Hub) || ~isvalid(obj.Hub) || ~isfinite(obj.HubID)
                 return
             end
@@ -264,6 +279,7 @@ classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
         function syncPeaksPlotCount(obj)
             % Match the number of scalar PeaksPlot renderers to Data length.
             nDesired = numel(obj.Data);
+            % Number of current.
             nCurrent = numel(obj.PeaksPlot);
 
             if nCurrent > nDesired
@@ -284,19 +300,26 @@ classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
         end
 
         function clearPeakHighlights(obj)
+        %CLEARPEAKHIGHLIGHTS Clear peak highlights.
+            % Visit each entry in peaks plot.
             for i = 1:numel(obj.PeaksPlot)
                 obj.PeaksPlot(i).clearPeakHighlight();
             end
         end
 
         function clearPeakLocks(obj)
+        %CLEARPEAKLOCKS Clear peak locks.
+            % Visit each entry in peaks plot.
             for i = 1:numel(obj.PeaksPlot)
                 obj.PeaksPlot(i).clearPeakLock();
             end
         end
 
         function laneY = getDistanceAnnotationLanes(obj)
+        %GETDISTANCEANNOTATIONLANES Return distance annotation lanes.
+            % Number of plots.
             nPlots = numel(obj.PeaksPlot);
+            % Vertical position of each distance annotation lane.
             laneY = nan(nPlots,1);
 
             if ~strcmp(obj.DistanceAnnotationsMode,'lanes') || isempty(obj.Data)
@@ -314,6 +337,7 @@ classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
                 return
             end
 
+            % Band height.
             bandHeight = bandMax - bandMin;
             lanePad = 0.18*bandHeight;
             laneStep = 0;
@@ -325,6 +349,7 @@ classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
         end
 
         function updateDistanceAnnotationAxes(obj)
+        %UPDATEDISTANCEANNOTATIONAXES Update distance annotation axes.
             if ~strcmp(obj.DistanceAnnotationsMode,'lanes') || isempty(obj.Data)
                 obj.MainAxes.YLimMode = "auto";
                 obj.MainAxes.YTickMode = "auto";
@@ -341,6 +366,7 @@ classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
         end
 
         function updateXLimits(obj)
+        %UPDATEXLIMITS Update x limits.
             if strcmp(obj.XLimMode_,'manual')
                 obj.MainAxes.XLim = obj.XLim_;
             else
@@ -349,6 +375,7 @@ classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
         end
 
         function lims = getDistanceAnnotationAxisLimits(obj)
+        %GETDISTANCEANNOTATIONAXISLIMITS Return distance annotation axis limits.
             lims = [];
             dataLim = obj.getDataYLim();
             if isempty(dataLim)
@@ -364,6 +391,7 @@ classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
         end
 
         function bandFraction = getDistanceAnnotationBandFraction(obj)
+        %GETDISTANCEANNOTATIONBANDFRACTION Return distance annotation band fraction.
             nLanes = max(numel(obj.PeaksPlot),1);
             bandFraction = obj.DistanceAnnotationBaseBandFraction + ...
                 obj.DistanceAnnotationLaneBandFraction*(nLanes - 1);
@@ -371,14 +399,17 @@ classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
         end
 
         function dataLim = getDataYLim(obj)
+        %GETDATAYLIM Return data y lim.
             yMin = Inf;
             yMax = -Inf;
 
+            % Visit each entry in data.
             for i = 1:numel(obj.Data)
                 if isempty(obj.Data(i))
                     continue
                 end
 
+                % Raw and smoothed samples used to bound the current trace.
                 y = [obj.Data(i).SignalNorm; obj.Data(i).SignalSmooth];
                 y = y(isfinite(y));
                 if isempty(y)
@@ -401,6 +432,7 @@ classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
             % versions expose them. Fall back to the axes CurrentPoint so
             % older matlabx releases still work.
             propNames = ["CurrentPointAxes","AxesCurrentPoint","CurrentAxesPoint"];
+            % Visit each entry in prop names.
             for i = 1:numel(propNames)
                 if isprop(E,propNames(i))
                     try
@@ -427,18 +459,23 @@ classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
         end
 
         function claim = getPeakClaimAtPoint(obj,xy)
+        %GETPEAKCLAIMATPOINT Return peak claim at point.
+            % Struct for claim.
             claim = struct( ...
                 "PlotIndex",NaN, ...
                 "PeakIndex",NaN, ...
                 "DistanceToPeak",Inf);
 
+            % Candidate peaks and their distances from the hit-test point.
             candidates = struct( ...
                 "PlotIndex",{}, ...
                 "PeakIndex",{}, ...
                 "DistanceToPeak",{});
 
+            % Process peaks plot in order.
             for i = 1:numel(obj.PeaksPlot)
                 plotCandidates = obj.PeaksPlot(i).peakCandidatesAtPoint(xy);
+                % Process plot candidates in order.
                 for j = 1:numel(plotCandidates)
                     candidates(end+1,1) = struct( ...
                         "PlotIndex",i, ...
@@ -456,6 +493,7 @@ classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
         end
 
         function tf = isDescendantOfMainAxes(obj,tgt)
+        %ISDESCENDANTOFMAINAXES Check whether the graphics handle belongs to the main axes.
             tf = false;
 
             while isprop(tgt,'Parent')
@@ -500,6 +538,7 @@ classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
         end
 
         function tf = isSameHandle(~,a,b)
+        %ISSAMEHANDLE Compare two graphics or model handles safely.
             try
                 tf = isequal(a,b);
             catch
@@ -508,6 +547,7 @@ classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
         end
 
         function tf = isKeyHubEvent(~,E)
+        %ISKEYHUBEVENT Check whether the event is an input event from the shared hub.
             if ismethod(E,'isKeyEvent')
                 try
                     tf = E.isKeyEvent();
@@ -526,6 +566,7 @@ classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
             elseif idx <= size(obj.SmoothLineColors,1)
                 color = obj.SmoothLineColors(idx,:);
             elseif numel(obj.Data) > 1
+                % Index for color.
                 colorIdx = mod(idx-1,size(obj.ColorOrder,1)) + 1;
                 color = obj.ColorOrder(colorIdx,:);
             else
@@ -569,10 +610,12 @@ classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
     %% x-limit accessors
     methods
         function v = get.XLim(obj)
+        %GET.XLIM Return the x lim.
             v = obj.XLim_;
         end
 
         function set.XLim(obj,v)
+        %SET.XLIM Set the x lim.
             validateattributes(v,{'numeric'},{'real','finite','size',[1 2],'increasing'});
             obj.XLim_ = double(v);
             obj.XLimMode_ = 'manual';
@@ -582,10 +625,12 @@ classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
         end
 
         function v = get.XLimMode(obj)
+        %GET.XLIMMODE Return the x lim mode.
             v = obj.XLimMode_;
         end
 
         function set.XLimMode(obj,v)
+        %SET.XLIMMODE Set the x lim mode.
             mustBeMember(v,{'auto','manual'});
             obj.XLimMode_ = char(v);
             if ~isempty(obj.MainAxes) && isvalid(obj.MainAxes)
@@ -597,10 +642,12 @@ classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
     %% public-facing helpers
     methods
         function delete(obj)
+        %DELETE Release resources owned by this object.
             obj.unregisterFigureEventHub();
         end
 
         function export(obj,filename,opts)
+        %EXPORT Return export.
             arguments
                 obj                         (1,1) desmostorm.widgets.PeaksPlotContainer
                 filename                    (1,:) char = 'peaks-plot.pdf'
@@ -628,6 +675,7 @@ classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
     %% Hub-facing event handlers
     methods
         function tf = matches(obj,E)
+        %MATCHES Check whether the supplied value matches the current settings.
             if obj.isKeyHubEvent(E) || isempty(obj.MainAxes) || ~isvalid(obj.MainAxes)
                 tf = false;
                 return
@@ -643,6 +691,7 @@ classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
         end
 
         function onMove(obj,E)
+        %ONMOVE Handle move.
             if isempty(obj.MainAxes) || ~isvalid(obj.MainAxes)
                 return
             end
@@ -650,6 +699,7 @@ classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
             xy = obj.getAxesPoint(E);
             claim = obj.getPeakClaimAtPoint(xy);
 
+            % Visit each entry in peaks plot.
             for i = 1:numel(obj.PeaksPlot)
                 if i == claim.PlotIndex
                     obj.PeaksPlot(i).highlightPeak(claim.PeakIndex);
@@ -660,6 +710,7 @@ classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
         end
 
         function onDown(obj,E)
+        %ONDOWN Handle down.
             if obj.WidthAnnotations == "off"
                 return
             end
@@ -676,13 +727,19 @@ classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
 
         % No-ops required by FigureEventHub.
         function onUp(~,~),         end
+        %ONSCROLL Handle scroll.
         function onScroll(~,~),     end
+        %ONKEY Handle key.
         function onKey(~,~),        end
+        %ONKEYPRESS Handle key press.
         function onKeyPress(~,~),   end
+        %ONKEYRELEASE Handle key release.
         function onKeyRelease(~,~), end
+        %ONENTER Handle enter.
         function onEnter(~,~),      end
 
         function onLeave(obj,~)
+        %ONLEAVE Handle leave.
             obj.clearPeakHighlights();
         end
     end
@@ -741,6 +798,7 @@ classdef PeaksPlotContainer < matlab.ui.componentcontainer.ComponentContainer
 
 
         function [peaksData,peaksPlotContainer] = demoOverlay(nScans)
+        %DEMOOVERLAY Demonstrate overlaid linescan traces in the legacy widget.
             arguments
                 nScans (1,1) double {mustBeInteger,mustBePositive} = 3
             end

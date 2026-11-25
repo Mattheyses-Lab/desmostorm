@@ -15,6 +15,7 @@
 % with this program; if not, see <https://www.gnu.org/licenses/>.
 
 classdef PeaksPlot < handle & matlab.mixin.SetGetExactNames
+%PEAKSPLOT Create the graphics primitives for one linescan trace.
 
     % Appearance
     properties(AbortSet)
@@ -34,6 +35,7 @@ classdef PeaksPlot < handle & matlab.mixin.SetGetExactNames
         ForegroundColor (1,3) double = [0 0 0]
         % color of peak annotation lines
         AnnotationsColor (1,3) double = [0 0 0]
+        % Stroke width in points for annotation.
         AnnotationLineWidth (1,1) double {mustBePositive,mustBeFinite} = 1
         % base color used when ColorMode is auto
         Color (1,3) double {mustBeInRange(Color,0,1)} = [0 0 0]
@@ -95,33 +97,49 @@ classdef PeaksPlot < handle & matlab.mixin.SetGetExactNames
 
     %% public properties with private backing
     properties(Dependent)
+        % Model object that owns this record.
         Parent (1,1) matlab.ui.control.UIAxes
+        % Data.
         Data desmostorm.analysis.PeaksData
     end
 
     properties(Access=private)
+        % Model object that owns this record.
         Parent_ (1,1) matlab.ui.control.UIAxes
+        % Data.
         Data_ desmostorm.analysis.PeaksData
+        % Active peak index.
         ActivePeakIndex_ (1,1) double = NaN
+        % Locked peak indices.
         LockedPeakIndices_ (:,1) double = []
     end
 
     %% graphics components the PeaksPlot is built from
     properties(Access = private,Transient,NonCopyable)
+        % Rendered graphics for peak patches.
         PeakPatches (:,1) matlab.graphics.primitive.Patch
+        % Rendered graphics for profile raw.
         ProfileRaw (1,1) matlab.graphics.primitive.Line
+        % Rendered graphics for profile.
         Profile (1,1) matlab.graphics.primitive.Line
+        % Rendered graphics for peak vertical lines.
         PeakVerticalLines (1,1) matlab.graphics.primitive.Line
+        % Rendered graphics for peak to peak lines.
         PeakToPeakLines (1,1) matlab.graphics.primitive.Line
+        % Rendered graphics for peak width lines.
         PeakWidthLines (1,1) matlab.graphics.primitive.Line
+        % Rendered graphics for peak border lines.
         PeakBorderLines (1,1) matlab.graphics.primitive.Line
+        % Rendered graphics for width labels.
         WidthLabels (:,1) matlab.graphics.primitive.Text
+        % Rendered graphics for peak to peak labels.
         PeakToPeakLabels (:,1) matlab.graphics.primitive.Text
     end
 
 
     methods
         function obj = PeaksPlot(ax,data) % constructor
+        %PEAKSPLOT Create the graphics primitives for one linescan trace.
             arguments
                 ax (1,1) matlab.ui.control.UIAxes
                 data desmostorm.analysis.PeaksData
@@ -187,6 +205,7 @@ classdef PeaksPlot < handle & matlab.mixin.SetGetExactNames
             if ~isempty(obj.Data)
                 % get the SCALED output data (data multiplied by user-defined scaling-factor)
                 S = obj.Data.OutputScaled;
+                % Geometry and annotation coordinates for the current trace.
                 G = obj.annotationGraphicsFromData(S);
                 % signal profile lines
                 set(obj.ProfileRaw,'XData',S.Location,'YData',S.SignalNorm);
@@ -206,6 +225,7 @@ classdef PeaksPlot < handle & matlab.mixin.SetGetExactNames
                 end
                 % determine how many peak width labels we need
                 nLabels = numel(obj.WidthLabels);
+                % Number of needed.
                 nNeeded = numel(S.PeakWidths);
                 % delete excess peak width labels as needed
                 if nLabels > nNeeded
@@ -324,10 +344,12 @@ classdef PeaksPlot < handle & matlab.mixin.SetGetExactNames
         end
 
         function h = get.Parent(obj)
+        %GET.PARENT Return the parent.
             h = obj.Parent_;
         end
 
         function set.Parent(obj,h)
+        %SET.PARENT Set the parent.
             arguments
                 obj (1,1) desmostorm.widgets.PeaksPlot
                 h (1,1) matlab.ui.control.UIAxes
@@ -349,10 +371,12 @@ classdef PeaksPlot < handle & matlab.mixin.SetGetExactNames
         end
 
         function h = get.Data(obj)
+        %GET.DATA Return the data.
             h = obj.Data_;
         end
 
         function set.Data(obj,data)
+        %SET.DATA Set the data.
             arguments
                 obj (1,1) desmostorm.widgets.PeaksPlot
                 data desmostorm.analysis.PeaksData
@@ -373,15 +397,18 @@ classdef PeaksPlot < handle & matlab.mixin.SetGetExactNames
         end
 
         function peakIdx = hitTestPeakAtPoint(obj,xy)
+        %HITTESTPEAKATPOINT Find the peak nearest the supplied point among intersected peaks.
             arguments
                 obj (1,1) desmostorm.widgets.PeaksPlot
                 xy (1,2) double
             end
 
+            % Indices of the peaks used by the current operation.
             peakIdx = obj.findPeakAtPoint(xy);
         end
 
         function candidates = peakCandidatesAtPoint(obj,xy)
+        %PEAKCANDIDATESATPOINT Find peaks whose filled areas contain the supplied point.
             arguments
                 obj (1,1) desmostorm.widgets.PeaksPlot
                 xy (1,2) double
@@ -391,6 +418,7 @@ classdef PeaksPlot < handle & matlab.mixin.SetGetExactNames
         end
 
         function highlightPeak(obj,peakIdx)
+        %HIGHLIGHTPEAK Set the active peak and update its highlight.
             arguments
                 obj (1,1) desmostorm.widgets.PeaksPlot
                 peakIdx (1,1) double
@@ -400,10 +428,12 @@ classdef PeaksPlot < handle & matlab.mixin.SetGetExactNames
         end
 
         function clearPeakHighlight(obj)
+        %CLEARPEAKHIGHLIGHT Clear peak highlight.
             obj.setActivePeak(NaN);
         end
 
         function tf = togglePeakLock(obj,peakIdx)
+        %TOGGLEPEAKLOCK Toggle peak lock.
             arguments
                 obj (1,1) desmostorm.widgets.PeaksPlot
                 peakIdx (1,1) double
@@ -428,6 +458,7 @@ classdef PeaksPlot < handle & matlab.mixin.SetGetExactNames
         end
 
         function clearPeakLock(obj)
+        %CLEARPEAKLOCK Clear peak lock.
             obj.LockedPeakIndices_ = [];
             obj.updatePeakPatchAppearance();
             obj.updateWidthAnnotationVisibility();
@@ -438,6 +469,7 @@ classdef PeaksPlot < handle & matlab.mixin.SetGetExactNames
 
     methods(Access=private)
         function deleteGraphics(obj)
+        %DELETEGRAPHICS Delete graphics.
             props = { ...
                 "ProfileRaw", ...
                 "Profile", ...
@@ -449,6 +481,7 @@ classdef PeaksPlot < handle & matlab.mixin.SetGetExactNames
                 "WidthLabels", ...
                 "PeakToPeakLabels"};
 
+            % Process props in order.
             for p = 1:numel(props)
                 h = obj.(props{p});
                 if isempty(h)
@@ -463,8 +496,10 @@ classdef PeaksPlot < handle & matlab.mixin.SetGetExactNames
         end
 
         function peakIdx = findPeakAtPoint(obj,xy)
+        %FINDPEAKATPOINT Find peak at point.
             candidates = obj.findPeakCandidatesAtPoint(xy);
             if isempty(candidates)
+                % Indices of the peaks used by the current operation.
                 peakIdx = NaN;
             else
                 [~,idx] = min([candidates.DistanceToPeak]);
@@ -473,6 +508,8 @@ classdef PeaksPlot < handle & matlab.mixin.SetGetExactNames
         end
 
         function candidates = findPeakCandidatesAtPoint(obj,xy)
+        %FINDPEAKCANDIDATESATPOINT Find peak candidates at point.
+            % Candidate peaks and their distances from the hit-test point.
             candidates = struct( ...
                 "PeakIndex",{}, ...
                 "PeakLocation",{}, ...
@@ -486,8 +523,10 @@ classdef PeaksPlot < handle & matlab.mixin.SetGetExactNames
                 return
             end
 
+            % Geometry used to render or measure this ROI or trace.
             geom = obj.Data.OutputScaled.PeakGeometry;
 
+            % Process peak patches in order.
             for i = 1:numel(obj.PeakPatches)
                 h = obj.PeakPatches(i);
                 if ~isvalid(h)
@@ -504,6 +543,7 @@ classdef PeaksPlot < handle & matlab.mixin.SetGetExactNames
         end
 
         function setActivePeak(obj,peakIdx)
+        %SETACTIVEPEAK Set active peak.
             if isequaln(obj.ActivePeakIndex_,peakIdx)
                 return
             end
@@ -515,10 +555,12 @@ classdef PeaksPlot < handle & matlab.mixin.SetGetExactNames
         end
 
         function updatePeakPatchAppearance(obj)
+        %UPDATEPEAKPATCHAPPEARANCE Update peak patch appearance.
             if isempty(obj.PeakPatches)
                 return
             end
 
+            % Process peak patches in order.
             for i = 1:numel(obj.PeakPatches)
                 style = obj.resolveObjectStyle('PeakArea',obj.peakState(i));
 
@@ -531,7 +573,9 @@ classdef PeaksPlot < handle & matlab.mixin.SetGetExactNames
         end
 
         function updateAnnotationLabelAppearance(obj)
+        %UPDATEANNOTATIONLABELAPPEARANCE Update annotation label appearance.
             labelColor = obj.resolveObjectStyle('PeakArea','normal').Color;
+            % Foreground color for labels and captions.
             fontColor = matlabx.colors.ops.getBWContrastColor(labelColor);
 
             labels = [reshape(obj.WidthLabels,1,[]), reshape(obj.PeakToPeakLabels,1,[])];
@@ -547,6 +591,7 @@ classdef PeaksPlot < handle & matlab.mixin.SetGetExactNames
         end
 
         function state = peakState(obj,peakIdx)
+        %PEAKSTATE Resolve a peak’s current hover or selection state.
             if isequal(peakIdx,obj.ActivePeakIndex_)
                 state = 'hover';
             elseif ismember(peakIdx,obj.LockedPeakIndices_)
@@ -557,6 +602,7 @@ classdef PeaksPlot < handle & matlab.mixin.SetGetExactNames
         end
 
         function style = resolveObjectStyle(obj,objectName,state)
+        %RESOLVEOBJECTSTYLE Resolve object style.
             arguments
                 obj (1,1) desmostorm.widgets.PeaksPlot
                 objectName (1,:) char {mustBeMember(objectName,{'RawLine','SmoothLine','PeakArea'})}
@@ -589,6 +635,7 @@ classdef PeaksPlot < handle & matlab.mixin.SetGetExactNames
         end
 
         function alpha = defaultAlphaFor(~,objectName,state)
+        %DEFAULTALPHAFOR Return the fill opacity for a plot element and its interaction state.
             switch objectName
                 case 'RawLine'
                     switch state
@@ -608,6 +655,7 @@ classdef PeaksPlot < handle & matlab.mixin.SetGetExactNames
         end
 
         function updateWidthAnnotationVisibility(obj)
+        %UPDATEWIDTHANNOTATIONVISIBILITY Update width annotation visibility.
             if obj.WidthAnnotations == "off" || isempty(obj.Data)
                 set(obj.PeakWidthLines,"Visible","off");
                 set(obj.WidthLabels,"Visible","off");
@@ -617,6 +665,7 @@ classdef PeaksPlot < handle & matlab.mixin.SetGetExactNames
             switch obj.WidthAnnotationsMode
                 case 'normal'
                     if ~isempty(obj.Data)
+                        % Geometry and annotation coordinates for the current trace.
                         G = obj.annotationGraphicsFromData(obj.Data.OutputScaled);
                         set(obj.PeakWidthLines, ...
                             "XData",G.WidthLineXY(1,:), ...
@@ -626,6 +675,7 @@ classdef PeaksPlot < handle & matlab.mixin.SetGetExactNames
                     set(obj.WidthLabels,"Visible","on");
 
                 case 'hover'
+                    % Indices of the peaks used by the current operation.
                     peakIdx = unique([reshape(obj.LockedPeakIndices_,1,[]),obj.ActivePeakIndex_],"stable");
                     peakIdx = peakIdx(~isnan(peakIdx));
 
@@ -650,6 +700,7 @@ classdef PeaksPlot < handle & matlab.mixin.SetGetExactNames
         end
 
         function updateDistanceAnnotationVisibility(obj)
+        %UPDATEDISTANCEANNOTATIONVISIBILITY Update distance annotation visibility.
             if obj.DistanceAnnotations == "off" || isempty(obj.Data)
                 set(obj.PeakVerticalLines,"Visible","off");
                 set(obj.PeakToPeakLines,"Visible","off");
@@ -657,6 +708,7 @@ classdef PeaksPlot < handle & matlab.mixin.SetGetExactNames
                 return
             end
 
+            % Geometry and annotation coordinates for the current trace.
             G = obj.annotationGraphicsFromData(obj.Data.OutputScaled);
             set(obj.PeakVerticalLines, ...
                 "XData",G.VerticalLineXY(1,:), ...
@@ -670,6 +722,8 @@ classdef PeaksPlot < handle & matlab.mixin.SetGetExactNames
         end
 
         function updatePeakPatches(obj,S)
+        %UPDATEPEAKPATCHES Update peak patches.
+            % Geometry used to render or measure this ROI or trace.
             geom = S.PeakGeometry;
             obj.syncPeakPatchCount(numel(geom));
 
@@ -677,9 +731,12 @@ classdef PeaksPlot < handle & matlab.mixin.SetGetExactNames
                 return
             end
 
+            % Process geom in order.
             for i = 1:numel(geom)
+                % Index of the matching entry.
                 idx = geom(i).LeftBorderIndex:geom(i).RightBorderIndex;
                 x = S.Location(idx);
+                % Smoothed intensity values inside the current measured width.
                 y = S.SignalSmooth(idx);
 
                 set(obj.PeakPatches(i), ...
@@ -697,6 +754,8 @@ classdef PeaksPlot < handle & matlab.mixin.SetGetExactNames
         end
 
         function syncPeakPatchCount(obj,nDesired)
+        %SYNCPEAKPATCHCOUNT Synchronize peak patch count.
+            % Number of current.
             nCurrent = numel(obj.PeakPatches);
 
             if nCurrent > nDesired
@@ -728,17 +787,22 @@ classdef PeaksPlot < handle & matlab.mixin.SetGetExactNames
                 "WidthLabelXY",zeros(0,2), ...
                 "PeakToPeakLabelXY",zeros(0,2));
 
+            % Geometry used to render or measure this ROI or trace.
             geom = S.PeakGeometry;
             if isempty(geom)
                 return
             end
 
+            % Number of detected peaks in the profile.
             nPeaks = numel(geom);
+            % Annotation height.
             annotationHeight = max(S.SignalSmooth);
+            % Distance annotation height.
             distanceAnnotationHeight = annotationHeight;
             if strcmp(obj.DistanceAnnotationsMode,'lanes') && isfinite(obj.DistanceAnnotationY)
                 distanceAnnotationHeight = obj.DistanceAnnotationY;
             end
+            % Vertical line height.
             verticalLineHeight = max(annotationHeight,distanceAnnotationHeight);
 
             G.WidthLineXY = nan(2,nPeaks*3);
@@ -746,6 +810,7 @@ classdef PeaksPlot < handle & matlab.mixin.SetGetExactNames
             G.WidthLabelXY = nan(nPeaks,2);
 
             for i = 1:nPeaks
+                % Index for line.
                 lineIdx = 3*(i-1)+1;
 
                 G.WidthLineXY(:,lineIdx:lineIdx+2) = [ ...
@@ -759,6 +824,7 @@ classdef PeaksPlot < handle & matlab.mixin.SetGetExactNames
                 G.WidthLabelXY(i,:) = [geom(i).PeakLocation, geom(i).WidthHeight];
             end
 
+            % Index for border.
             borderIdx = [reshape([geom.LeftBorderIndex],[],1); geom(end).RightBorderIndex];
             borderLocation = [reshape([geom.LeftBorderLocation],[],1); geom(end).RightBorderLocation];
             borderValue = [reshape([geom.LeftBorderValue],[],1); geom(end).RightBorderValue];
@@ -767,6 +833,7 @@ classdef PeaksPlot < handle & matlab.mixin.SetGetExactNames
             borderValue = borderValue(keepIdx);
 
             G.BorderLineXY = nan(2,numel(borderLocation)*3);
+            % Process border location in order.
             for i = 1:numel(borderLocation)
                 lineIdx = 3*(i-1)+1;
                 G.BorderLineXY(:,lineIdx:lineIdx+2) = [ ...
@@ -816,10 +883,12 @@ classdef PeaksPlot < handle & matlab.mixin.SetGetExactNames
 
             hold(ax,"on");
 
+            % Number of base signals.
             nBaseSignals = size(data.Gauss_Raw,1);
 
             colorIdxs = randi([1 256],[1 nBaseSignals]);
 
+            % Colormap used to display the current channel.
             cmap = jet(256);
 
             for i = 1:nBaseSignals

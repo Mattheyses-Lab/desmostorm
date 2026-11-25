@@ -47,10 +47,12 @@ end
 
 if isempty(opts.Threshold)
     thresh = graythresh(I);
+    % Class range.
     classRange = getrangefromclass(I);
     opts.Threshold = max(thresh * classRange(2), 0);
 end
 
+% Logical mask for candidate.
 candidateMask = I > opts.Threshold;
 if ~any(candidateMask(:)) || ~any(bw(:))
     mask = false(size(I));
@@ -59,6 +61,7 @@ end
 
 % Distance watershed splits nearby foreground puncta into object basins.
 D = bwdist(~candidateMask);
+% Watershed basin ID at each pixel, with zero on watershed boundaries.
 L = watershed(-D);
 L(~candidateMask) = 0;
 

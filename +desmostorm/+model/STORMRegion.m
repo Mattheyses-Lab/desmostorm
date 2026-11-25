@@ -19,18 +19,24 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
 
     %% ID/ownership/meta
     properties
+        % Stable identifier used to look up this record.
         ID (1,1) string
+        % Model object that owns this record.
         Parent desmostorm.model.STORMImage
+        % Display name shown in the application.
         Name (1,1) string = ""
+        % Time when this record was created.
         CreatedAt datetime = datetime('now')
 
         % Labeling (for ML training/export)
         LabelID (1,1) string = "unlabeled"
+        % Origin of the current label assignment.
         LabelSource (1,1) string = "user"
     end
 
     %% Classification/auto-detection
     properties
+        % Classifier score associated with the region.
         Score (1,1) = NaN
     end
 
@@ -38,6 +44,7 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
     properties
         % Geometry in image pixel center coords (x right, y down)
         Center (1,2) double = [NaN NaN]
+        % Side length of the square region box in pixels.
         BoxSize (1,1) double = NaN
         % Linescan ROI properties
         ROI struct = struct(...
@@ -46,6 +53,7 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
             'Width',NaN,...             % width of the rectangle (px)
             'Height',NaN,...            % height of the rectangle (px)
             'RotationAngle',NaN)        % CCW rotation angle of the rectangle (deg)
+        % Origin of the current linescan ROI geometry.
         ROISource (1,1) string = "none"
         % Linescan measurement results
         LinescanResults (:,1) desmostorm.analysis.PeaksData = desmostorm.analysis.PeaksData.empty()
@@ -53,8 +61,11 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
 
     %% Derived properties
     properties(Dependent)
+        % Region and linescan measurements for display and export.
         SummaryTable (:,:) table
+        % Physical calibration for the image pixels.
         PixelSize (1,1) desmostorm.model.units.PixelSize
+        % Project currently open in the application.
         Project
     end
 
@@ -62,6 +73,7 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
     methods
         % Constructor
         function obj = STORMRegion(Parent, ID, Center, BoxSize, LabelID, LabelSource, Score)
+        %STORMREGION Initialize a labeled region in its parent image.
             arguments
                 Parent      desmostorm.model.STORMImage
                 ID          (1,1) string
@@ -93,6 +105,7 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
     methods
 
         function updateROI(obj,data,opts)
+        %UPDATEROI Update ROI.
             arguments
                 obj (1,1) desmostorm.model.STORMRegion
                 data (1,1) struct
@@ -104,6 +117,8 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
         end
 
         function updateLinescanResults(obj,data)
+        %UPDATELINESCANRESULTS Update linescan results.
+            % Visit each entry in data.
             for i = 1:numel(data)
                 % add pixel scale and unit info to linescan results
                 data(i).DistanceScale = obj.PixelSize.Value;
@@ -118,6 +133,7 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
             data = obj.LinescanResults;
             if isempty(data), return; end
 
+            % Process data in order.
             for i = 1:numel(data)
                 data(i).DistanceScale = obj.PixelSize.Value;
                 data(i).DistanceUnit = obj.PixelSize.Unit;
@@ -134,6 +150,7 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
         end
 
         function resetLinescanResults(obj)
+        %RESETLINESCANRESULTS Reset linescan results.
             obj.LinescanResults = desmostorm.analysis.PeaksData.empty();
         end
 
@@ -143,6 +160,7 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
     methods (Access=private)
 
         function str = formatLength(obj,val,mode)
+        %FORMATLENGTH Format length.
             arguments
                 obj (1,1) desmostorm.model.STORMRegion
                 val (:,1)
@@ -153,10 +171,12 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
         end
 
         function out = formatAngle(~,val)
+        %FORMATANGLE Format angle.
             out = sprintf('%.3g°', val);
         end
 
         function out = px2phys(obj,in)
+        %PX2PHYS Convert pixel distances to the calibrated physical units.
             out = obj.PixelSize.px2phys(in);
         end
 
@@ -164,9 +184,11 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
             % --- peak stats table (for all channels) --- 
             % get max number of channels in the project
             proj = obj.Project;
+            % Number of channels to process.
             nChannels = numel(proj.Channels);
             % cell array to hold tables for each channel
             channelTableCells = cell(1,nChannels);
+            % Process each source channel in its original component order.
             for C = 1:nChannels
                 channelTableCells{C} = obj.getSingleChannelPeakStatsTable(C);
             end
@@ -175,6 +197,7 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
         end
 
         function T = getSingleChannelPeakStatsTable(obj,C)
+        %GETSINGLECHANNELPEAKSTATSTABLE Return single channel peak stats table.
             arguments
                 obj (1,1) desmostorm.model.STORMRegion
                 C (1,1) double
@@ -191,6 +214,7 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
             peakStatNames{4} = sprintf('Peak R FWHM (%s)',name);
             peakStatNames{5} = sprintf('Peak R location (%s)',name);
 
+            % Source channel index.
             c = obj.Parent.sourceChannelIndex(C);
             if ~isempty(c) && c <= numel(obj.LinescanResults)
                 if obj.LinescanResults(c).hasCentralPeakPair
@@ -242,6 +266,7 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
                 obj.formatLength(obj.ROI.Width),...
                 obj.formatLength(obj.ROI.Height),...
                 obj.formatAngle(obj.ROI.RotationAngle)};
+            % Table assembled from the current records.
             T = cell2table(TableData,"VariableNames",VariableNames);
         end
 
@@ -264,10 +289,13 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
         end
 
         function ps = get.PixelSize(obj)
+        %GET.PIXELSIZE Return the pixel size.
+            % Physical calibration used to convert pixel measurements.
             ps = obj.Parent.PixelSize;
         end
 
         function proj = get.Project(obj)
+        %GET.PROJECT Return the project.
             if isempty(obj.Parent) || isempty(obj.Parent.Parent)
                 proj = desmostorm.model.STORMProject.empty();
             else
@@ -276,6 +304,7 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
         end
 
         function debug(obj)
+        %DEBUG Return debug.
             disp('Debug');
         end
 
@@ -285,6 +314,7 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
     methods
 
         function out = TextSummaryTable(obj,C)
+        %TEXTSUMMARYTABLE Format region measurements as aligned text for display and export.
             arguments
                 obj desmostorm.model.STORMRegion
                 C double = []
@@ -308,6 +338,7 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
         end
 
         function str = getBaseExportName(obj)
+        %GETBASEEXPORTNAME Return base export name.
             str = obj.Parent.shortName() + "_" + obj.Name;
         end
 
@@ -317,6 +348,7 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
     methods(Access=?desmostorm.model.STORMImage)
 
         function R = toStruct(obj)
+        %TOSTRUCT Serialize the current values into a plain MATLAB structure.
             R.ID            = obj.ID;
             R.Name          = obj.Name;
             R.CreatedAt     = obj.CreatedAt;
@@ -374,6 +406,7 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
         end
 
         function T = SummaryTableTemplate()
+        %SUMMARYTABLETEMPLATE Return the fields and default values for a region summary row.
             VariableNames = {...
                 'Name';...
                 'Center coordinates (x,y)';...
@@ -382,6 +415,7 @@ classdef STORMRegion < handle & matlab.mixin.SetGetExactNames
                 'Orientation';...
                 };
 
+            % Table assembled from the current records.
             T = table({},{},{},{},{},'VariableNames',VariableNames);
         end
 

@@ -46,11 +46,13 @@ function out = formatColumnName(in)
 
 
     function str2 = autoFormat(str)
+    %AUTOFORMAT Format a numeric value for the summary table.
 
         % Convert underscores into alternating parentheses
         parenOpen = true;
         str2 = strings(1,0);
         
+        % Visit each entry in str.
         for k = 1:numel(str)
             if str(k) == '_'
                 if parenOpen

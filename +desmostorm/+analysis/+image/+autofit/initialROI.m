@@ -28,6 +28,7 @@ end
 
 side = opts.SizeFraction * min(H,W);
 
+% Linescan ROI geometry used for the current region.
 ROI = struct();
 ROI.Height = side;
 ROI.Width = side;

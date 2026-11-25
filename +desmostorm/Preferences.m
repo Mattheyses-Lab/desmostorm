@@ -30,6 +30,7 @@ classdef Preferences
     %
     %   All preferences managed by this class are stored under this
     %   group to avoid collisions with other applications.
+        % Group.
         Group = 'desmostorm'
     end
 
@@ -102,6 +103,7 @@ classdef Preferences
             group = desmostorm.Preferences.Group;
 
             if ~ispref(group)
+                % Struct for prefs.
                 prefs = struct();
                 fprintf('No desmostorm preferences found.\n');
                 return
@@ -162,6 +164,7 @@ classdef Preferences
                 Description(k) = string(catalog(k).Description);
             end
 
+            % Table assembled from the current records.
             T = table(Name, Category, Default, Effective, Explicit, Description);
 
             if nargout == 0
@@ -206,6 +209,7 @@ classdef Preferences
 
         function entry = entry_(name, category, description)
         %ENTRY_ Construct one catalog entry.
+            % Struct for entry.
             entry = struct( ...
                 "Name", string(name), ...
                 "Category", string(category), ...
@@ -217,6 +221,7 @@ classdef Preferences
             devMode = logical(desmostorm.Preferences.get("DeveloperMode", false));
             logging = desmostorm.Log.preferenceDefaults(devMode);
 
+            % Struct for defaults.
             defaults = struct( ...
                 "SetupVersion", "0.0.0", ...
                 "DeveloperMode", false, ...

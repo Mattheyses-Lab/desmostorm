@@ -15,8 +15,11 @@
 % with this program; if not, see <https://www.gnu.org/licenses/>.
 
 classdef Info
+%INFO Application identity and compatibility version constants.
     properties (Constant)
+        % Display name shown in the application.
         Name    string = "desmostorm"   % name of the app
+        % Version associated with the saved record.
         Version string = "1.2.0"        % application version, major.minor.patch
 
         % Setup version is intentionally separate from app version. Bump this

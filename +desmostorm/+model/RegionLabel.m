@@ -18,15 +18,21 @@ classdef RegionLabel < handle
 %RegionLabel  Defines a user label (name/hotkey/color) for region annotation.
 
     properties
+        % Stable identifier used to look up this record.
         ID (1,1) string = ""
+        % Display name shown in the application.
         Name (1,1) string = ""
+        % Keyboard shortcut used to select this label.
         Hotkey (1,1) string = ""   % e.g. "1", "a", "q"
+        % RGB color for.
         Color (1,3) double = [1 1 1]
+        % Time when this record was created.
         CreatedAt datetime = datetime('now')
     end
 
     methods
         function obj = RegionLabel(name, opts)
+        %REGIONLABEL Initialize a named label with a color and optional shortcut.
             arguments
                 name (1,1) string = ""
                 opts.ID (1,1) string = ""
@@ -47,6 +53,7 @@ classdef RegionLabel < handle
         end
 
         function tf = hasHotkey(obj)
+        %HASHOTKEY Check whether hotkey is present.
             tf = strlength(obj.Hotkey) > 0;
         end
     end

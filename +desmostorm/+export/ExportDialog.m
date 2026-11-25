@@ -15,34 +15,43 @@
 % with this program; if not, see <https://www.gnu.org/licenses/>.
 
 classdef ExportDialog
+%EXPORTDIALOG Collect export options in a tabbed modal dialog.
     methods (Static)
         function options = prompt(name,sections,plotHost)
         %PROMPT Collect menubar export settings in a tabbed modal dialog.
             if nargin < 3, plotHost = []; end
-            background = [.12 .12 .12];
-            paneColor = [.18 .18 .18];
-            controlColor = [.3 .3 .3];
-            fontColor = [.85 .85 .85];
-            controlFontColor = [.9 .9 .9];
+            % Canvas or container background color.
+            background = desmostorm.app.UIStyle.Background;
+            % Background color for the settings tab or panel.
+            paneColor = desmostorm.app.UIStyle.Pane;
+            % Background color for editable controls.
+            controlColor = desmostorm.app.UIStyle.Control;
+            % Foreground color for labels and captions.
+            fontColor = desmostorm.app.UIStyle.Caption;
+            % Foreground color for editable control values.
+            controlFontColor = desmostorm.app.UIStyle.Text;
             options = [];
             fields = struct();
             controls = struct();
 
+            % Whether the dialog needs the PlotAxes export controls.
+            isPlotExport = any(cellfun(@(spec) isfield(spec,"Name") && ...
+                spec.Name == "ContentType",sections{1,2}));
+            dialogSize = [470 420];
+            if isPlotExport, dialogSize = [520 600]; end
             fig = uifigure(Visible="off",Name=name, ...
-                InnerPosition=[0 0 470 420],Resize="off", ...
+                InnerPosition=[0 0 dialogSize],Resize="off", ...
                 WindowStyle="modal",Color=background);
             fig.CloseRequestFcn = @(~,~) closeDialog();
+            % Delete dialog when this scope exits.
             cleanup = onCleanup(@() deleteDialog(fig));
-            root = uigridlayout(fig,[2 1],Padding=[10 10 10 10], ...
-                RowSpacing=10,ColumnSpacing=0,BackgroundColor=background, ...
+            root = uigridlayout(fig,[2 1],Padding=desmostorm.app.UIStyle.DialogPadding, ...
+                RowSpacing=desmostorm.app.UIStyle.RowSpacing,ColumnSpacing=0,BackgroundColor=background, ...
                 RowHeight={'1x','fit'},ColumnWidth={'1x'});
             tabs = uitabgroup(root);
             tabs.Layout.Row = 1;
             readAxes = [];
             for section = 1:size(sections,1)
-                if section == 2 && ~isempty(plotHost)
-                    readAxes = matlabx.ui.axes.internal.plotAxesControlTabs(tabs,plotHost,@() [],true);
-                end
                 specs = sections{section,2};
                 tab = uitab(tabs,Title=sections{section,1},BackgroundColor=paneColor, ...
                     ForegroundColor=fontColor);
@@ -50,12 +59,15 @@ classdef ExportDialog
                     RowHeight=[repmat({'fit'},1,numel(specs)),{'1x'}], ...
                     Padding=[5 5 5 5],ColumnSpacing=5,RowSpacing=5, ...
                     BackgroundColor=paneColor,Scrollable="on");
+                % Process specs in order.
                 for row = 1:numel(specs)
                     spec = specs{row};
                     label = uilabel(pane,Text=spec.Label,FontColor=fontColor);
                     label.Layout.Row = row;
                     label.Layout.Column = 1;
-                    if isfield(spec,"Companion")
+                    if spec.Type == "note"
+                        label.Layout.Column = [1 2];
+                    elseif isfield(spec,"Companion")
                         pair = uigridlayout(pane,[1 2],Padding=0,ColumnSpacing=5, ...
                             RowHeight={'fit'},ColumnWidth={'1x','fit'},BackgroundColor=paneColor);
                         pair.Layout.Row = row;
@@ -73,23 +85,33 @@ classdef ExportDialog
                         control.Layout.Column = 2;
                     end
                 end
+                if section == 1 && ~isempty(plotHost)
+                    readAxes = matlabx.ui.axes.internal.plotAxesControlTabs( ...
+                        tabs,plotHost,@() [],true,pane);
+                end
             end
 
-            buttons = uigridlayout(root,[1 3],Padding=0,RowSpacing=0, ...
-                ColumnSpacing=5,ColumnWidth={'1x',80,80},RowHeight={'fit'}, ...
+            % Button width.
+            buttonWidth = desmostorm.app.UIStyle.ButtonWidth;
+            % Flexible spacer followed by the two fixed-width actions.
+            columns = {'1x',buttonWidth,buttonWidth};
+            buttons = uigridlayout(root,[1 numel(columns)],Padding=0,RowSpacing=0, ...
+                ColumnSpacing=desmostorm.app.UIStyle.ButtonSpacing,ColumnWidth=columns,RowHeight={'fit'}, ...
                 BackgroundColor=background);
             buttons.Layout.Row = 2;
-            cancel = uibutton(buttons,Text="Cancel", ...
-                BackgroundColor=controlColor,FontColor=controlFontColor, ...
-                ButtonPushedFcn=@(~,~) closeDialog());
-            cancel.Layout.Column = 2;
-            proceed = uibutton(buttons,Text="Continue", ...
-                BackgroundColor=[.18 .42 .68],FontColor=[1 1 1], ...
-                ButtonPushedFcn=@(~,~) acceptDialog());
-            proceed.Layout.Column = 3;
-            if isfield(controls,"StyleSizing") && isfield(controls,"PreserveAspectRatio")
-                controls.StyleSizing.ValueChangedFcn = @(~,~) updateAspectControl();
-                updateAspectControl();
+            cancel = desmostorm.app.UIStyle.button(buttons,false,'Text',"Cancel", ...
+                'ButtonPushedFcn',@(~,~) closeDialog());
+            cancel.Layout.Column = numel(columns)-1;
+            proceed = desmostorm.app.UIStyle.button(buttons,true,'Text',"Continue", ...
+                'ButtonPushedFcn',@(~,~) acceptDialog());
+            proceed.Layout.Column = numel(columns);
+            if isfield(controls,"Units") && isfield(controls,"Width") && isfield(controls,"Height")
+                currentUnits = string(controls.Units.Value);
+                controls.Units.ValueChangedFcn = @(~,~) convertDimensions();
+            end
+            if isPlotExport
+                controls.ContentType.ValueChangedFcn = @(~,~) updateOutputType();
+                updateOutputType();
             end
             if isfield(controls,"ScalingMode") && isfield(controls,"AutoScalingMethod")
                 controls.ScalingMode.ValueChangedFcn = @(~,~) updateScalingControl();
@@ -101,10 +123,12 @@ classdef ExportDialog
             closeDialog();
 
             function closeDialog()
+            %CLOSEDIALOG Close the dialog figure if it still exists.
                 deleteDialog(fig);
             end
 
             function control = registerControl(pane,spec)
+            %REGISTERCONTROL Create an export control and register it for value collection.
                 switch spec.Type
                     case "choice"
                         control = uidropdown(pane,Items=cellstr(spec.Items),Value=char(spec.Value), ...
@@ -125,19 +149,70 @@ classdef ExportDialog
                 fields.(spec.Name) = spec;
             end
 
-            function updateAspectControl()
-                aspect = controls.PreserveAspectRatio;
-                physical = string(controls.StyleSizing.Value) == "Preserve physical sizes";
-                if physical, aspect.Value = true; end
-                aspect.Enable = ~physical;
+            function updateOutputType()
+            %UPDATEOUTPUTTYPE Update file formats, units, and resolution for the selected output type.
+                vector = string(controls.ContentType.Value) == "Vector";
+                units = ["inches","centimeters","points"];
+                formats = ["PDF","SVG"];
+                format = "SVG";
+                if ~vector
+                    units(end+1) = "pixels";
+                    formats = ["PNG","TIFF"];
+                    format = "PNG";
+                elseif currentUnits == "pixels"
+                    if ~convertDimensions("inches")
+                        controls.ContentType.Value = 'Image';
+                        return
+                    end
+                end
+                controls.Units.Items = cellstr(units);
+                controls.Units.Value = char(currentUnits);
+                fields.Units.Items = units;
+                fields.Units.OutputValues = units;
+                controls.Format.Items = cellstr(formats);
+                controls.Format.Value = char(format);
+                fields.Format.Items = formats;
+                fields.Format.OutputValues = formats;
+                controls.Resolution.Enable = ~vector;
             end
 
             function updateScalingControl()
+            %UPDATESCALINGCONTROL Enable the autoscale method only when the export uses automatic limits.
                 controls.AutoScalingMethod.Enable = string(controls.ScalingMode.Value) == "Auto";
             end
 
+            function ok = convertDimensions(nextUnits)
+            %CONVERTDIMENSIONS Convert entered dimensions while retaining the physical output size.
+                if nargin < 1, nextUnits = string(controls.Units.Value); end
+                ok = false;
+                dpi = 300;
+                if isfield(controls,"Resolution"), dpi = controls.Resolution.Value; end
+                if any([currentUnits nextUnits] == "pixels") && (~isfinite(dpi) || dpi <= 0)
+                    controls.Units.Value = char(currentUnits);
+                    uialert(fig,"Enter a positive resolution before converting pixel dimensions.","Invalid Resolution");
+                    return
+                end
+                factor = matlabx.ui.axes.internal.exportUnitsPerInch(nextUnits,dpi) / ...
+                    matlabx.ui.axes.internal.exportUnitsPerInch(currentUnits,dpi);
+                for key = ["Width","Height"]
+                    control = controls.(key);
+                    if fields.(key).Type == "dimension"
+                        value = str2double(control.Value);
+                        if isreal(value) && isfinite(value) && value > 0
+                            control.Value = compose("%.9g",value * factor);
+                        end
+                    else
+                        control.Value = control.Value * factor;
+                    end
+                end
+                currentUnits = nextUnits;
+                ok = true;
+            end
+
             function acceptDialog()
+            %ACCEPTDIALOG Validate the controls and return the accepted export options.
                 values = struct();
+                % Process the named fields in fields.
                 for key = reshape(string(fieldnames(fields)),1,[])
                     spec = fields.(key);
                     value = controls.(key).Value;
@@ -169,6 +244,11 @@ classdef ExportDialog
                     uialert(fig,"Specify a width or height.","Invalid export option");
                     return
                 end
+                if isPlotExport && values.ContentType == "Image" && ...
+                        values.Resolution ~= fix(values.Resolution)
+                    uialert(fig,"Resolution must be a positive whole number.","Invalid export option");
+                    return
+                end
                 if ~isempty(readAxes)
                     [style,view,message] = readAxes();
                     if strlength(message) > 0
@@ -189,5 +269,6 @@ classdef ExportDialog
 end
 
 function deleteDialog(fig)
+%DELETEDIALOG Delete the dialog figure if it still exists.
     if isgraphics(fig), delete(fig); end
 end

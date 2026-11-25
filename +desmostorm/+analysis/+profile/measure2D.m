@@ -52,6 +52,7 @@ fillV  = p.Results.Fill;
 
 % ---- Prepare image & references
 Iclass = class(I);
+% Pixel data for the image being processed.
 I      = double(I);
 [H,W]  = size(I);
 Rin    = imref2d([H, W], [0.5, W+0.5], [0.5, H+0.5]);  % pixel-edge
@@ -67,6 +68,7 @@ v0   = (nH + 1)/2;
 
 % ---- Rotation: CCW in image coords (x→right, y→down)
 theta = deg2rad(thetaDeg);
+% Source channel index.
 c = cos(theta); s = sin(theta);
 R = [ c,  s;    % this is CCW in y-down coordinates
      -s,  c];

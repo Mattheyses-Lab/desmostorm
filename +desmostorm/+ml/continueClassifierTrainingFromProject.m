@@ -131,10 +131,15 @@ function [pkgNew, out] = continueClassifierTrainingFromProject(project, classifi
     
     [nextVersion, stem] = desmostorm.ml.nextClassifierVersion(saveDir, baseName);
 
+    % Filesystem path for classifier out.
     classifierOut = fullfile(saveDir, sprintf("classifier_%s_v%03d.mat", stem, nextVersion));
+    % Filesystem path for project patch out.
     projectPatchOut = fullfile(saveDir, sprintf("patchTable_%s_v%03d_project.csv", stem, nextVersion));
+    % Filesystem path for training patch out.
     trainingPatchOut = fullfile(saveDir, sprintf("patchTable_%s_v%03d_training.csv", stem, nextVersion));
+    % Filesystem path for patch dir.
     patchDir = fullfile(saveDir, sprintf("classifier_%s_v%03d_patches", stem, nextVersion));
+    % Filesystem path for manifest.
     manifestFile = fullfile(patchDir,"patch_manifest.csv");
 
     % Save/copy the exact merged training table as cropped patch files for this

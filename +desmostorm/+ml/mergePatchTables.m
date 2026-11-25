@@ -31,6 +31,7 @@ function T = mergePatchTables(Told, Tnew, opts)
     end
     
     if isempty(Told)
+        % Table assembled from the current records.
         T = Tnew;
         return
     end
@@ -42,6 +43,7 @@ function T = mergePatchTables(Told, Tnew, opts)
     % Ensure common required vars exist before doing type harmonization. Missing
     % core columns mean the input is not a valid desmostorm patch table.
     req = ["imageFilename","centerX","centerY","label"];
+    % Visit each entry in req.
     for v = req
         if ~ismember(v, string(Told.Properties.VariableNames))
             error("mergePatchTables:MissingVar", "Told is missing variable '%s'.", v);
@@ -68,6 +70,7 @@ function T = mergePatchTables(Told, Tnew, opts)
     % Add missing columns as empty/NaN if needed so vertical concat works cleanly
     allVars = union(string(Told.Properties.VariableNames), string(Tnew.Properties.VariableNames));
     
+    % Visit each entry in all vars.
     for v = allVars
         if ~ismember(v, string(Told.Properties.VariableNames))
             Told.(v) = defaultColumnLike(Tnew.(v), height(Told));

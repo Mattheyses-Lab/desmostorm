@@ -62,8 +62,10 @@ end
     % Convert page and text settings to pixels because uifigure layout uses
     % screen units, while the export dialog exposes print-oriented units.
     fontSizePx = matlabx.UICal.pt2px(opts.FontSizePoints);
+    % Layout width.
     layoutWidth = opts.PageWidthInches;
     if opts.StyleSizing == "scale", layoutWidth = 11; end
+    % Page width pixels.
     pageWidthPx = layoutWidth * matlabx.UICal.pixelsPerInch();
 
     % Keep the page compact and predictable: the export figure is a single
@@ -71,21 +73,27 @@ end
     padding = 5;
     spacing = 5;
 
+    % Fig height.
     figHeight = pageWidthPx/4;
+    % Grid height.
     gridHeight = figHeight-padding*2;
 
     % The embedded image contains only the axes view and fills a square.
     imgWidth = gridHeight;
+    % Remaining width.
     remainingWidth = pageWidthPx-2*padding-2*spacing-imgWidth;
     if imgWidth <= 0 || remainingWidth <= 0
         error('desmostorm:export:summaryPDF:PageTooSmall','Increase the page width.');
     end
+    % Plot width.
     plotWidth = 2*remainingWidth/3;
+    % Table width.
     tableWidth = remainingWidth-plotWidth;
 
     % Initialize temporary files and folder for PDF export
     tempFolder = char(tempname);
     mkdir(tempFolder);
+    % Remove temp folder when this scope exits.
     cleanupTempFolder = onCleanup(@() removeTempFolder(tempFolder));
 
     % Expand the requested channel selection into concrete pages. "all"
@@ -95,10 +103,15 @@ end
         return
     end
 
+    % Dimensions of the temporary figure used to render page content.
     layoutSize = [pageWidthPx figHeight];
+    % Physical PDF page dimensions in points.
     pageSize = 72 * opts.PageWidthInches * [1 figHeight/pageWidthPx];
+    % Bounds of the plot column within the page layout.
     plotRect = [padding padding plotWidth gridHeight];
+    % Bounds of the image column within the page layout.
     imageRect = [padding+plotWidth+spacing padding imgWidth imgWidth];
+    % Point scale.
     pointScale = [pageSize./layoutSize pageSize./layoutSize];
     pdfCommand = summaryPDFCommand(tempFolder,numel(pages),pageSize, ...
         plotRect .* pointScale,imageRect .* pointScale);
@@ -116,6 +129,7 @@ end
     f = uifigure("WindowStyle","normal", ...
         "Visible","off", ...
         "Position",[0 0 pageWidthPx figHeight]);
+    % Close figure when this scope exits.
     cleanupFig = onCleanup(@() closeFigure(f));
     
     movegui(f,'center')
@@ -142,6 +156,7 @@ end
     p.Layout.Row = 1;
     p.Layout.Column = 1;
     renderer = desmostorm.plot.PeaksPlotRenderer();
+    % Release the temporary object when this scope exits.
     cleanupRenderer = onCleanup(@() delete(renderer));
     renderer.update(desmostorm.plot.PeaksPlotData(),style);
     p.mount(renderer);
@@ -188,6 +203,7 @@ end
     % user's way without triggering the blurry first-render export path.
     f.Visible = 'off';
 
+    % Process pages in order.
     for pageIdx = 1:numel(pages)
         img = pages(pageIdx).Image;
         reg = pages(pageIdx).Region;
@@ -243,9 +259,13 @@ end
         % Export the plot independently so a vector plot remains vector
         % when placed alongside the captured image and summary text.
         plotInches = plotRect(3:4) ./ layoutSize .* (pageSize / 72);
+        % Render inches.
         renderInches = plotRect(3:4) / matlabx.UICal.pixelsPerInch();
+        % Raster resolution adjusted for the plot’s final placement.
         plotDPI = opts.Resolution * plotInches(1) / renderInches(1);
+        % Filesystem path for plot.
         plotFile = fullfile(tempFolder,sprintf('plot-%d.pdf',pageIdx));
+        % Filesystem path for base.
         baseFile = fullfile(tempFolder,sprintf('layout-%d.pdf',pageIdx));
         p.exportPlot(plotFile,ContentType=opts.ContentType, ...
             Units="inches",Width=renderInches(1),Height=renderInches(2), ...
@@ -253,7 +273,9 @@ end
         % Render the region image and ROI directly from the image axes.
         % Render at the layout size and adjust DPI for the final PDF scale.
         imageInches = imgWidth / matlabx.UICal.pixelsPerInch();
+        % Raster resolution adjusted for the image’s final placement.
         imageDPI = opts.ImageResolution * opts.PageWidthInches / layoutWidth;
+        % Filesystem path for image.
         imageFile = fullfile(tempFolder,sprintf('image-%d.png',pageIdx));
         ax.exportView(imageFile,Units="inches",Width=imageInches,Height=imageInches, ...
             Resolution=imageDPI,PreserveAspectRatio="on",OverlaySizing=opts.StyleSizing);
@@ -268,6 +290,7 @@ end
 
     closeFigure(f);
     desmostorm.runtime.updateProgress(opts.ProgressDialog,"Assembling summary PDF...");
+    % Filesystem path for log.
     logFile = fullfile(tempFolder,'pdfbox.log');
     pdfCommand.redirectErrorStream(true);
     pdfCommand.redirectOutput(java.io.File(logFile));
@@ -282,6 +305,7 @@ end
         error('desmostorm:export:summaryPDF:AssemblyFailed', ...
             'PDFBox could not assemble the summary PDF. %s',strtrim(fileread(logFile)));
     end
+    % Filesystem path for output.
     output = fullfile(tempFolder,'summary.pdf');
     [ok,message] = movefile(output,filename,'f');
     if ~ok, error('desmostorm:export:summaryPDF:WriteFailed','%s',message); end
@@ -289,8 +313,11 @@ end
 end
 
 function command = summaryPDFCommand(folder,pageCount,pageSize,plotRect,imageRect)
+%SUMMARYPDFCOMMAND Build the Java process command for assembling exported PDF pages.
     appRoot = fileparts(fileparts(fileparts(which('desmostorm.export.summaryPDF'))));
+    % Filesystem path for dependency.
     dependencyFolder = fullfile(appRoot,'external','pdfbox');
+    % Filesystem path for jars.
     jars = fullfile(dependencyFolder,["pdfbox-app-3.0.8.jar","desmostorm-summary-pdf.jar"]);
     if ~all(isfile(jars))
         error('desmostorm:export:summaryPDF:MissingPDFBox', ...
@@ -303,6 +330,7 @@ function command = summaryPDFCommand(folder,pageCount,pageSize,plotRect,imageRec
     executable = "java";
     if ispc, executable = "java.exe"; end
     javaHome = char(javaMethod('getProperty','java.lang.System','java.home'));
+    % Filesystem path for launcher.
     launcher = fullfile(javaHome,"bin",executable);
     if ~isfile(launcher), launcher = executable; end
 
@@ -310,6 +338,7 @@ function command = summaryPDFCommand(folder,pageCount,pageSize,plotRect,imageRec
     args = [launcher,"-Djava.awt.headless=true","-cp",join(jars,pathsep), ...
         "SummaryPDF",string(folder),values];
     commandArgs = java.util.ArrayList();
+    % Visit each entry in args.
     for i = 1:numel(args)
         commandArgs.add(java.lang.String(char(args(i))));
     end
@@ -317,6 +346,8 @@ function command = summaryPDFCommand(folder,pageCount,pageSize,plotRect,imageRec
 end
 
 function pages = collectPages(imgs, imageChannel)
+%COLLECTPAGES Collect pages.
+    % Pages to write, each associated with an image, region, and source channel.
     pages = struct('Image',{},'Region',{},'Channel',{});
     exportAll = strcmpi(imageChannel, "all");
     
@@ -328,6 +359,7 @@ function pages = collectPages(imgs, imageChannel)
         end
     end
     
+    % Process imgs in order.
     for i = 1:numel(imgs)
         regs = imgs(i).RegionArray;
         if isempty(regs)
@@ -340,7 +372,9 @@ function pages = collectPages(imgs, imageChannel)
             channels = imgs(i).sourceChannelIndex(channel);
         end
     
+        % Process regs in order.
         for j = 1:numel(regs)
+            % Process channels in order.
             for c = channels
                 pages(end+1).Image = imgs(i);
                 pages(end).Region = regs(j);
@@ -351,6 +385,7 @@ function pages = collectPages(imgs, imageChannel)
 end
 
 function color = resolvePlotColor(project,channel,manualColor,colorSource)
+%RESOLVEPLOTCOLOR Resolve plot color.
     if colorSource == "manual"
         color = manualColor;
         return
@@ -360,6 +395,7 @@ function color = resolvePlotColor(project,channel,manualColor,colorSource)
 end
 
 function applyROISettings(tool,roiConfig,opts)
+%APPLYROISETTINGS Apply ROI settings.
     tool.ROIColor = roiConfig.ROIColor;
     tool.ROILineWidth = roiConfig.ROILineWidth;
     tool.ROIFaceAlpha = opts.ROIFaceAlpha;
@@ -373,6 +409,7 @@ function applyROISettings(tool,roiConfig,opts)
 end
 
 function closeFigure(f)
+%CLOSEFIGURE Delete the export figure if it still exists.
     if ~isempty(f) && isvalid(f)
         delete(f);
         drawnow
@@ -380,6 +417,7 @@ function closeFigure(f)
 end
 
 function removeTempFolder(folderName)
+%REMOVETEMPFOLDER Remove temp folder.
     if isfolder(folderName)
         rmdir(folderName,'s');
     end

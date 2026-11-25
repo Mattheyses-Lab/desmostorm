@@ -17,11 +17,14 @@
 classdef (ConstructOnLoad) ActiveImageChanged < event.EventData
 % event data class for ActiveImageChanged events
     properties
+        % New ID.
         NewID string
+        % Old ID.
         OldID string
     end
     methods
         function this = ActiveImageChanged(newID,oldID)
+        %ACTIVEIMAGECHANGED Capture the previous and new active image identities for listeners.
             this.NewID = newID;
             this.OldID = oldID;
         end

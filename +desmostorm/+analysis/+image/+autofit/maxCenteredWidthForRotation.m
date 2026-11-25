@@ -18,6 +18,7 @@ function width = maxCenteredWidthForRotation(W,H,theta,height)
 %MAXCENTEREDWIDTHFORROTATION Largest centered width that fits the crop.
 
 safety = 0.98;
+% Source channel index.
 c = abs(cosd(theta));
 s = abs(sind(theta));
 

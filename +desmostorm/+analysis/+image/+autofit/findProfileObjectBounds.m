@@ -36,9 +36,12 @@ Y = desmostorm.analysis.PeaksData.smooth(Y,smoothSpan);
 threshold = autofitBoundaryThreshold(Y,supportLeftIdx,supportRightIdx);
 runLength = autofitBoundaryRunLength(numel(Y));
 
+% Index for left.
 leftIdx = findSustainedLowRunLeft(Y,supportLeftIdx,threshold,runLength);
+% Index for right.
 rightIdx = findSustainedLowRunRight(Y,supportRightIdx,threshold,runLength);
 
+% Struct for info.
 info = struct( ...
     "SupportLeftIdx",supportLeftIdx, ...
     "SupportRightIdx",supportRightIdx, ...
@@ -74,7 +77,9 @@ end
 
 if isempty(selectedGeom)
     [~,centerIdx] = max(peaksData.Signal);
+    % Index for left.
     leftIdx = centerIdx;
+    % Index for right.
     rightIdx = centerIdx;
     return
 end
@@ -134,6 +139,7 @@ function idx = findSustainedLowRunLeft(Y,startIdx,threshold,runLength)
 %FINDSUSTAINEDLOWRUNLEFT Find the closest sustained low run left of support.
 searchIdx = 1:max(1,startIdx-1);
 low = Y(searchIdx) <= threshold;
+% Index of the matching entry.
 idx = lastRunEnd(searchIdx,low,runLength);
 end
 
@@ -141,6 +147,7 @@ function idx = findSustainedLowRunRight(Y,startIdx,threshold,runLength)
 %FINDSUSTAINEDLOWRUNRIGHT Find the closest sustained low run right of support.
 searchIdx = min(numel(Y),startIdx+1):numel(Y);
 low = Y(searchIdx) <= threshold;
+% Index of the matching entry.
 idx = firstRunStart(searchIdx,low,runLength);
 end
 

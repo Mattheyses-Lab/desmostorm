@@ -30,11 +30,13 @@ arguments
     opts.ProgressValueMode (1,1) string {mustBeMember(opts.ProgressValueMode,["stage","none"])} = "stage"
 end
 
+    % Intermediate measurements retained for troubleshooting.
     diagnostics = struct();
     debugOutput = opts.DebugOutput;
     updateValue = opts.ProgressValueMode == "stage";
     
     if isempty(I)
+        % Linescan ROI geometry used for the current region.
         ROI = [];
         return
     end
@@ -44,6 +46,7 @@ end
         "Prefix",opts.ProgressMessagePrefix, ...
         "UpdateValue",updateValue);
     
+    % Pixel data for the image being processed.
     I = double(I);
     [H,W] = size(I,[1 2]);
     desmostorm.Log.DEBUG(sprintf("Auto-fit ROI input image size: %d x %d px.",H,W));

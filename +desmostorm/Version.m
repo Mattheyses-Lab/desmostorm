@@ -15,11 +15,14 @@
 % with this program; if not, see <https://www.gnu.org/licenses/>.
 
 classdef Version
+%VERSION Compare application and schema version strings.
     methods(Static)
         function c = compare(v1,v2)
+        %COMPARE Compare two version strings component by component.
             a = sscanf(char(v1),'%d.%d.%d');
             b = sscanf(char(v2),'%d.%d.%d');
             a(end+1:3)=0; b(end+1:3)=0;
+            % Source channel index.
             c = sign(dot([1 0.01 0.0001], a-b)); % returns -1,0,1
         end
     end

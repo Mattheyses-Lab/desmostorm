@@ -8,8 +8,13 @@ draft = [];
 originalIDs = strings(0,1);
 fig = uifigure('Name','Edit labels','WindowStyle','modal','Theme','dark', ...
     'AutoResizeChildren','off','Position',[0 0 640 420], ...
+    'Color',desmostorm.app.UIStyle.Background, ...
     'CloseRequestFcn',@(src,~) uiresume(src));
-layout = uigridlayout(fig,[2 1],'RowHeight',{'1x',28});
+% Grid that arranges the dialog contents.
+layout = uigridlayout(fig,[2 1],'RowHeight',{'1x','fit'}, ...
+    'Padding',desmostorm.app.UIStyle.DialogPadding,'RowSpacing',desmostorm.app.UIStyle.RowSpacing, ...
+    'BackgroundColor',desmostorm.app.UIStyle.Background);
+% Container for the controls or graphics created below.
 host = uigridlayout(layout,[1 1],'Padding',0,'RowHeight',{'fit'},'Scrollable','on');
 data = struct2table(labels(:),'AsArray',true);
 data.ID = string(data.ID);
@@ -26,13 +31,17 @@ editor = matlabx.ui.control.ControlTable(host,Columns=columns,Data=data, ...
     SelectionMode="multiple",Reorderable=true,NewRowFcn=@newLabel);
 editor.RowOperationRequestedFcn = @checkRowOperation;
 
+% Button width.
+buttonWidth = desmostorm.app.UIStyle.ButtonWidth;
 buttons = uigridlayout(layout,[1 5], ...
-    'ColumnWidth',{'fit','fit','1x','fit','fit'},'Padding',0);
-uibutton(buttons,'Text','New label','ButtonPushedFcn',@(~,~) editor.addNewRow());
-uibutton(buttons,'Text','Delete selected','ButtonPushedFcn',@(~,~) editor.removeSelectedRows());
-cancel = uibutton(buttons,'Text','Cancel','ButtonPushedFcn',@(~,~) uiresume(fig));
+    'ColumnWidth',{'fit','fit','1x',buttonWidth,buttonWidth},'RowHeight',{'fit'}, ...
+    'Padding',0,'ColumnSpacing',desmostorm.app.UIStyle.ButtonSpacing, ...
+    'BackgroundColor',desmostorm.app.UIStyle.Background);
+desmostorm.app.UIStyle.button(buttons,false,'Text','New label','ButtonPushedFcn',@(~,~) editor.addNewRow());
+desmostorm.app.UIStyle.button(buttons,false,'Text','Delete selected','ButtonPushedFcn',@(~,~) editor.removeSelectedRows());
+cancel = desmostorm.app.UIStyle.button(buttons,false,'Text','Cancel','ButtonPushedFcn',@(~,~) uiresume(fig));
 cancel.Layout.Column = 4;
-apply = uibutton(buttons,'Text','Apply','ButtonPushedFcn',@confirm);
+apply = desmostorm.app.UIStyle.button(buttons,true,'Text','Apply','ButtonPushedFcn',@confirm);
 apply.Layout.Column = 5;
 
 movegui(fig,'center');
@@ -40,10 +49,12 @@ uiwait(fig);
 if isvalid(fig), delete(fig); end
 
     function row = newLabel(tableControl)
+    %NEWLABEL Create a draft row with an unused label name and ID.
         data = tableControl.Data;
         number = max(1,height(data));
         name = "Label " + number;
         id = "label-" + number;
+        % Keep trying until the candidate is unique.
         while any(strcmpi(name,data.Name)) || ismember(id,data.ID)
             number = number+1;
             name = "Label " + number;
@@ -55,12 +66,14 @@ if isvalid(fig), delete(fig); end
     end
 
     function checkRowOperation(~,event)
+    %CHECKROWOPERATION Validate a requested edit to the label table rows.
         protected = any(editor.Data.OriginalID(event.Rows) == "unlabeled");
         event.Cancel = event.Operation == "duplicate" || protected || ...
             (event.Operation == "reorder" && event.DestinationRow == 1);
     end
 
     function confirm(~,~)
+    %CONFIRM Validate the dialog input and return the accepted values.
         data = editor.Data;
         data.Name = strtrim(data.Name);
         data.ID = strtrim(data.ID);

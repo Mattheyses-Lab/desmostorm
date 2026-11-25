@@ -27,12 +27,14 @@ function [Ptrain, Pval] = splitByImage(P, valFrac)
     end
     
     imgs = unique(P.imageFilename);
+    % Number of imgs.
     nImgs = numel(imgs);
     nValTarget = max(1, round(valFrac * nImgs));
     
     % For each image, determine whether it can help validation cover either
     % class. This only uses labels, not patch counts.
     hasObject = false(nImgs,1);
+    % Flag for has back.
     hasBack   = false(nImgs,1);
     
     for i = 1:nImgs
@@ -48,6 +50,7 @@ function [Ptrain, Pval] = splitByImage(P, valFrac)
     needObject = true;
     needBack   = true;
     
+    % Visit each entry in index all.
     for k = idxAll
         if sum(valSet) >= nValTarget
             break
@@ -81,6 +84,7 @@ function [Ptrain, Pval] = splitByImage(P, valFrac)
     
     valImgs = imgs(valSet);
     
+    % Logical mask for is val.
     isVal = ismember(P.imageFilename, valImgs);
     Pval   = P(isVal,:);
     Ptrain = P(~isVal,:);

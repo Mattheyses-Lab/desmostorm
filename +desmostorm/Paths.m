@@ -25,6 +25,7 @@ classdef Paths
         end
 
         function p = user(varargin)
+        %USER Resolve a path under the application user directory.
             p = fullfile(desmostorm.Paths.root(), 'user', varargin{:});
         end
 
@@ -41,18 +42,22 @@ classdef Paths
         end
 
         function p = assets()
+        %ASSETS Resolve a path relative to the installed assets directory.
             p = fullfile(desmostorm.Paths.root, 'assets');
         end
 
         function p = ml()
+        %ML Return machine learning.
             p = fullfile(desmostorm.Paths.assets,'ml');
         end
 
         function p = logs(varargin)
+        %LOGS Resolve a path under the application log directory.
             p = fullfile(desmostorm.Paths.root(), 'logs', varargin{:});
         end
 
         function p = logFile(stem)
+        %LOGFILE Resolve the path used for a session log.
             arguments
                 stem (1,1) string = "session"
             end
@@ -63,6 +68,7 @@ classdef Paths
         end
 
         function p = external(varargin)
+        %EXTERNAL Resolve a path within the installed external dependencies.
             p = fullfile(desmostorm.Paths.root(), 'external', varargin{:});
         end
 

@@ -42,15 +42,19 @@ clustData = matlabx.analysis.cluster.PointClusters(seedPts, ...
 clustData.recluster();
 
 isolatedPts = clustData.UnclusteredPoints;
+% Index for edge cluster.
 edgeClusterIdx = findEdgeClusterIdx(clustData,W,H,opts.EdgeDistanceFraction);
 edgePts = collectClusterPoints(clustData,edgeClusterIdx);
 
 removeSeedPts = [isolatedPts; edgePts];
+% Logical mask for seed.
 seedMask = matlabx.image.mask.fromPoints(removeSeedPts,size(I));
+% Logical mask for remove.
 removeMask = desmostorm.analysis.image.selectWatershedSeedLabels(I, ...
     seedMask, ...
     "Threshold",0);
 
+% Pixel array returned by this operation.
 Iout = I;
 Iout(removeMask) = 0;
 
@@ -88,6 +92,7 @@ end
 
 function idx = findEdgeClusterIdx(clustData,W,H,fraction)
 %FINDEDGECLUSTERIDX Identify clusters whose centroids are far from center.
+    % Index of the matching entry.
     idx = zeros(0,1);
     if clustData.nClusters == 0
         return
@@ -103,6 +108,7 @@ function idx = findEdgeClusterIdx(clustData,W,H,fraction)
     xThreshold = fraction * max((W - 1) / 2,1);
     yThreshold = fraction * max((H - 1) / 2,1);
 
+    % Mask for samples at the edge of the profile.
     isEdge = ...
         abs(centroids(:,1) - imageCenter(1)) >= xThreshold | ...
         abs(centroids(:,2) - imageCenter(2)) >= yThreshold;

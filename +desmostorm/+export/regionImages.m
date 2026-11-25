@@ -33,20 +33,26 @@ end
 matlabx.utils.files.ensureDir(folderName);
 
 regionsTotal = 0;
+% Process image array in order.
 for i = 1:numel(project.ImageArray)
     regionsTotal = regionsTotal + numel(project.ImageArray(i).RegionArray);
 end
 
+% Counts of attempted, successful, and skipped export records.
 summary = struct("Attempted",regionsTotal,"Exported",0,"Skipped",0);
 regionsDone = 0;
 exportedFiles = {};
+% Process image array in order.
 for i = 1:numel(project.ImageArray)
     img = project.ImageArray(i);
+    % Index of the channel in the source image.
     sourceIndex = img.sourceChannelIndex(opts.Channel);
 
+    % Process region array in order.
     for j = 1:numel(img.RegionArray)
         reg = img.RegionArray(j);
         fileName = regionImageFileName(img,reg,opts.Channel,opts.OutputFormat);
+        % Complete path used to write the current export.
         fullName = fullfile(folderName,fileName);
 
         regionsDone = regionsDone + 1;
@@ -63,7 +69,9 @@ for i = 1:numel(project.ImageArray)
         end
 
         Icell = img.regionSubimageCell(reg);
+        % Pixel data for the image being processed.
         I = Icell{sourceIndex};
+        % Intensity limits used for this image component.
         clim = desmostorm.export.imageDisplayLimits(img,sourceIndex,opts.ScalingMode,opts.DisplaySettings,opts.AutoScalingMethod);
         switch opts.OutputFormat
             case "grayscale TIFF"
@@ -80,6 +88,7 @@ if opts.TiledSummary == "on" && ~isempty(exportedFiles)
     desmostorm.runtime.updateProgress(opts.ProgressDialog, ...
         'Building tiled region image summary...', ...
         regionsTotal, regionsTotal);
+    % Filesystem path for summary.
     summaryFile = fullfile(folderName,tiledSummaryFileName(opts.Channel,opts.OutputFormat));
     writeTiledSummary(exportedFiles,summaryFile);
 end
@@ -92,20 +101,27 @@ desmostorm.runtime.updateProgress(opts.ProgressDialog, ...
 end
 
 function Iout = scaleFor16BitExport(I,clim)
+%SCALEFOR16BITEXPORT Scale for 16 bit export.
+    % Pixel data for the image being processed.
     I = double(I);
     I = (I - clim(1)) ./ diff(clim);
     I = min(max(I,0),1);
+    % Pixel array returned by this operation.
     Iout = uint16(round(I * double(intmax('uint16'))));
 end
 
 function Iout = scaleFor8BitExport(I,clim)
+%SCALEFOR8BITEXPORT Scale for 8 bit export.
+    % Pixel data for the image being processed.
     I = double(I);
     I = (I - clim(1)) ./ diff(clim);
     I = min(max(I,0),1);
+    % Pixel array returned by this operation.
     Iout = uint8(round(I * double(intmax('uint8'))));
 end
 
 function RGB = renderRegionRGB(I,project,channel,clim,channelColorMode)
+%RENDERREGIONRGB Render region RGB.
     A = double(scaleFor8BitExport(I,clim)) ./ double(intmax('uint8'));
 
     switch string(channelColorMode)
@@ -114,7 +130,9 @@ function RGB = renderRegionRGB(I,project,channel,clim,channelColorMode)
             RGB = uint8(round(255 * A .* reshape(color,1,1,3)));
 
         case "luts"
+            % Colormap used to display the current channel.
             cmap = project.getChannelColormap(channel);
+            % Index of the matching entry.
             idx = max(1,min(size(cmap,1),round(A * (size(cmap,1)-1)) + 1));
             RGB = reshape(cmap(idx(:),:),size(A,1),size(A,2),3);
             RGB = uint8(round(255 * RGB));
@@ -122,6 +140,7 @@ function RGB = renderRegionRGB(I,project,channel,clim,channelColorMode)
 end
 
 function fileName = regionImageFileName(img,reg,channel,outputFormat)
+%REGIONIMAGEFILENAME Return the region image file name.
     switch string(outputFormat)
         case "grayscale TIFF"
             ext = ".tif";
@@ -137,6 +156,7 @@ function fileName = regionImageFileName(img,reg,channel,outputFormat)
 end
 
 function fileName = tiledSummaryFileName(channel,outputFormat)
+%TILEDSUMMARYFILENAME Return the tiled summary file name.
     switch string(outputFormat)
         case "grayscale TIFF"
             suffix = "grayscale";
@@ -148,6 +168,7 @@ function fileName = tiledSummaryFileName(channel,outputFormat)
 end
 
 function stem = safeFileStem(str)
+%SAFEFILESTEM Replace characters unsuitable for an export filename.
     stem = regexprep(char(str),'[^A-Za-z0-9_.-]','_');
     if isempty(stem)
         stem = 'region';
@@ -155,17 +176,22 @@ function stem = safeFileStem(str)
 end
 
 function writeTiledSummary(fileNames,filename)
+%WRITETILEDSUMMARY Write tiled summary.
     tiles = cell(size(fileNames));
     tileSize = 0;
+    % Whether the exported tiles contain truecolor pixels.
     isRGB = false;
 
+    % Process file names in order.
     for i = 1:numel(fileNames)
+        % Pixel data for the image being processed.
         I = imread(fileNames{i});
         tiles{i} = I;
         isRGB = isRGB || ndims(I) == 3;
         tileSize = max(tileSize,max(size(I,1),size(I,2)));
     end
 
+    % Number of tiles along each side of the square montage.
     n = ceil(sqrt(numel(tiles)));
     if isRGB
         canvas = zeros(tileSize*n,tileSize*n,3,'uint8');
@@ -173,6 +199,7 @@ function writeTiledSummary(fileNames,filename)
         canvas = zeros(tileSize*n,tileSize*n,'uint16');
     end
 
+    % Process tiles in order.
     for i = 1:numel(tiles)
         row = floor((i-1)/n) + 1;
         col = mod(i-1,n) + 1;
@@ -191,14 +218,18 @@ function writeTiledSummary(fileNames,filename)
 end
 
 function tile = padToSquare(I,tileSize,isRGB)
+%PADTOSQUARE Pad to square.
     if isRGB
+        % Pixel data for the image being processed.
         I = ensureRGB8(I);
         tile = zeros(tileSize,tileSize,3,'uint8');
     else
         tile = zeros(tileSize,tileSize,'like',I);
     end
 
+    % First row for centering the original image in the padded tile.
     row0 = floor((tileSize - size(I,1))/2) + 1;
+    % First column for centering the original image in the padded tile.
     col0 = floor((tileSize - size(I,2))/2) + 1;
     rows = row0:(row0 + size(I,1) - 1);
     cols = col0:(col0 + size(I,2) - 1);
@@ -210,7 +241,9 @@ function tile = padToSquare(I,tileSize,isRGB)
 end
 
 function I = ensureRGB8(I)
+%ENSURERGB8 Ensure RGB 8.
     if ismatrix(I)
+        % Pixel data for the image being processed.
         I = im2uint8(I);
         I = repmat(I,1,1,3);
         return

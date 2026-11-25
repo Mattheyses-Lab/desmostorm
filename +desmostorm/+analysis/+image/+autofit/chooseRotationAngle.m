@@ -18,6 +18,7 @@ function [theta,choice] = chooseRotationAngle(T)
 %CHOOSEROTATIONANGLE Choose the center of the best high-score plateau.
 
 theta = NaN;
+% Struct for choice.
 choice = struct( ...
     "Method","score-plateau", ...
     "ScoreThreshold",NaN, ...
@@ -46,10 +47,12 @@ if any(cleanMask)
     mask = cleanMask;
 end
 
+% Index for run.
 runIdx = longestCircularTrueRun(mask);
 if isempty(runIdx)
     [~,idx] = max(T.SmoothedScore);
 else
+    % Index of the matching entry.
     idx = runIdx(ceil(numel(runIdx) / 2));
 end
 
@@ -63,6 +66,7 @@ function idx = longestCircularTrueRun(mask)
 %LONGESTCIRCULARTRUERUN Return indices for the longest true run with wrap.
 mask = reshape(logical(mask),1,[]);
 n = numel(mask);
+% Index of the matching entry.
 idx = [];
 
 if n == 0 || ~any(mask)
@@ -80,6 +84,7 @@ bestLen = 0;
 currentStart = 1;
 currentLen = 0;
 
+% Visit each entry in doubled.
 for i = 1:numel(doubled)
     if doubled(i)
         if currentLen == 0

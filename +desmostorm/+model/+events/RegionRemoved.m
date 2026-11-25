@@ -18,13 +18,17 @@ classdef (ConstructOnLoad) RegionRemoved < event.EventData
 %REGIONREMOVED Event data for region deletion.
 
     properties
+        % Image ID.
         ImageID string
+        % Region ID.
         RegionID string
+        % Region name.
         RegionName string
     end
 
     methods
         function this = RegionRemoved(imageID, regionID, regionName)
+        %REGIONREMOVED Identify the removed region and its owner image.
             this.ImageID = string(imageID);
             this.RegionID = string(regionID);
             this.RegionName = string(regionName);

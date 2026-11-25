@@ -52,6 +52,7 @@ end
 
 imgs = project.ImageArray;
 if isempty(imgs)
+    % Initialize a patch table with the expected training schema.
     P = emptyPatchTable();
     return
 end
@@ -62,6 +63,7 @@ s = opts.BoxSize;
 totalPos = 0;
 totalNegUser = 0;
 
+% Process imgs in order.
 for i = 1:numel(imgs)
     img = imgs(i);
     fn = string(img.SourcePath);
@@ -77,6 +79,7 @@ for i = 1:numel(imgs)
     Cpos = zeros(0,2);
     CnegUser = zeros(0,2);
 
+    % Process regs in order.
     for r = 1:numel(regs)
         reg = regs(r);
 
@@ -99,7 +102,9 @@ for i = 1:numel(imgs)
         end
     end
 
+    % Number of pos.
     nPos = size(Cpos,1);
+    % Number of neg user.
     nNegUser = size(CnegUser,1);
 
     totalPos = totalPos + nPos;
@@ -175,6 +180,7 @@ for i = 1:numel(imgs)
     end
 
     if ~isempty(CnegRand)
+        % Number of neg rand.
         nNegRand = size(CnegRand,1);
         rowsRand = [repmat({fn}, nNegRand, 1), ...
                     num2cell(CnegRand(:,1)), num2cell(CnegRand(:,2)), ...
@@ -184,10 +190,12 @@ for i = 1:numel(imgs)
     end
 end
 
+% Training patch records with image paths, centers, and labels.
 P = cell2table(rows, 'VariableNames', ...
     {'imageFilename','centerX','centerY','label','source'});
 
 if isempty(P)
+    % Initialize a patch table with the expected training schema.
     P = emptyPatchTable();
     return
 end
@@ -229,6 +237,7 @@ function B = centerToBBox(C, s)
 %CENTERTOBBOX Convert center coordinates into fixed-size [x y w h] boxes.
     x = C(:,1) - s/2;
     y = C(:,2) - s/2;
+    % Bounding boxes in top-left, width, and height format.
     B = [x y repmat([s s], size(C,1), 1)];
 end
 
@@ -251,5 +260,6 @@ function iou = bboxIoU(b1, B)
     a1 = b1(3) * b1(4);
     a2 = B(:,3) .* B(:,4);
     
+    % Overlap divided by union area for each candidate pair.
     iou = inter ./ (a1 + a2 - inter + eps);
 end

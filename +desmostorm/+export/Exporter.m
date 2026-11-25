@@ -15,8 +15,10 @@
 % with this program; if not, see <https://www.gnu.org/licenses/>.
 
 classdef Exporter
+%EXPORTER Coordinate interactive exports and dispatch to the file writers.
     methods (Static)
         function result = exportRegionMeasurements(project,config,opts)
+        %EXPORTREGIONMEASUREMENTS Export region measurements.
             arguments
                 project (1,1) desmostorm.model.STORMProject
                 config  (1,1) desmostorm.config.Settings
@@ -26,6 +28,7 @@ classdef Exporter
 
             result = false;
 
+            % Filesystem path for default name.
             defaultName = fullfile(config.IO.DefaultFolder, [char(project.Name),'_region-measurements.xlsx']);
             [file, path] = uiputfile('*.xlsx', ...
                 'Export region measurements', defaultName);
@@ -40,9 +43,11 @@ classdef Exporter
         end
 
         function result = exportSummaryPDF(project,config,opts)
+        %EXPORTSUMMARYPDF Export summary PDF.
             arguments
                 project (1,1) desmostorm.model.STORMProject
                 config  (1,1) desmostorm.config.Settings
+                opts.SummaryFontSize (1,1) double {mustBePositive,mustBeFinite} = config.PeaksPlot.FontSize
                 opts.ProgressDialog = []
                 opts.ProgressFactory = []
             end
@@ -55,7 +60,7 @@ classdef Exporter
                 "Export Options", {
                     choiceField("ImageChannel","Channel",channelChoices,channelChoices(1))
                     numberField("PageWidthInches","Page width (inches)",11)
-                    numberField("FontSizePoints","Summary text size (points)",8)
+                    numberField("FontSizePoints","Summary text size (points)",opts.SummaryFontSize)
                     sizingField("StyleSizing","Style sizing")
                 }
                 "Plot Options", plotFields(config.PeaksPlot)
@@ -82,6 +87,7 @@ classdef Exporter
             params = rmfield(params,"FontSize");
             params.ScalingMode = string(params.ScalingMode);
 
+            % Filesystem path for default name.
             defaultName = fullfile(config.IO.DefaultFolder, [char(project.Name),'_summary.pdf']);
             [file, path] = uiputfile('*.pdf', ...
                 'Export peak plots', defaultName);
@@ -100,6 +106,7 @@ classdef Exporter
         end
 
         function result = exportRegionImages(project,config,opts)
+        %EXPORTREGIONIMAGES Export region images.
             arguments
                 project (1,1) desmostorm.model.STORMProject
                 config  (1,1) desmostorm.config.Settings
@@ -124,6 +131,7 @@ classdef Exporter
 
             if isempty(options), return; end
 
+            % Destination folder for the exported files.
             folderName = uigetdir(config.IO.DefaultFolder, 'Export region images');
             desmostorm.app.focusMainFigure();
 
@@ -143,6 +151,7 @@ classdef Exporter
         end
 
         function result = exportImagesWithRegionBoxes(project,config,opts)
+        %EXPORTIMAGESWITHREGIONBOXES Export images with region boxes.
             arguments
                 project (1,1) desmostorm.model.STORMProject
                 config  (1,1) desmostorm.config.Settings
@@ -184,6 +193,7 @@ classdef Exporter
                 options.Colormap = linspace(0,1,256).' .* project.getChannelRGB(options.Channel);
             end
 
+            % Destination folder for the exported files.
             folderName = uigetdir(config.IO.DefaultFolder, 'Export images with region box overlays');
             desmostorm.app.focusMainFigure();
 
@@ -203,6 +213,7 @@ classdef Exporter
         end
 
         function result = exportRegionLinescanPlot(project,config,opts)
+        %EXPORTREGIONLINESCANPLOT Export region linescan plot.
             arguments
                 project (1,1) desmostorm.model.STORMProject
                 config  (1,1) desmostorm.config.Settings
@@ -232,15 +243,15 @@ classdef Exporter
             end
             options = desmostorm.export.ExportDialog.prompt("Export Linescan Plot", {
                 "Export Options", {
-                    choiceField("Channels","Channels",channelChoices,"all")
-                    choiceField("Format","Format",["SVG","PDF","EPS"],"SVG")
+                    choiceField("ContentType","Output type",["Vector","Image"],"Vector")
+                    choiceField("Format","Format",["PDF","SVG"],"SVG")
                     choiceField("Units","Units",["inches","centimeters","points"],"inches")
                     dimensionField("Width","Width","7")
                     dimensionField("Height","Height","")
-                    toggleField("PreserveAspectRatio","Preserve aspect ratio",true)
-                    sizingField("StyleSizing","Style sizing")
+                    struct("Type","note","Label","Leave one dimension blank to preserve the plot’s shape.")
+                    numberField("Resolution","Resolution (DPI)",300)
                 }
-                "Peak Annotations", plotOptions
+                "Peak Annotations", [{choiceField("Channels","Channels",channelChoices,"all")};plotOptions]
             },opts.PlotHost);
 
             if isempty(options), return; end % return on cancel
@@ -263,18 +274,22 @@ classdef Exporter
                 options.AspectRatio = capturedSize(1) / capturedSize(2);
             end
             options.CurrentChannel = opts.CurrentChannel;
+            options.ContentType = lower(options.ContentType);
             options = inheritPlotStyle(options,config.PeaksPlot);
             options.WidthAnnotationsMode = "normal";
 
             % --- get filename ---
             name = region.getBaseExportName() + "_linescan-plot";
             extension = "." + lower(options.Format);
+            if options.Format == "TIFF", extension = ".tif"; end
             options = rmfield(options,"Format");
+            % Filesystem path for default name.
             defaultName = fullfile(config.IO.DefaultFolder,name + extension);
             [file,path] = uiputfile(char("*"+extension),'Export linescan plot',defaultName);
             desmostorm.app.focusMainFigure();
             if isequal(file,0), return; end
             [~,stem] = fileparts(file);
+            % Filesystem path for filename.
             filename = fullfile(path,string(stem) + extension);
 
             % --- export ---
@@ -289,6 +304,7 @@ classdef Exporter
         end
 
         function result = exportRegionSubimageWithROI(project,config,opts)
+        %EXPORTREGIONSUBIMAGEWITHROI Export region subimage with ROI.
             arguments
                 project (1,1) desmostorm.model.STORMProject
                 config  (1,1) desmostorm.config.Settings
@@ -348,6 +364,7 @@ classdef Exporter
                 folderTitle = 'Export region images with ROI overlays';
             end
 
+            % Destination folder for the exported files.
             folderName = uigetdir(config.IO.DefaultFolder, folderTitle);
             desmostorm.app.focusMainFigure();
 
@@ -369,6 +386,7 @@ classdef Exporter
 end
 
 function [progress,cleanup] = startExportProgress(opts,message)
+%STARTEXPORTPROGRESS Start export progress.
     if isempty(opts.ProgressFactory)
         progress = opts.ProgressDialog;
         cleanup = [];
@@ -379,11 +397,13 @@ function [progress,cleanup] = startExportProgress(opts,message)
 end
 
 function choices = projectChannelChoices(project)
+%PROJECTCHANNELCHOICES Build channel dropdown labels in project registry order.
     names = string({project.Channels.Name});
     choices = "C" + (1:numel(names)) + " — " + names;
 end
 
 function fields = plotFields(plot)
+%PLOTFIELDS Describe the plot typography and annotation controls for an export.
     fields = [
         peakAnnotationFields(plot)
         {
@@ -396,6 +416,7 @@ function fields = plotFields(plot)
 end
 
 function fields = peakAnnotationFields(plot)
+%PEAKANNOTATIONFIELDS Describe export controls for peak annotation text and visibility.
     fields = {
         numberField("AnnotationFontSize","Annotation font size (points)",plot.AnnotationFontSize)
         toggleField("DistanceAnnotations","Show distance labels",logical(plot.DistanceAnnotations))
@@ -404,6 +425,7 @@ function fields = peakAnnotationFields(plot)
 end
 
 function options = inheritPlotStyle(options,plot)
+%INHERITPLOTSTYLE Add project plot appearance values to the export options.
     options.ColorSource = plot.ColorSource;
     options.Color = plot.Color;
     options.AnnotationColorMode = plot.AnnotationColorMode;
@@ -417,18 +439,22 @@ function options = inheritPlotStyle(options,plot)
 end
 
 function options = inheritROIVisibility(options,roi)
+%INHERITROIVISIBILITY Copy the ROI opacity and angle-label visibility from project settings.
     options.ROIFaceAlpha = roi.ROIFaceAlpha;
     options.RotationAngleVisible = roi.RotationAngleVisible;
 end
 
 function field = channelField(project,currentChannel,choices)
+%CHANNELFIELD Describe a project channel selector for the export dialog.
     field = choiceField("Channel","Channel",choices,activeImageChannel(project,currentChannel,choices));
 end
 
 function choice = activeImageChannel(project,currentChannel,choices)
+%ACTIVEIMAGECHANNEL Choose the export channel that corresponds to the active source component.
     index = 1;
     img = project.ActiveImage;
     if ~isempty(img) && currentChannel <= numel(img.ChannelIDs)
+        % Matching index or indices in the lookup.
         match = find(string({project.Channels.ID}) == img.ChannelIDs(currentChannel),1);
         if ~isempty(match), index = match; end
     end
@@ -436,12 +462,14 @@ function choice = activeImageChannel(project,currentChannel,choices)
 end
 
 function field = scalingField()
+%SCALINGFIELD Describe the dropdown that selects how export intensity limits are chosen.
     field = choiceField("ScalingMode","Display limits", ...
         ["Auto","Current limits","Data range"],"Auto");
     field.OutputValues = ["auto","user","data"];
 end
 
 function field = autoScalingMethodField()
+%AUTOSCALINGMETHODFIELD Describe the auto-scaling method dropdown for an image export.
     field = choiceField("AutoScalingMethod","Auto method", ...
         ["Channel setting",desmostorm.config.Display.AutoMethods], ...
         "Channel setting");
@@ -449,10 +477,12 @@ function field = autoScalingMethodField()
 end
 
 function field = dimensionField(name,label,value)
+%DIMENSIONFIELD Describe a canvas dimension that can be left automatic.
     field = struct("Name",name,"Label",label,"Type","dimension","Value",value);
 end
 
 function fields = imageFileFields(sizeValue)
+%IMAGEFILEFIELDS Describe file and overlay sizing controls for raster exports.
     fields = [
         {choiceField("Format","Format",["PNG","TIFF","JPEG"],"PNG")}
         dimensionsFields(sizeValue,sizeValue,600)
@@ -464,6 +494,7 @@ function fields = imageFileFields(sizeValue)
 end
 
 function fields = dimensionsFields(width,height,dpi)
+%DIMENSIONSFIELDS Describe the raster units, dimensions, and resolution controls.
     fields = {
         choiceField("Units","Units",["inches","centimeters","pixels","points"],"inches")
         numberField("Width","Width",width)
@@ -473,36 +504,43 @@ function fields = dimensionsFields(width,height,dpi)
 end
 
 function field = sizingField(name,label)
+%SIZINGFIELD Describe the choice between physical and output-scaled styling.
     field = choiceField(name,label,["Preserve physical sizes","Scale with output"], ...
         "Preserve physical sizes");
     field.OutputValues = ["physical","scale"];
 end
 
 function field = choiceField(name,label,items,value)
+%CHOICEFIELD Describe a dropdown and the values it returns.
     field = struct("Name",name,"Label",label,"Type","choice", ...
         "Items",items,"Value",value,"OutputValues",items);
 end
 
 function field = numberField(name,label,value)
+%NUMBERFIELD Describe a numeric control that accepts a positive value.
     field = struct("Name",name,"Label",label,"Type","number","Value",value, ...
         "Limits",[0 Inf],"LowerLimitInclusive","off");
 end
 
 function field = opacityField(name,label,value)
+%OPACITYFIELD Describe a numeric control for opacity between zero and one.
     field = struct("Name",name,"Label",label,"Type","number","Value",value, ...
         "Limits",[0 1],"LowerLimitInclusive","on");
 end
 
 function field = toggleField(name,label,value)
+%TOGGLEFIELD Toggle field.
     field = struct("Name",name,"Label",label,"Type","toggle","Value",logical(value));
 end
 
 function field = colorField(name,label,value)
+%COLORFIELD Describe a color picker and its initial RGB value.
     field = struct("Name",name,"Label",label,"Type","color","Value",value);
 end
 
 
 function field = colorModeField(name,label,modes,value,colorName,color)
+%COLORMODEFIELD Pair a mode dropdown with an editable manual color.
     field = choiceField(name,label,modes,value);
     field.Companion = colorField(colorName,label,color);
 end

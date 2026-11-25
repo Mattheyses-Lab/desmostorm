@@ -17,6 +17,7 @@
 function [ROI,info] = refineROIHeight(I,ROI,config)
 %REFINEROIHEIGHT Fit top/bottom ROI edges around the central peak pair.
 
+% Struct for info.
 info = struct( ...
     "Succeeded",false, ...
     "LeftMinIdx",NaN, ...
@@ -35,6 +36,7 @@ X = peaksData.Location;
     peaksData,"Mode","centralpair");
 
 dHTop = X(1) - X(leftMinIdx);
+% Linescan ROI geometry used for the current region.
 ROI = desmostorm.analysis.image.autofit.shiftTopEdge(ROI,dHTop);
 
 dHBottom = X(rightMinIdx) - X(end);

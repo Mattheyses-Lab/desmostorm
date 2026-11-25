@@ -77,6 +77,7 @@ function regionLinescanPlot(region,filename,opts)
     if opts.StyleSizing == "scale"
         figureSize = [6.5 3];
     end
+    % Width and height of the temporary rendering figure in inches.
     W = figureSize(1);
     H = figureSize(2);
     plotBackgroundColor = resolvePlotBackgroundColor(opts.BackgroundColor);
@@ -121,10 +122,12 @@ function regionLinescanPlot(region,filename,opts)
     end
     if opts.AlphaMode == "manual", style.RawLineAlpha = 0.5; end
 
+    % Container for the controls or graphics created below.
     host = matlabx.ui.axes.PlotAxes(g,FontName="Arial",FontSize=opts.FontSize, ...
         TitleFontSizeMultiplier=opts.TitleFontSizeMultiplier,LabelFontSizeMultiplier=opts.LabelFontSizeMultiplier, ...
         TitleVisible=opts.TitleVisible,ToolbarVisible="off");
     renderer = desmostorm.plot.PeaksPlotRenderer();
+    % Release the temporary object when this scope exits.
     cleanupRenderer = onCleanup(@() delete(renderer));
     renderer.update(data,style);
     host.mount(renderer);
@@ -133,6 +136,7 @@ function regionLinescanPlot(region,filename,opts)
     title(host.Axes,matlabx.utils.text.texFriendly(img.Name) + " | " + ...
         matlabx.utils.text.texFriendly(region.Name));
 
+    % Canvas or container background color.
     background = opts.BackgroundColor;
     axesColor = opts.BackgroundColor;
     appearance = opts.AxesAppearance;
@@ -142,6 +146,7 @@ function regionLinescanPlot(region,filename,opts)
     if isfield(appearance,"AxesColorOverride") && ~isempty(appearance.AxesColorOverride)
         axesColor = appearance.AxesColorOverride;
     end
+    % Process the named fields in appearance.
     for name = reshape(string(fieldnames(appearance)),1,[])
         if ~ismember(name,["BackgroundColorOverride","AxesColorOverride"])
             host.(name) = appearance.(name);
@@ -169,12 +174,15 @@ function regionLinescanPlot(region,filename,opts)
 end
 
 function color = resolvePlotBackgroundColor(color)
+%RESOLVEPLOTBACKGROUNDCOLOR Resolve plot background color.
     if isstring(color) || ischar(color)
         color = [1 1 1];
     end
 end
 
 function channels = resolveChannels(region,requested,currentChannel)
+%RESOLVECHANNELS Resolve channels.
+    % Number of channels to process.
     nChannels = numel(region.LinescanResults);
 
     if isnumeric(requested)
@@ -206,6 +214,7 @@ function channels = resolveChannels(region,requested,currentChannel)
 end
 
 function colors = resolvePlotColors(region,channels,manualColor,colorSource)
+%RESOLVEPLOTCOLORS Resolve plot colors.
     if colorSource == "manual"
         colors = repmat(manualColor,numel(channels),1);
         return
@@ -213,12 +222,14 @@ function colors = resolvePlotColors(region,channels,manualColor,colorSource)
 
     project = region.Project;
     colors = zeros(numel(channels),3);
+    % Process each source channel in its original component order.
     for i = 1:numel(channels)
         colors(i,:) = project.getChannelRGB(region.Parent.ChannelIDs(channels(i)));
     end
 end
 
 function colors = manualAnnotationColor(opts)
+%MANUALANNOTATIONCOLOR Return an explicit annotation color when manual mode is selected.
     colors = zeros(0,3);
     if opts.AnnotationColorMode == "manual", colors = opts.AnnotationColor; end
 end

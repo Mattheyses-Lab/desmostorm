@@ -15,41 +15,63 @@
 % with this program; if not, see <https://www.gnu.org/licenses/>.
 
 classdef PeaksData
+%PEAKSDATA Analyze the peaks in a sampled intensity profile.
 
     % input data
     properties
+        % Raw intensity samples along the linescan.
         Signal (:,1) double  % signal values
+        % Sample positions before conversion to calibrated distance units.
         Location (:,1) double  % signal value location vector (distance/time/etc)
     end
 
     % processed input
     properties
+        % Intensity samples after optional normalization.
         SignalNorm   (:,1) double
+        % Normalized profile after optional smoothing.
         SignalSmooth (:,1) double
     end
 
     % analysis settings
     properties
+        % Whether to normalize intensities before peak detection.
         Normalize               (1,1) logical
+        % Whether to smooth the intensity profile before peak detection.
         Smooth                  (1,1) logical
+        % Minimum separation between adjacent candidate peaks.
         MinPeakDistance         (1,1) double
+        % Height threshold interpreted using MinPeakHeightMode.
         MinPeakHeight           (1,1) double
+        % Mode used for min peak height.
         MinPeakHeightMode       (1,:) char
+        % Prominence threshold interpreted using MinPeakProminenceMode.
         MinPeakProminence       (1,1) double
+        % Mode used for min peak prominence.
         MinPeakProminenceMode   (1,:) char
+        % Smoothing span in samples.
         PeakSmoothing           (1,1) double
+        % Intensity reference used to measure peak widths.
         WidthReference          (1,:) char
+        % Factor applied to sample positions to obtain calibrated distances.
         DistanceScale           (1,1) double
+        % Display unit for calibrated profile positions and widths.
         DistanceUnit            (1,:) char
+        % Whether to recompute peak width after detecting the peak borders.
         RecomputeWidths         (1,1) logical % T/F - whether to recompute widths from findpeaks() to match FWHM annotations
     end
 
     % primary output measurements
     properties
+        % Intensity at each detected peak.
         PeakValues      (:,1) double = []
+        % Sample positions of the detected peaks.
         PeakLocations   (:,1) double = []
+        % Width measurements in detection order.
         PeakWidths      (:,1) double = []
+        % Prominence of each peak relative to its surrounding profile.
         PeakProminences (:,1) double = []
+        % Separation between successive peak locations.
         PeakDistances   (:,1) double = []
     end
 
@@ -61,41 +83,59 @@ classdef PeaksData
         % CentralPeakPairProminences (:,1) double = []
         CentralPeakPairDistance    (:,1) double = []
 
+        % Left peak index.
         LeftPeakIdx         (:,1) double = []
+        % Left peak value.
         LeftPeakValue       (:,1) double = []
+        % Left peak location.
         LeftPeakLocation    (:,1) double = []
+        % Left peak width.
         LeftPeakWidth       (:,1) double = []
+        % Left peak prominence.
         LeftPeakProminence  (:,1) double = []
 
+        % Right peak index.
         RightPeakIdx         (:,1) double = []
+        % Right peak value.
         RightPeakValue       (:,1) double = []
+        % Right peak location.
         RightPeakLocation    (:,1) double = []
+        % Right peak width.
         RightPeakWidth       (:,1) double = []
+        % Right peak prominence.
         RightPeakProminence  (:,1) double = []
     end
 
     % analysis geometry derived from detected peaks
     properties
+        % Peak borders and width intersections used by the plot.
         PeakGeometry struct = desmostorm.analysis.PeaksData.emptyPeakGeometry()
     end
 
     % output structs
     properties(Dependent)
+        % Measurement snapshot in the original sample coordinates.
         OutputRaw       struct
+        % Measurement snapshot in calibrated units.
         OutputScaled    struct
     end
 
     % other derived outputs
     properties(Dependent)
+        % Number of peaks detected in the current profile.
         nPeaks              (1,1) double
+        % Whether valid peaks flank the center of the profile.
         hasCentralPeakPair  (1,1) logical
+        % Whether a peak was detected to the left of the profile center.
         hasLeftPeak         (1,1) logical
+        % Whether a peak was detected to the right of the profile center.
         hasRightPeak        (1,1) logical
     end
 
 
     methods
         function obj = PeaksData(Signal,Location,opts)
+        %PEAKSDATA Analyze the peaks in a sampled intensity profile.
             arguments
                 Signal                      (:,1) double
                 Location                    (:,1) double
@@ -160,6 +200,7 @@ classdef PeaksData
             obj.PeakProminences = out.PeakProminences;
             obj.PeakDistances = out.PeakDistances;
             % --- GET ANALYSIS GEOMETRY FOR PEAK WIDTHS/BORDERS ---
+            % Geometry used to render or measure this ROI or trace.
             geom = desmostorm.analysis.PeaksData.getPeakGeometry( ...
                 obj.SignalSmooth, ...
                 obj.Location, ...
@@ -190,6 +231,7 @@ classdef PeaksData
 
 
         function [h,ax] = plot(obj,opts)
+        %PLOT Plot the measured profile and return the graphics and axes handles.
             arguments
                 obj         (1,1) desmostorm.analysis.PeaksData
                 opts.Parent (:,1) matlab.ui.control.UIAxes = matlab.ui.control.UIAxes.empty()
@@ -217,6 +259,7 @@ classdef PeaksData
     methods
 
         function out = getCentralPeakPairStats(obj)
+        %GETCENTRALPEAKPAIRSTATS Return central peak pair stats.
 
             % initialize struct
             out = struct(...
@@ -290,6 +333,7 @@ classdef PeaksData
 
         % package unscaled output
         function out = get.OutputRaw(obj)
+        %GET.OUTPUTRAW Package the measured profile and peaks in source coordinates.
             out.Location = obj.Location;
             out.Signal = obj.Signal;
             out.SignalNorm = obj.SignalNorm;
@@ -304,6 +348,7 @@ classdef PeaksData
 
         % package scaled output (multiplied by obj.DistanceScale)
         function out = get.OutputScaled(obj)
+        %GET.OUTPUTSCALED Package measurements after applying distance calibration.
             out = obj.OutputRaw;
             out.Location = out.Location*obj.DistanceScale;
             out.PeakLocations = out.PeakLocations*obj.DistanceScale;
@@ -316,19 +361,23 @@ classdef PeaksData
 
         % number of peaks
         function n = get.nPeaks(obj)
+        %GET.NPEAKS Count the detected peak locations.
             n = numel(obj.PeakLocations);
         end
 
 
         function tf = get.hasCentralPeakPair(obj)
+        %GET.HASCENTRALPEAKPAIR Indicate whether the profile contains a central peak pair.
             tf = obj.hasLeftPeak && obj.hasRightPeak;
         end
 
         function tf = get.hasLeftPeak(obj)
+        %GET.HASLEFTPEAK Indicate whether the profile contains a left peak.
             tf = ~isempty(obj.LeftPeakIdx);
         end
 
         function tf = get.hasRightPeak(obj)
+        %GET.HASRIGHTPEAK Indicate whether the profile contains a right peak.
             tf = ~isempty(obj.RightPeakIdx);
         end
 
@@ -339,6 +388,7 @@ classdef PeaksData
     methods(Static)
 
       function out = detect(Signal, Location, MinPeakDistance, MinPeakHeight, MinPeakProminence, WidthReference, opts)
+      %DETECT Detect peaks and their geometry in the sampled profile.
             arguments
                 Signal                      (:,1) double
                 Location                    (:,1) double
@@ -352,6 +402,7 @@ classdef PeaksData
 
             % recalculate MinPeakHeight and MinPeakProminence in terms of the Signal values if applicable
             if strcmp(opts.MinPeakHeightMode,'relative')
+                % Min peak height.
                 MinPeakHeight = MinPeakHeight * max(Signal);
             end
 
@@ -395,15 +446,18 @@ classdef PeaksData
 
         % rescale to [0,1]
         function out = normalizeSignal(Signal)
+        %NORMALIZESIGNAL Normalize signal.
             out = rescale(Signal);
         end
 
         % smooth with moving average filter
         function out = smooth(Signal,span)
+        %SMOOTH Smooth the sampled intensity profile.
             out = smooth(Signal,span);
         end
 
         function geom = getPeakGeometry(y,x,pks,locs,proms,opts)
+        %GETPEAKGEOMETRY Return peak geometry.
             arguments
                 y (:,1) double
                 x (:,1) double
@@ -413,12 +467,15 @@ classdef PeaksData
                 opts.WidthReference (1,:) char = 'halfheight'
             end
 
+            % Geometry used to render or measure this ROI or trace.
             geom = desmostorm.analysis.PeaksData.emptyPeakGeometry();
             if isempty(locs)
                 return
             end
 
+            % Indices of the peaks used by the current operation.
             peakIdx = desmostorm.analysis.PeaksData.getPeakIndices(x,locs);
+            % Index for border.
             borderIdx = desmostorm.analysis.PeaksData.getPeakBorderIndices(y,peakIdx);
             widths = desmostorm.analysis.PeaksData.getPeakWidthIntersections( ...
                 y, ...
@@ -430,6 +487,7 @@ classdef PeaksData
                 borderIdx(2:end), ...
                 "WidthReference",opts.WidthReference);
 
+            % Number of detected peaks in the profile.
             nPeaks = numel(peakIdx);
             geom = repmat(desmostorm.analysis.PeaksData.blankPeakGeometry(),nPeaks,1);
 
@@ -452,25 +510,31 @@ classdef PeaksData
         end
 
         function peakIdx = getPeakIndices(x,locs)
+        %GETPEAKINDICES Return peak indices.
             arguments
                 x (:,1) double
                 locs (:,1) double
             end
 
+            % Indices of the peaks used by the current operation.
             peakIdx = arrayfun(@(loc) find(x==loc,1),locs);
             peakIdx = reshape(peakIdx,[],1);
         end
 
         function borderIdx = getPeakBorderIndices(y,peakIdx)
+        %GETPEAKBORDERINDICES Return peak border indices.
             arguments
                 y (:,1) double
                 peakIdx (:,1) double
             end
 
+            % Number of detected peaks in the profile.
             nPeaks = numel(peakIdx);
+            % Number of samples.
             nSamples = numel(y);
 
             if nPeaks == 0
+                % Index for border.
                 borderIdx = zeros(0,1);
                 return
             end
@@ -480,6 +544,7 @@ classdef PeaksData
             borderIdx(end) = nSamples;
 
             for i = 1:nPeaks-1
+                % Index for segment.
                 segmentIdx = peakIdx(i):peakIdx(i+1);
                 [~,minIdx] = min(y(segmentIdx));
                 borderIdx(i+1) = segmentIdx(minIdx);
@@ -487,6 +552,7 @@ classdef PeaksData
         end
 
         function out = getPeakWidthIntersections(y,x,peakIdx,pks,proms,leftBorderIdx,rightBorderIdx,opts)
+        %GETPEAKWIDTHINTERSECTIONS Return peak width intersections.
             arguments
                 y (:,1) double
                 x (:,1) double
@@ -498,16 +564,19 @@ classdef PeaksData
                 opts.WidthReference (1,:) char = 'halfheight'
             end
 
+            % Number of detected peaks in the profile.
             nPeaks = numel(peakIdx);
 
             leftWidthLocation = nan(nPeaks,1);
             rightWidthLocation = nan(nPeaks,1);
+            % Width height.
             widthHeight = nan(nPeaks,1);
             width = nan(nPeaks,1);
 
             for i = 1:nPeaks
                 switch opts.WidthReference
                     case 'halfheight'
+                        % Half height.
                         halfHeight = pks(i)/2;
                     case 'halfprom'
                         halfHeight = proms(i)/2;
@@ -516,6 +585,7 @@ classdef PeaksData
                 leftBorder = leftBorderIdx(i);
                 rightBorder = rightBorderIdx(i);
 
+                % Last sample below the half-height threshold on the left side.
                 idxL = find(y(leftBorder:peakIdx(i)) <= halfHeight,1,'last');
                 idxL = idxL + leftBorder - 1;
                 idxL = max(idxL,leftBorder);
@@ -526,6 +596,7 @@ classdef PeaksData
                     xL = interp1(y(idxL:idxL+1),x(idxL:idxL+1),halfHeight,'linear');
                 end
 
+                % First sample below the half-height threshold on the right side.
                 idxR = find(y(peakIdx(i):rightBorder) <= halfHeight,1,'first');
                 idxR = idxR + peakIdx(i) - 1;
                 idxR = min(idxR,rightBorder);
@@ -550,10 +621,14 @@ classdef PeaksData
         end
 
         function geom = emptyPeakGeometry()
+        %EMPTYPEAKGEOMETRY Return an empty struct array with the peak geometry fields.
+            % Geometry used to render or measure this ROI or trace.
             geom = repmat(desmostorm.analysis.PeaksData.blankPeakGeometry(),0,1);
         end
 
         function geom = blankPeakGeometry()
+        %BLANKPEAKGEOMETRY Initialize peak geometry fields for a single peak.
+            % Geometry used to render or measure this ROI or trace.
             geom = struct( ...
                 "PeakIndex",NaN, ...
                 "PeakLocation",NaN, ...
@@ -572,6 +647,7 @@ classdef PeaksData
         end
 
         function geom = scalePeakGeometry(geom,scale)
+        %SCALEPEAKGEOMETRY Scale peak geometry.
             arguments
                 geom struct
                 scale (1,1) double
@@ -589,8 +665,10 @@ classdef PeaksData
                 "RightWidthLocation", ...
                 "Width"};
 
+            % Scale geometry fields that represent positions or distances.
             for f = 1:numel(distanceFields)
                 name = distanceFields{f};
+                % Convert this distance field for every peak in the profile.
                 for i = 1:numel(geom)
                     geom(i).(name) = geom(i).(name)*scale;
                 end
@@ -622,6 +700,7 @@ classdef PeaksData
             end
 
             N = opts.N;
+            % Number of detected peaks in the profile.
             nPeaks = opts.nPeaks;
             noiseSigma = opts.noiseSigma;  
 
@@ -669,6 +748,7 @@ classdef PeaksData
             Signal = Signal - min(Signal);
 
             [sortedPositions,sortIdx] = sort(Positions,"ascend");
+            % Index for sorted positions.
             sortedPositionsIdx = max(min(round(sortedPositions*N),N),1);
             sortedLocations = Location(sortedPositionsIdx);
             sortedHeights = Heights(sortIdx);

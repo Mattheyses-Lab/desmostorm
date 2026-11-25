@@ -209,6 +209,7 @@ function net = trainPatchClassifier(Ptrain, Pval, boxSize, opts)
         layers = lgraph.Layers;
         connections = lgraph.Connections;
     
+        % Visit each entry in layers.
         for i = 1:numel(layers)
             if isprop(layers(i),"WeightLearnRateFactor")
                 layers(i).WeightLearnRateFactor = 0;
@@ -219,6 +220,7 @@ function net = trainPatchClassifier(Ptrain, Pval, boxSize, opts)
         end
     
         k = max(1, numel(layers)-20);
+        % Visit each entry in layers.
         for i = k:numel(layers)
             if isprop(layers(i),"WeightLearnRateFactor")
                 layers(i).WeightLearnRateFactor = 1;
@@ -278,9 +280,11 @@ end
 % =====================================================================
 
 function [learnableLayer, classLayer] = findLayersToReplaceLocal(lgraph)
+%FINDLAYERSTOREPLACELOCAL Find layers to replace local.
     layers = lgraph.Layers;
     
     classLayer = [];
+    % Visit each entry in layers.
     for i = numel(layers):-1:1
         if isa(layers(i), "nnet.cnn.layer.ClassificationOutputLayer")
             classLayer = layers(i);
@@ -296,6 +300,7 @@ function [learnableLayer, classLayer] = findLayersToReplaceLocal(lgraph)
     srcName = conn.Source(strcmp(conn.Destination, classLayer.Name));
     if isempty(srcName)
         srcName = "";
+        % Visit each entry in layers.
         for i = numel(layers):-1:1
             if isa(layers(i), "nnet.cnn.layer.FullyConnectedLayer")
                 srcName = layers(i).Name;
@@ -314,7 +319,9 @@ function [learnableLayer, classLayer] = findLayersToReplaceLocal(lgraph)
 end
 
 function lgraph = createLgraphUsingConnectionsLocal(layers, connections)
+%CREATELGRAPHUSINGCONNECTIONSLOCAL Create lgraph using connections local.
     lgraph = layerGraph();
+    % Process layers in order.
     for i = 1:numel(layers)
         lgraph = addLayers(lgraph, layers(i));
     end
@@ -322,6 +329,7 @@ function lgraph = createLgraphUsingConnectionsLocal(layers, connections)
     src = connections.Source;
     dst = connections.Destination;
     
+    % Visit each entry in connections.
     for c = 1:height(connections)
         if iscell(src)
             s = src{c};

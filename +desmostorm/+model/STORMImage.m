@@ -19,16 +19,23 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
 
     %% Identity/ownership/meta
     properties
+        % Stable identifier used to look up this record.
         ID (1,1) string = matlabx.utils.text.uniqueID()
+        % Model object that owns this record.
         Parent (:,1) desmostorm.model.STORMProject
+        % Display name shown in the application.
         Name (1,1) string = ""
+        % Path to the source file.
         SourcePath (1,1) string = ""
+        % File type.
         FileType (1,1) string = ""    % 'tif','png',...
         CreatedAt datetime = datetime('now')
+        % Pixel size override.
         PixelSizeOverride desmostorm.model.units.PixelSize = desmostorm.model.units.PixelSize.empty
     end
 
     properties (Dependent=true)
+        % Physical calibration for the image pixels.
         PixelSize desmostorm.model.units.PixelSize
     end
 
@@ -60,13 +67,18 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
 
 
     properties (SetAccess=private)
+        % Project channel IDs in source component order.
         ChannelIDs (1,:) string = strings(1,0)
     end
 
     properties (Dependent, SetAccess=private)
+        % Whether pixel data is currently loaded.
         isLoaded (1,1) logical
+        % Image height in pixels.
         SizeY (1,1) double
+        % Image width in pixels.
         SizeX (1,1) double
+        % Number of source image components.
         SizeC (1,1) double
     end
 
@@ -78,9 +90,11 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
     methods
 
         % --- ImageData ---
+        %GET.IMAGEDATA Return the image data.
         function v = get.ImageData(obj), v = obj.ImageData_; end
     
         function set.ImageData(obj, val)
+        %SET.IMAGEDATA Set the image data.
             arguments
                 obj
                 val (1,1) matlabx.image.Image5D
@@ -92,21 +106,28 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
 
 
         % --- isLoaded ---
+        %GET.ISLOADED Report whether the source pixel data is in memory.
         function tf = get.isLoaded(obj), tf = obj.ImageData_.IsLoaded; end
         % --- SizeY ---
+        %GET.SIZEY Return the source height in pixels.
         function sizeY = get.SizeY(obj), sizeY = obj.ImageData_.SizeY; end
         % --- SizeX ---
+        %GET.SIZEX Return the source width in pixels.
         function sizeX = get.SizeX(obj), sizeX = obj.ImageData_.SizeX; end
         % --- SizeC ---
+        %GET.SIZEC Return the source component count.
         function sizeC = get.SizeC(obj), sizeC = obj.ImageData_.NumComponents; end
 
         % --- getPlane ---
         function I = getPlane(obj, c)
+        %GETPLANE Return plane.
+            % Pixel data for the image being processed.
             I = obj.ImageData_.getPlane(c);
         end
 
         % --- getDisplayRange ---
         function val = getDisplayRange(obj, c)
+        %GETDISPLAYRANGE Return display range.
             if isempty(obj.Channels_(c).DisplayRange)
                 obj.cacheImageInfoFromBuffer_();
             end
@@ -115,6 +136,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
 
         % --- setDisplayRange ---
         function setDisplayRange(obj, val, c)
+        %SETDISPLAYRANGE Set display range.
             arguments
                 obj
                 val (1,2) double
@@ -126,7 +148,9 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
 
         % --- getDisplayRanges ---
         function out = getDisplayRanges(obj)
+        %GETDISPLAYRANGES Return display ranges.
             out = cell(1,obj.SizeC);
+            % Process each source channel in its original component order.
             for C = 1:obj.SizeC
                 out{C} = obj.getDisplayRange(C);
             end
@@ -134,6 +158,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
 
         % --- getAutoDisplayRange ---
         function val = getAutoDisplayRange(obj, c)
+        %GETAUTODISPLAYRANGE Return auto display range.
             if isempty(obj.Channels_(c).AutoDisplayRange)
                 obj.cacheImageInfoFromBuffer_();
             end
@@ -142,13 +167,16 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
 
         % --- getAutoDisplayRanges ---
         function out = getAutoDisplayRanges(obj)
+        %GETAUTODISPLAYRANGES Return auto display ranges.
             out = cell(1,obj.SizeC);
+            % Process each source channel in its original component order.
             for C = 1:obj.SizeC
                 out{C} = obj.getAutoDisplayRange(C);
             end
         end
 
         function [value,bounds,reset] = displayLimits(obj,c,policy)
+        %DISPLAYLIMITS Resolve the visible bounds, slider range, and reset value for one source channel.
             bounds = obj.getDataRange(c);
             if any(~isfinite(bounds)), bounds = [0 1]; end
             if bounds(1) >= bounds(2)
@@ -171,6 +199,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
         end
 
         function value = normalizeDisplayRange(obj,c,value)
+        %NORMALIZEDISPLAYRANGE Normalize display range.
             if ~any(startsWith(string(obj.Channels_(c).Class),["int","uint"]))
                 return
             end
@@ -186,6 +215,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
         end
 
         function value = automaticDisplayRange(obj,c,method,bounds)
+        %AUTOMATICDISPLAYRANGE Calculate intensity limits with the selected scaling method.
             switch string(method)
                 case "Zero to max"
                     value = [0 bounds(2)];
@@ -216,6 +246,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
 
         % --- getDataRange ---
         function val = getDataRange(obj, c)
+        %GETDATARANGE Return data range.
             if isempty(obj.Channels_(c).DataRange)
                 obj.cacheImageInfoFromBuffer_();
             end
@@ -226,13 +257,21 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
 
     % temporary wrappers during migration to Image5D
     properties (Dependent)
+        % Pixel data for the current image component.
         CData
+        % Pixel data split into a cell for each source component.
         CDataCell
+        % Storage class of the source pixel data.
         CDataClass
+        % Intensity bounds for the source pixel data.
         CDataRange
+        % Display range.
         DisplayRange
+        % Auto display range.
         AutoDisplayRange
+        % Height.
         Height (1,1) double
+        % Width.
         Width (1,1) double
     end
 
@@ -240,6 +279,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
     methods
 
         function val = get.Height(obj)
+        %GET.HEIGHT Return the height.
             if any(isnan(obj.ImageSize_))
                 obj.cacheImageInfoFromFile_();
             end
@@ -247,6 +287,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
         end
 
         function val = get.Width(obj)
+        %GET.WIDTH Return the width.
             if any(isnan(obj.ImageSize_))
                 obj.cacheImageInfoFromFile_();
             end
@@ -254,6 +295,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
         end
 
         function val = get.CDataClass(obj)
+        %GET.CDATACLASS Return the storage class of the source pixels.
             if obj.SizeC < 1
                 val = [];
                 return
@@ -263,6 +305,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
 
         % first channel only
         function val = get.CData(obj)
+        %GET.CDATA Return the source pixel array.
             if obj.SizeC < 1
                 val = [];
                 return
@@ -271,17 +314,20 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
         end
 
         function val = get.CDataCell(obj)
+        %GET.CDATACELL Return source pixels in a separate cell for each component.
             if obj.SizeC < 1
                 val = {};
                 return
             end
             val = cell(1,obj.SizeC);
+            % Process each source channel in its original component order.
             for c = 1:obj.SizeC
                 val{c} = obj.getPlane(c);
             end
         end
 
         function val = get.CDataRange(obj)
+        %GET.CDATARANGE Return the intensity bounds for the first component.
             if obj.SizeC < 1
                 val = [];
                 return
@@ -290,6 +336,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
         end
 
         function val = get.DisplayRange(obj)
+        %GET.DISPLAYRANGE Return the display range.
             if obj.SizeC < 1
                 val = [];
                 return
@@ -298,6 +345,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
         end
 
         function val = get.AutoDisplayRange(obj)
+        %GET.AUTODISPLAYRANGE Return the auto display range.
             if obj.SizeC < 1
                 val = [];
                 return
@@ -310,17 +358,23 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
 
     %% Regions (dictionary + order) and active selection
     properties (Access=private)
+        % Lookup table for regions.
         RegionsDict = dictionary   % string id -> desmostorm.model.STORMRegion
     end
 
     properties
+        % Region IDs in display order within the image.
         RegionOrder (:,1) string = string.empty(0,1)
+        % ID of the region currently in focus.
         ActiveRegionID (:,1) string = string.empty(0,1)
+        % IDs checked for batch region operations.
         SelectedRegionIDs (:,1) string = string.empty(0,1)
     end
 
     properties (Dependent, GetAccess=public, SetAccess=private)
+        % Regions in display order within this image.
         RegionArray     % [Nx1 desmostorm.model.STORMRegion] in RegionOrder
+        % Region currently in focus.
         ActiveRegion    % desmostorm.model.STORMRegion or []
     end
 
@@ -330,6 +384,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
     end
 
     properties (Dependent)
+        % Region names.
         RegionNames
     end
 
@@ -345,6 +400,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
     methods
 
         function obj = STORMImage(parent, name, sourcePath, ID)
+        %STORMIMAGE Initialize an image record and its source-backed image data.
             arguments
                 parent (:,1) desmostorm.model.STORMProject = desmostorm.model.STORMProject.empty()
                 name (1,1) string = ""
@@ -378,6 +434,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
 
     methods
         function setChannelIDs(obj,ids)
+        %SETCHANNELIDS Set channel IDs.
             ids = reshape(string(ids),1,[]);
             assert(numel(ids) == obj.SizeC && all(strlength(ids) > 0) && ...
                 numel(unique(ids)) == numel(ids), ...
@@ -387,6 +444,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
         end
 
         function index = sourceChannelIndex(obj,channel)
+        %SOURCECHANNELINDEX Find the source component that maps to the requested project channel.
             if isnumeric(channel)
                 if channel > numel(obj.Parent.Channels)
                     index = [];
@@ -398,18 +456,23 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
         end
 
         function name = channelName(obj,c)
+        %CHANNELNAME Return the channel name.
             name = obj.Parent.getChannelName(obj.ChannelIDs(c));
         end
 
         function names = channelNames(obj)
+        %CHANNELNAMES Return channel display names in source component order.
             names = strings(1,obj.SizeC);
+            % Process each source channel in its original component order.
             for c = 1:obj.SizeC
                 names(c) = obj.channelName(c);
             end
         end
 
         function syncChannelNames(obj)
+        %SYNCCHANNELNAMES Synchronize channel names.
             components = obj.ImageData.Components;
+            % Process components in order.
             for c = 1:numel(components)
                 components(c).Name = obj.channelName(c);
             end
@@ -420,10 +483,12 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
     methods
 
         function clearImageDataBuffer(obj)
+        %CLEARIMAGEDATABUFFER Clear image data buffer.
             obj.ImageData_.unload();
         end
 
         function bufferImageData(obj)
+        %BUFFERIMAGEDATA Load the source pixels and cache statistics for display.
             obj.ImageData_.load();
             obj.cacheImageInfoFromBuffer_();
         end
@@ -435,12 +500,14 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
     methods (Access=private)
 
         function cacheImageInfoFromFile_(obj)
+        %CACHEIMAGEINFOFROMFILE_ Cache image info from file.
 
             if obj.ImageData_.IsLoaded
                 obj.cacheImageInfoFromBuffer_();
                 return
             end
 
+            % Process each source channel in its original component order.
             for c = 1:obj.SizeC
                 obj.Channels_(c).Size = obj.ImageData_.Components(c).Size;
                 obj.Channels_(c).Class = obj.ImageData_.Components(c).Class;
@@ -451,10 +518,13 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
         end
 
         function cacheImageInfoFromBuffer_(obj)
+        %CACHEIMAGEINFOFROMBUFFER_ Cache image info from buffer.
+            % Process each source channel in its original component order.
             for c = 1:obj.SizeC
                 obj.Channels_(c).Size = obj.ImageData_.Components(c).Size;
                 obj.Channels_(c).Class = obj.ImageData_.Components(c).Class;
                 obj.Channels_(c).NativeDisplayRange = obj.ImageData_.Components(c).NativeDisplayRange;
+                % Pixel data for the image being processed.
                 I = obj.getPlane(c);
                 obj.Channels_(c).AutoDisplayRange = (stretchlim(I,[0.1 0.9999])).' * obj.Channels_(c).NativeDisplayRange(2);
                 finitePixels = I(isfinite(I));
@@ -485,6 +555,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
     methods
 
         function addRegion(obj, ID, Center, BoxSize, LabelID, LabelSource, opts)
+        %ADDREGION Add region.
             arguments
                 obj             (1,1) desmostorm.model.STORMImage
                 ID              (1,1) string
@@ -523,6 +594,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
         end
 
         function addRegionSilent(obj, ID, Center, BoxSize)
+        %ADDREGIONSILENT Add region silent.
             if ~isKey(obj.RegionsDict, ID)
                 % create new STORMRegion
                 reg = desmostorm.model.STORMRegion(obj,ID,Center,BoxSize,"unlabeled","classifier");
@@ -542,6 +614,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
         end
 
         function removeRegion(obj, regionID)
+        %REMOVEREGION Remove region.
             regionID = string(regionID);
             if isKey(obj.RegionsDict, regionID)
                 oldActiveID = obj.ActiveRegionID;
@@ -579,6 +652,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
         end
 
         function setActiveRegion(obj, regionID)
+        %SETACTIVEREGION Set active region.
             oldID = obj.ActiveRegionID;
             regionID = string(regionID);
             % return if region is already active
@@ -598,15 +672,18 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
 
         % --- retrieve ---
         function tf = hasRegion(obj, regionID)
+        %HASREGION Check whether region is present.
             tf = isKey(obj.RegionsDict, string(regionID));
         end
 
         function r = getRegion(obj, regionID)
+        %GETREGION Return region.
             regionID = string(regionID);
             if isKey(obj.RegionsDict, regionID), r = obj.RegionsDict(regionID); else, r = []; end
         end
 
         function regs = getRegionsByLabelID(obj,labelID)
+        %GETREGIONSBYLABELID Return regions by label ID.
             if isempty(obj.RegionArray), regs = []; return; end
             regs = obj.RegionArray([obj.RegionArray(:).LabelID]==labelID);
         end
@@ -614,6 +691,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
 
         % --- select ---
         function setRegionSelection(obj,IDs)
+        %SETREGIONSELECTION Set region selection.
             if isempty(IDs), obj.clearRegionSelection(); return; end
             oldIDs = obj.SelectedRegionIDs;
             validIDs = intersect(obj.RegionOrder,string(IDs(:)),'stable');
@@ -626,6 +704,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
         end
 
         function clearRegionSelection(obj)
+        %CLEARREGIONSELECTION Clear region selection.
             oldIDs = obj.SelectedRegionIDs;
             if isempty(oldIDs)
                 return
@@ -644,6 +723,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
         % --- process Region linescans ---
 
         function processAll(obj, config, opts)
+        %PROCESSALL Process all.
             arguments
                 obj desmostorm.model.STORMImage
                 config desmostorm.config.RunConfig
@@ -666,6 +746,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
         end
 
         function processRegionLinescan(obj, reg, config, opts)
+        %PROCESSREGIONLINESCAN Process region linescan.
             arguments
                 obj desmostorm.model.STORMImage
                 reg desmostorm.model.STORMRegion
@@ -699,6 +780,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
         function refreshRegionLinescanPixelSizes(obj)
         %REFRESHREGIONLINESCANPIXELSIZES Rescale existing linescan outputs only.
             arr = obj.RegionArray;
+            % Visit each entry in arr.
             for i = 1:numel(arr)
                 arr(i).refreshLinescanPixelSize();
             end
@@ -712,6 +794,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
         % --- autofit Region ROIs ---
 
         function nFit = autofitAllRegionROIs(obj, config, opts)
+        %AUTOFITALLREGIONROIS Fit linescan ROIs for the regions in the current project.
             arguments
                 obj desmostorm.model.STORMImage
                 config desmostorm.config.RunConfig
@@ -728,6 +811,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
 
             % otherwise, process each region
             nFit = 0;
+            % Visit each entry in arr.
             for i = 1:numel(arr)
                 if obj.autofitRegionROI(arr(i),config, ...
                         "DebugOutput",false, ...
@@ -738,6 +822,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
         end
 
         function ok = autofitRegionROI(obj, reg, config, opts)
+        %AUTOFITREGIONROI Fit a linescan rectangle to the supplied region image.
             arguments
                 obj desmostorm.model.STORMImage
                 reg desmostorm.model.STORMRegion
@@ -777,6 +862,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
         % --- retrieve Region subimage ---
 
         function I = regionSubimage(obj,reg)
+        %REGIONSUBIMAGE Extract pixels inside the region box.
             if isempty(reg), I = []; return; end
             % region box size and center coordinates
             s = reg.BoxSize; XY = reg.Center;
@@ -792,6 +878,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
         end
 
         function I = regionSubimageCell(obj,reg)
+        %REGIONSUBIMAGECELL Extract the region box separately for each source component.
             if isempty(reg), I = []; return; end
             % region box size and center coordinates
             s = reg.BoxSize; XY = reg.Center;
@@ -815,6 +902,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
     methods
 
         function runClassifier(obj, net, propOpts)
+        %RUNCLASSIFIER Run the classifier and add the resulting region proposals.
 
             % remove any existing regions first
             obj.removeAllRegions();
@@ -876,6 +964,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
     methods
 
         function arr = get.RegionArray(obj)
+        %GET.REGIONARRAY Return the region array.
             if numel(obj.RegionOrder)==0
                 arr = desmostorm.model.STORMRegion.empty();
                 return
@@ -884,6 +973,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
         end
 
         function reg = get.ActiveRegion(obj)
+        %GET.ACTIVEREGION Return the active region.
             reg = [];
             if isempty(obj.ActiveRegionID), return; end
             if isKey(obj.RegionsDict, obj.ActiveRegionID)
@@ -893,6 +983,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
 
 
         function names = get.RegionNames(obj)
+        %GET.REGIONNAMES Return the region names.
             arr = obj.RegionArray;
             if isempty(arr)
                 names = string.empty(1,0);
@@ -905,6 +996,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
         function ps = get.PixelSize(obj)
             % 1) per-image override
             if ~isempty(obj.PixelSizeOverride)
+                % Physical calibration used to convert pixel measurements.
                 ps = obj.PixelSizeOverride;
                 return;
             end
@@ -930,10 +1022,12 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
     methods
 
         function str = ImageInfoDisplayString(obj)
+        %IMAGEINFODISPLAYSTRING Format metadata for the current image display.
             str = sprintf('%s (%ix%i %s)',char(obj.Name),obj.Height,obj.Width,obj.CDataClass);
         end
 
         function name = shortName(obj)
+        %SHORTNAME Return the short name.
             str = strsplit(obj.Name,'.');
             name = str{1};
         end
@@ -944,6 +1038,8 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
     methods (Access=protected)
 
         function groups = getPropertyGroups(obj)
+        %GETPROPERTYGROUPS Return property groups.
+            % Counts of attempted, successful, and skipped export records.
             summary = struct( ...
                 'Name', obj.Name, ...
                 'SourcePath', obj.SourcePath, ...
@@ -962,6 +1058,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
     methods(Access=?desmostorm.model.STORMProject)
 
         function I = toStruct(obj)
+        %TOSTRUCT Serialize the current values into a plain MATLAB structure.
 
             if ~isfile(obj.SourcePath)
                 error("model:STORMImage:toStruct:InvalidFile","Cannot find file: %s",obj.SourcePath)
@@ -1027,6 +1124,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
     methods (Static)
 
         function img = fromStruct(S,proj)
+        %FROMSTRUCT Read saved values from a MATLAB structure.
 
             name = string(S.Name);
             path = string(S.SourcePath);
@@ -1041,6 +1139,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
             end
 
             if isfield(S,'DisplayRanges')
+                % Process each source channel in its original component order.
                 for c = 1:min(img.SizeC,numel(S.DisplayRanges))
                     if ~isempty(S.DisplayRanges{c})
                         img.setDisplayRange(S.DisplayRanges{c},c);
@@ -1087,6 +1186,7 @@ classdef STORMImage < handle & matlab.mixin.CustomDisplay
     methods (Hidden)
 
         function debug(obj)
+        %DEBUG Return debug.
             debug
         end
 

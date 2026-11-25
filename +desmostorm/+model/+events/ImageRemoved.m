@@ -17,10 +17,12 @@
 classdef (ConstructOnLoad) ImageRemoved < event.EventData
 % event data class for ImageRemoved events
     properties
+        % Image ID.
         ImageID string
     end
     methods
         function this = ImageRemoved(imageID)
+        %IMAGEREMOVED Package the removed image for project listeners.
             this.ImageID = imageID;
         end
     end

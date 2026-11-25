@@ -18,13 +18,17 @@ classdef (ConstructOnLoad) RegionSelectionChanged < event.EventData
 %REGIONSELECTIONCHANGED Event data for selected-region transitions.
 
     properties
+        % Image ID.
         ImageID string
+        % New IDs.
         NewIDs (:,1) string
+        % Old IDs.
         OldIDs (:,1) string
     end
 
     methods
         function this = RegionSelectionChanged(imageID, newIDs, oldIDs)
+        %REGIONSELECTIONCHANGED Capture the selected regions before and after a selection change.
             this.ImageID = string(imageID);
             this.NewIDs = string(newIDs(:));
             this.OldIDs = string(oldIDs(:));

@@ -54,6 +54,7 @@ function out = localRead(data, P, boxSize, inputSize)
     
     % ResNet-style backbones expect three channels.
     X = repmat(patch, 1, 1, 3);
+    % Training label paired with the patch tensor.
     Y = row.label(1);
     if ~iscategorical(Y), Y = categorical(Y); end
     
@@ -62,6 +63,7 @@ end
 
 function patch = readMaterializedPatch(P,row)
 %READMATERIALIZEDPATCH Read a pre-cropped patch image from the patch table.
+    % Filesystem path for patch.
     patchFile = string(row.patchFilename);
     if ~isfile(patchFile) && isstruct(P.Properties.UserData) && ...
             isfield(P.Properties.UserData,"PatchRoot")
@@ -84,6 +86,7 @@ function patch = cropSourcePatch(row,boxSize)
 %
 % This is the legacy path used by older classifier packages and by new project
 % labels before they are materialized into the saved classifier package.
+    % Image pixels before transformation or normalization.
     I0 = imread(row.imageFilename);
     if ~ismatrix(I0)
         I0 = I0(:,:,1);
@@ -92,7 +95,9 @@ function patch = cropSourcePatch(row,boxSize)
 
     cx = row.centerX; cy = row.centerY; s = boxSize;
 
+    % Inclusive pixel columns covered by the box.
     c1 = ceil(cx - s/2); c2 = floor(cx + s/2);
+    % Inclusive pixel rows covered by the box.
     r1 = ceil(cy - s/2); r2 = floor(cy + s/2);
 
     % Crop in source-image coordinates before resizing to the network input.
@@ -106,6 +111,7 @@ end
 function I = normalizePatchImage(I)
 %NORMALIZEPATCHIMAGE Convert image data to the single precision [0,1] range.
     if isa(I,"uint16")
+        % Pixel data for the image being processed.
         I = single(I) / single(intmax("uint16"));
     elseif isa(I,"uint8")
         I = single(I) / single(intmax("uint8"));

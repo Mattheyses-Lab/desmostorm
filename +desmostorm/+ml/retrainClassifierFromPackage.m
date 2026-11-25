@@ -129,9 +129,13 @@ propOpts.PositiveClass = positiveClass;
 
 [nextVersion,stem] = desmostorm.ml.nextClassifierVersion(saveDir,baseName);
 
+% Filesystem path for classifier out.
 classifierOut = fullfile(saveDir,sprintf("classifier_%s_v%03d.mat",stem,nextVersion));
+% Filesystem path for training patch out.
 trainingPatchOut = fullfile(saveDir,sprintf("patchTable_%s_v%03d_training.csv",stem,nextVersion));
+% Filesystem path for patch dir.
 patchDir = fullfile(saveDir,sprintf("classifier_%s_v%03d_patches",stem,nextVersion));
+% Filesystem path for manifest.
 manifestFile = fullfile(patchDir,"patch_manifest.csv");
 
 desmostorm.ml.updateProgressDialog(opts.ProgressDialog, ...

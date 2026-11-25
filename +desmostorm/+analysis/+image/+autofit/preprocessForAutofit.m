@@ -26,8 +26,10 @@ arguments
     debugOutput (1,1) logical = false
 end
 
+% Struct for info.
 info = struct("Methods",["removeIsolatedPuncta","removeEdgeClusters"]);
 
+% Pixel array returned by this operation.
 Iout = desmostorm.analysis.image.removeIsolatedPuncta(I, ...
     "DebugOutput",debugOutput);
 

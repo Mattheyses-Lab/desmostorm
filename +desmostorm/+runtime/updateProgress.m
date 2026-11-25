@@ -7,6 +7,7 @@ function updateProgress(sink,message,value,total)
 % Pass a fraction, or completed and total counts. An omitted value changes
 % only the message, while [] requests an indeterminate progress indicator.
 if isempty(sink), return, end
+% Flag for has value.
 hasValue = nargin >= 3;
 if ~hasValue, value = []; end
 if nargin == 4

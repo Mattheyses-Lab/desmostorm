@@ -1,9 +1,26 @@
+% DesmoSTORM - MATLAB app for desmosomal plaque protein analysis.
+% Copyright (C) 2026 William Dean
+%
+% This program is free software; you can redistribute it and/or modify it
+% under the terms of the GNU General Public License as published by the Free
+% Software Foundation; either version 2 of the License, or (at your option)
+% any later version.
+%
+% This program is distributed in the hope that it will be useful, but WITHOUT
+% ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+% FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
+% details.
+%
+% You should have received a copy of the GNU General Public License along
+% with this program; if not, see <https://www.gnu.org/licenses/>.
+
 function tests = testSemanticChannels
 %TESTSEMANTICCHANNELS Verify source-order mappings and project migration.
 tests = functiontests(localfunctions);
 end
 
 function testMappedChannelsRoundTrip(testCase)
+%TESTMAPPEDCHANNELSROUNDTRIP Verify mapped channels round trip.
 [project,images,folder] = makeProject(testCase);
 project.importImages(images,{["DSG2","DP"],["DP","DSG2"],"DP"}, ...
     {["green","magenta"],["magenta","green"],"magenta"});
@@ -32,6 +49,7 @@ verifyEmpty(testCase,loaded.ImageArray(3).sourceChannelIndex(ids(1)));
 end
 
 function testLegacyChannelsUseOriginalIndices(testCase)
+%TESTLEGACYCHANNELSUSEORIGINALINDICES Verify legacy channels use original indices.
 [project,images,folder] = makeProject(testCase);
 project.importImages(images,{["A","B"],["A","B"],"A"}, ...
     {["green","magenta"],["green","magenta"],"green"});
@@ -59,6 +77,7 @@ verifyEmpty(testCase,loaded.ImageArray(3).sourceChannelIndex(2));
 end
 
 function testDisplayPoliciesFollowSemanticChannel(testCase)
+%TESTDISPLAYPOLICIESFOLLOWSEMANTICCHANNEL Verify display policies follow semantic channel.
 [project,images,folder] = makeProject(testCase);
 project.importImages(images,{["DSG2","DP"],["DP","DSG2"],"DP"}, ...
     {["green","magenta"],["magenta","green"],"magenta"});
@@ -95,6 +114,7 @@ verifyFalse(testCase,settings.Display.channelPolicy(project.Channels(2).ID).Lock
 end
 
 function testNavigationSelectionsAndLabelReplacement(testCase)
+%TESTNAVIGATIONSELECTIONSANDLABELREPLACEMENT Verify navigation selections and label replacement.
 [project,images,folder] = makeProject(testCase);
 project.importImages(images,{["A","B"],["A","B"],"A"}, ...
     {["green","magenta"],["green","magenta"],"green"});
@@ -107,6 +127,7 @@ verifyEqual(testCase,project.ActiveImage.ID,images(1).ID);
 verifyEqual(testCase,project.SelectedImageIDs,images(2).ID);
 verifyEqual(testCase,images(1).ActiveRegion.ID,"r1");
 
+% Project registry for region labels.
 bank = project.LabelBank;
 bank.setSelection("object");
 snapshot = bank.toStruct();
@@ -131,6 +152,7 @@ verifyEmpty(testCase,loaded.SelectedImageIDs);
 end
 
 function [project,images,folder] = makeProject(testCase)
+%MAKEPROJECT Create project.
 testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...
     desmostorm.Paths.external("matlabx")));
 fixture = testCase.applyFixture(matlab.unittest.fixtures.TemporaryFolderFixture());
@@ -141,6 +163,7 @@ testCase.addTeardown(@() delete(project));
 names = {["DSG2","DP"],["DP","DSG2"],"DP"};
 images = desmostorm.model.STORMImage.empty();
 pixels = reshape(uint16(0:255),16,16);
+% Process names in order.
 for k = 1:numel(names)
     file = fullfile(folder,"image" + k + ".ome.tiff");
     data = repmat({pixels},1,numel(names{k}));

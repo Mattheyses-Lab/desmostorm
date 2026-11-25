@@ -89,6 +89,7 @@ classdef Log
             % GUI sessions should surface interactive feedback immediately.
             % High-volume command-line workflows can still use Logger directly.
             log.FlushMinIntervalSec = 0;
+            % Filesystem path for log.
             logPath = opts.LogFile;
             log.setFileSink(char(logPath), true);
 
@@ -140,6 +141,7 @@ classdef Log
             end
 
             if devMode
+                % Struct for defaults.
                 defaults = struct( ...
                     "Level", "DEBUG", ...
                     "Detail", "debug", ...
@@ -222,6 +224,7 @@ classdef Log
 
         function T = asTable()
         %ASTABLE Return stored log entries as a table.
+            % Table assembled from the current records.
             T = desmostorm.Log.get().asTable();
         end
 
@@ -271,6 +274,7 @@ classdef Log
             log = desmostorm.Log.get();
             args = varargin;
 
+            % Index of the matching entry.
             idx = desmostorm.Log.findNameValue_(args, "Source");
             if ~isempty(idx)
                 return
@@ -283,6 +287,7 @@ classdef Log
         %DETECTSOURCE_ Infer the first caller outside the desmostorm facade.
             st = dbstack(1, '-completenames');
 
+            % Process st in order.
             for k = 1:numel(st)
                 name = string(st(k).name);
                 if desmostorm.Log.isFacadeFrame_(name)
@@ -307,6 +312,7 @@ classdef Log
         end
 
         function msg = normalizeMsg_(msg)
+        %NORMALIZEMSG_ Normalize msg.
             if ~isa(msg, 'MException')
                 msg = string(msg);
             end
@@ -314,7 +320,9 @@ classdef Log
 
         function idx = findNameValue_(args, name)
         %FINDNAMEVALUE_ Find a name-value pair position in varargin-like input.
+            % Index of the matching entry.
             idx = [];
+            % Process args in order.
             for k = 1:2:(numel(args)-1)
                 key = args{k};
                 if (ischar(key) || isstring(key)) && strcmpi(string(key), string(name))

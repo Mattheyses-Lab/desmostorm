@@ -46,6 +46,7 @@ end
 matlabx.utils.files.ensureDir(folderName);
 
 imgs = collectImages(project,opts.Scope);
+% Counts of attempted, successful, and skipped export records.
 summary = struct("Attempted",numel(imgs),"Exported",0,"Skipped",0);
 if isempty(imgs)
     return
@@ -67,6 +68,7 @@ end
     "Visible","off", ...
     "Size",7, ...
     "Units","inches");
+% Release the temporary object when this scope exits.
 c = onCleanup(@() delete(fig));
 
 ax.CLim = desmostorm.export.imageDisplayLimits(firstImage,firstImage.sourceChannelIndex(opts.Channel),opts.ScalingMode,opts.DisplaySettings,opts.AutoScalingMethod);
@@ -80,6 +82,7 @@ pause(0.5)
 desmostorm.app.focusMainFigure();
 fig.Visible = "off";
 
+% Process imgs in order.
 for k = 1:numel(imgs)
     img = imgs(k);
 
@@ -87,6 +90,7 @@ for k = 1:numel(imgs)
         sprintf('Exporting region box overlay (%d/%d): %s',k,numel(imgs),img.Name), ...
         k-1,numel(imgs));
 
+    % Index of the channel in the source image.
     sourceIndex = img.sourceChannelIndex(opts.Channel);
     if isempty(sourceIndex)
         summary.Skipped = summary.Skipped + 1;
@@ -108,6 +112,7 @@ for k = 1:numel(imgs)
         pause(0.05)
     end
 
+    % Filesystem path for filename.
     filename = fullfile(folderName,sprintf('%s_C%d_region-box-overlay.%s', ...
         safeFileStem(img.shortName),opts.Channel,lower(opts.Format)));
     [width,height] = imageExportSize(img,opts.Size);
@@ -128,6 +133,7 @@ desmostorm.runtime.updateProgress(opts.ProgressDialog, ...
 end
 
 function imgs = collectImages(project,scope)
+%COLLECTIMAGES Collect images.
     if scope == "active"
         img = project.ActiveImage;
         if isempty(img)
@@ -142,9 +148,13 @@ function imgs = collectImages(project,scope)
 end
 
 function [img,I] = firstExportableImage(imgs,channel)
+%FIRSTEXPORTABLEIMAGE Find the first image containing the requested source channel.
     img = desmostorm.model.STORMImage.empty();
+    % Pixel data for the image being processed.
     I = [];
+    % Process imgs in order.
     for k = 1:numel(imgs)
+        % Index of the channel in the source image.
         sourceIndex = imgs(k).sourceChannelIndex(channel);
         if ~isempty(sourceIndex)
             img = imgs(k);
@@ -155,11 +165,15 @@ function [img,I] = firstExportableImage(imgs,channel)
 end
 
 function I = getImageChannel(img,channel)
+%GETIMAGECHANNEL Return image channel.
+    % Pixel data for the image being processed.
     I = img.ImageData.getPlane(channel);
 end
 
 function addRegionBoxOverlays(ax,project,img,opts)
+%ADDREGIONBOXOVERLAYS Add region box overlays.
     regs = img.RegionArray;
+    % Process regs in order.
     for i = 1:numel(regs)
         reg = regs(i);
         color = resolveBoxColor(project,reg,opts);
@@ -182,6 +196,7 @@ function addRegionBoxOverlays(ax,project,img,opts)
 end
 
 function color = resolveBoxColor(project,reg,opts)
+%RESOLVEBOXCOLOR Resolve box color.
     if opts.ColorMode == "manual"
         color = opts.Color;
         return
@@ -196,6 +211,7 @@ function color = resolveBoxColor(project,reg,opts)
 end
 
 function [W,H] = imageExportSize(img,longSide)
+%IMAGEEXPORTSIZE Fit the image aspect ratio to the requested long-side length.
     if img.Width >= img.Height
         W = longSide;
         H = longSide * img.Height / img.Width;
@@ -206,6 +222,7 @@ function [W,H] = imageExportSize(img,longSide)
 end
 
 function stem = safeFileStem(str)
+%SAFEFILESTEM Replace characters unsuitable for an export filename.
     stem = regexprep(char(str),'[^A-Za-z0-9_.-]','_');
     if isempty(stem)
         stem = 'image';

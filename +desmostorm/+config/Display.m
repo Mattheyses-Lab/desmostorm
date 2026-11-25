@@ -19,22 +19,32 @@ classdef Display < handle
 
     % --- Colormaps ---
     properties (Constant)
+        % Available methods for calculating display limits.
         AutoMethods = ["Light contrast","Medium contrast","Strong contrast","Zero to max","Data range"]
     end
 
     properties (Access=private)
+        % Colormap name.
         ColormapName_     string = "turbo"    % selection name
+        % Colormap category.
         ColormapCategory_ string = "MATLAB"   % selection category
+        % Mode used for channel color.
         ChannelColorMode_ string = "colors"     % "colors" or "luts"
+        % Default automatic scaling policy for channels without saved overrides.
         DefaultKeepAuto_ (1,1) logical = true
+        % Channel policies.
         ChannelPolicies_ struct = struct('ID',{},'KeepAuto',{},'Lock',{}, ...
             'LockedRange',{},'Method',{})
     end
 
     properties (Dependent)
+        % Colormap.
         Colormap          % Nx3 double (loaded on demand)
+        % Colormap name.
         ColormapName
+        % Colormap category.
         ColormapCategory
+        % Mode used for channel color.
         ChannelColorMode
     end
 
@@ -51,8 +61,11 @@ classdef Display < handle
             c = matlabx.colors.maps.Registry.map(this.ColormapName_, this.ColormapCategory_);
         end
 
+        %GET.COLORMAPNAME Return the colormap name.
         function s = get.ColormapName(this),     s = this.ColormapName_;     end
+        %GET.COLORMAPCATEGORY Return the colormap category.
         function s = get.ColormapCategory(this), s = this.ColormapCategory_; end
+        %GET.CHANNELCOLORMODE Return the channel color mode.
         function s = get.ChannelColorMode(this), s = this.ChannelColorMode_; end
 
 
@@ -80,8 +93,10 @@ classdef Display < handle
         end
 
         function policy = channelPolicy(this,id)
+        %CHANNELPOLICY Return the saved display policy or defaults for a project channel.
             index = find(string({this.ChannelPolicies_.ID}) == id,1);
             if isempty(index)
+                % Saved range and automatic scaling settings for this project channel.
                 policy = struct('ID',id,'KeepAuto',this.DefaultKeepAuto_, ...
                     'Lock',false,'LockedRange',[],'Method',"Light contrast");
             else
@@ -90,12 +105,14 @@ classdef Display < handle
         end
 
         function setChannelPolicy(this,policy)
+        %SETCHANNELPOLICY Set channel policy.
             index = find(string({this.ChannelPolicies_.ID}) == policy.ID,1);
             if isempty(index), index = numel(this.ChannelPolicies_)+1; end
             this.ChannelPolicies_(index) = policy;
         end
 
         function set.ChannelColorMode(this, v)
+        %SET.CHANNELCOLORMODE Set the channel color mode.
             v = string(v);
             mustBeMember(v,["colors","luts"]);
             this.setValue("ChannelColorMode",v);
@@ -103,6 +120,8 @@ classdef Display < handle
 
         % ---------- Serialization ----------
         function S = toStruct(this)
+        %TOSTRUCT Serialize the current values into a plain MATLAB structure.
+            % Struct carrying serialized or resolved settings.
             S = struct( ...
                 'ColormapName',     this.ColormapName, ...
                 'ColormapCategory', this.ColormapCategory, ...
@@ -112,6 +131,7 @@ classdef Display < handle
         end
 
         function fromStruct(this,S)
+        %FROMSTRUCT Read saved values from a MATLAB structure.
             f = fieldnames(this.toStruct());
 
             for i = 1:numel(f)
@@ -121,6 +141,7 @@ classdef Display < handle
                 elseif isprop(this, prop) && isfield(S,f{i})
                     this.(prop) = S.(f{i});
                     if strcmp(f{i},'ChannelPolicies')
+                        % Process channel policies in order.
                         for k = 1:numel(this.ChannelPolicies_)
                             this.ChannelPolicies_(k).LockedRange = ...
                                 reshape(this.ChannelPolicies_(k).LockedRange,1,[]);
@@ -134,6 +155,7 @@ classdef Display < handle
 
     methods (Access=private)
         function setValue(this,name,value)
+        %SETVALUE Update a stored value and notify listeners when it changes.
             prop = char(name + "_");
             old = this.(prop);
             if isequaln(old,value)

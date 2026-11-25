@@ -18,13 +18,17 @@ classdef (ConstructOnLoad) RegionAdded < event.EventData
 %REGIONADDED Event data for region creation.
 
     properties
+        % Image ID.
         ImageID string
+        % Region ID.
         RegionID string
+        % Region name.
         RegionName string
     end
 
     methods
         function this = RegionAdded(imageID, regionID, regionName)
+        %REGIONADDED Identify the newly added region and its owner image.
             this.ImageID = string(imageID);
             this.RegionID = string(regionID);
             this.RegionName = string(regionName);

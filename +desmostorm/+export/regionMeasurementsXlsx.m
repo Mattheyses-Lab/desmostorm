@@ -24,6 +24,7 @@ arguments
 end
 
 desmostorm.runtime.updateProgress(opts.ProgressDialog,'Building region measurement table...');
+% Table assembled from the current records.
 T = desmostorm.export.regionTable(project);
 
 if isempty(T)

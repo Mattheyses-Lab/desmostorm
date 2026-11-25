@@ -38,8 +38,10 @@ arguments
     opts.Colormap (:,3) double = hot(256)
 end
 
+% Pixel data for the image being processed.
 I = double(I);
 config = getConfig(opts.Config);
+% Linescan ROI geometry used for the current region.
 ROI = desmostorm.analysis.image.autofit.initialROI( ...
     size(I,1),size(I,2),"SizeFraction",opts.ROISizeFraction);
 scoreData = desmostorm.analysis.image.autofit.scoreRotationAngles( ...
@@ -50,6 +52,7 @@ firstFrame = true;
 delayTime = 1 / opts.FramesPerSecond;
 
 [fig,roiTool,heightPlot,widthPlot,scorePlot] = buildFigure(I,scoreData,opts);
+% Close figure when this scope exits.
 cleaner = onCleanup(@() closeFigure(fig));
 
 % Stage 1: sweep through candidate angles and show the changing linescan.
@@ -104,8 +107,11 @@ function [fig,roiTool,heightPlot,widthPlot,scorePlot] = buildFigure(I,scoreData,
 %BUILDFIGURE Create the UI components used by the animation frames.
 fontSize = 12 * opts.OutputScale;
 figureSize = round(opts.FigureSize .* opts.OutputScale);
+% Image axes top chrome pixels.
 imageAxesTopChromePx = matlabx.UICal.get().uipanelTopChromeHeightPx(fontSize);
+% Image axes height pixels.
 imageAxesHeightPx = figureSize(2);
+% Image axes width pixels.
 imageAxesWidthPx = imageAxesHeightPx - imageAxesTopChromePx;
 
 fig = uifigure( ...
@@ -114,6 +120,7 @@ fig = uifigure( ...
     "Color",[1 1 1], ...
     "InnerPosition",[100 100 figureSize]);
 
+% Grid that arranges the dialog contents.
 layout = uigridlayout(fig,[1 3], ...
     "ColumnWidth",{imageAxesWidthPx,"1x","1x"}, ...
     "RowHeight",{imageAxesHeightPx}, ...
@@ -205,7 +212,9 @@ end
 function ROI = interpolateROI(ROI1,ROI2,t)
 %INTERPOLATEROI Interpolate ROI geometry between two fitting stages.
 fields = ["CenterX","CenterY","Width","Height","RotationAngle"];
+% Linescan ROI geometry used for the current region.
 ROI = ROI1;
+% Process fields in order.
 for i = 1:numel(fields)
     f = fields(i);
     ROI.(f) = ROI1.(f) + (ROI2.(f) - ROI1.(f)) * t;

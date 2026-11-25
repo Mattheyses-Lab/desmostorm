@@ -21,8 +21,11 @@ arguments
     region (1,1) desmostorm.model.STORMRegion
 end
 
+% Physical calibration used to convert pixel measurements.
 ps = region.PixelSize;
+% Linescan ROI geometry used for the current region.
 ROI = region.ROI;
+% Analyzed profiles in the parent image’s source channel order.
 L = region.LinescanResults;
 proj = region.Project;
 
@@ -51,9 +54,12 @@ row.ROIWidth_phys = ps.px2phys(ROI.Width);
 row.ROIHeight_phys = ps.px2phys(ROI.Height);
 row.ROIRotationAngle = round(ROI.RotationAngle,2);
 
+% Number of channels to process.
 nChannels = numel(proj.Channels);
+% Number of results available in source order.
 nResults = length(L);
 
+% Process each source channel in its original component order.
 for i = 1:nChannels
     leftPeakFWHM_px = NaN;
     leftPeakLocation_px = NaN;
@@ -61,6 +67,7 @@ for i = 1:nChannels
     rightPeakLocation_px = NaN;
     peakDistance_px = NaN;
 
+    % Source channel index.
     c = region.Parent.sourceChannelIndex(i);
     if ~isempty(c) && c <= nResults
         if L(c).hasLeftPeak

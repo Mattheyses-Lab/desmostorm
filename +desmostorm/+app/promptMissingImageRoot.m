@@ -31,6 +31,7 @@ end
 
 msg = "Locate missing image files (" + numel(missingNames) + " missing):";
 desmostorm.Log.WARN(msg);
+% Visit each entry in missing names.
 for i = 1:numel(missingNames)
     desmostorm.Log.WARN("Missing image file: " + missingNames(i));
 end
@@ -47,6 +48,7 @@ switch selection
     case "Locate"
         wasVisible = fig.Visible;
         fig.Visible = "off";
+        % Restore figure visibility when this scope exits.
         cleanupFig = onCleanup(@() restoreFigureVisibility(fig, wasVisible));
         selectedRoot = uigetdir(projectFolder, msg);
     otherwise
@@ -62,6 +64,7 @@ searchRoot = string(selectedRoot);
 end
 
 function restoreFigureVisibility(fig, visibleState)
+%RESTOREFIGUREVISIBILITY Restore the main figure visibility saved before opening the importer.
     if ~isempty(fig) && isvalid(fig)
         fig.Visible = visibleState;
         desmostorm.app.focusMainFigure();

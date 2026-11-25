@@ -23,6 +23,7 @@ end
 
 imgs = project.ImageArray;
 if isempty(imgs)
+    % Table assembled from the current records.
     T = table();
     return
 end

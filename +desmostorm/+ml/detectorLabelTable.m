@@ -33,11 +33,13 @@ end
 
 imgs = project.ImageArray;
 if isempty(imgs)
+    % Table assembled from the current records.
     T = table();
     return
 end
 
 n = numel(imgs);
+% Filesystem path for image filename.
 imageFilename = strings(n,1);
 boxesPerImage = cell(n,1);
 keep = true(n,1);
@@ -65,6 +67,7 @@ for i = 1:n
     % Convert each region center/box size into MATLAB detector [x y w h] boxes.
     B = zeros(numel(regs), 4);
 
+    % Process regs in order.
     for r = 1:numel(regs)
         reg = regs(r);
         ctr = reg.Center;

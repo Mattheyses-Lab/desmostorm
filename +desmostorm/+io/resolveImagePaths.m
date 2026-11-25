@@ -52,8 +52,10 @@ end
 end
 
 function [imagesOut, missing] = findMissingImages(imagesOut, projectFolder)
+%FINDMISSINGIMAGES Find missing images.
     missing = false(1, numel(imagesOut));
 
+    % Process images out in order.
     for k = 1:numel(imagesOut)
         p = string(imagesOut(k).SourcePath);
         if strlength(p) > 0 && isfile(p)
@@ -61,6 +63,7 @@ function [imagesOut, missing] = findMissingImages(imagesOut, projectFolder)
         end
 
         if strlength(projectFolder) > 0 && isfield(imagesOut(k),'FileName')
+            % Filesystem path for candidate.
             candidate = fullfile(projectFolder, imagesOut(k).FileName + imagesOut(k).Ext);
             if isfile(candidate)
                 imagesOut(k).SourcePath = string(candidate);
@@ -73,6 +76,7 @@ function [imagesOut, missing] = findMissingImages(imagesOut, projectFolder)
 end
 
 function imagesOut = resolveFromSearchRoot(imagesOut, missing, searchRoot)
+%RESOLVEFROMSEARCHROOT Resolve from search root.
     files = dir(fullfile(searchRoot, "**", "*"));
     files = files(~[files.isdir]);
 
@@ -89,6 +93,7 @@ function imagesOut = resolveFromSearchRoot(imagesOut, missing, searchRoot)
             continue
         end
 
+        % Dimensions of the current image or array.
         sz = imagesOut(k).FileSizeBytes;
         if ~isnan(sz)
             szHits = hits([hits.bytes] == sz);
@@ -106,9 +111,11 @@ function imagesOut = resolveFromSearchRoot(imagesOut, missing, searchRoot)
 end
 
 function logMissingImages(imagesOut, missing)
+%LOGMISSINGIMAGES Report source image files that could not be located.
     desmostorm.Log.WARN("Project is missing " + nnz(missing) + " image file(s).");
 
     missingNames = [imagesOut(missing).SourcePath]';
+    % Visit each entry in missing names.
     for i = 1:numel(missingNames)
         desmostorm.Log.WARN("Missing image file: " + missingNames(i));
     end

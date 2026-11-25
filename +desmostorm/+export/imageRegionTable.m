@@ -23,6 +23,7 @@ end
 
 regs = img.RegionArray;
 if isempty(regs)
+    % Table assembled from the current records.
     T = table();
     return
 end

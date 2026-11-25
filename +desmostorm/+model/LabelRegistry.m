@@ -18,16 +18,21 @@ classdef LabelRegistry < handle
 %LabelRegistry  Project-level label bank (lookup by id/hotkey, active label, serialization).
 
     properties (Access=private)
+        % Lookup table for labels.
         LabelsDict = dictionary(string.empty(1,0), desmostorm.model.RegionLabel.empty(1,0))  % ID -> RegionLabel
+        % Order.
         Order (1,:) string = string.empty(1,0)
+        % Lookup table for hotkey map.
         HotkeyMap = dictionary(string.empty(1,0), string.empty(1,0))            % hotkey -> ID
     end
 
     properties
+        % Active label ID.
         ActiveLabelID (1,1) string = ""
     end
 
     properties (SetAccess=private)
+        % Selected label IDs.
         SelectedLabelIDs (1,:) string = strings(1,0)
     end
 
@@ -38,21 +43,25 @@ classdef LabelRegistry < handle
 
     methods
         function obj = LabelRegistry()
+        %LABELREGISTRY Initialize the registry and its default labels.
             obj.LabelsDict = dictionary(string.empty(1,0), desmostorm.model.RegionLabel.empty(1,0));
             obj.HotkeyMap  = dictionary(string.empty(1,0), string.empty(1,0));
             obj.Order      = string.empty(1,0);
         end
 
         function ids = ids(obj)
+        %IDS Return the registered label IDs.
             ids = obj.Order;
         end
 
         function hotkeys = hotkeys(obj)
+        %HOTKEYS Return the keyboard shortcuts assigned to project labels.
             lbls = obj.labels();
             hotkeys = [lbls(:).Hotkey];
         end
 
         function arr = labels(obj)
+        %LABELS Return the registered label definitions in display order.
             if isempty(obj.Order)
                 arr = desmostorm.model.RegionLabel.empty();
             else
@@ -61,6 +70,7 @@ classdef LabelRegistry < handle
         end
 
         function lbl = getByID(obj, id)
+        %GETBYID Return by ID.
             id = string(id);
             if strlength(id)==0 || ~isKey(obj.LabelsDict, id)
                 lbl = [];
@@ -70,6 +80,7 @@ classdef LabelRegistry < handle
         end
 
         function lbl = getByHotkey(obj, key)
+        %GETBYHOTKEY Return by hotkey.
             key = lower(string(key));
             if strlength(key)==0 || ~isKey(obj.HotkeyMap, key)
                 lbl = [];
@@ -79,6 +90,7 @@ classdef LabelRegistry < handle
         end
 
         function setActiveByID(obj, id)
+        %SETACTIVEBYID Set active by ID.
             id = string(id);
             if id == obj.ActiveLabelID, return; end
 
@@ -95,6 +107,7 @@ classdef LabelRegistry < handle
         end
 
         function setActiveByHotkey(obj, key)
+        %SETACTIVEBYHOTKEY Set active by hotkey.
             lbl = obj.getByHotkey(key);
             if ~isempty(lbl)
                 obj.setActiveByID(lbl.ID);
@@ -102,14 +115,17 @@ classdef LabelRegistry < handle
         end
 
         function setSelection(obj,ids)
+        %SETSELECTION Set selection.
             obj.SelectedLabelIDs = intersect(obj.Order,string(ids(:)).','stable');
         end
 
         function lbl = active(obj)
+        %ACTIVE Return the label used for the next region assignment.
             lbl = obj.getByID(obj.ActiveLabelID);
         end
 
         function id = add(obj, name, opts)
+        %ADD Add a label definition and return its ID.
             arguments
                 obj
                 name (1,1) string
@@ -139,6 +155,7 @@ classdef LabelRegistry < handle
         end
 
         function remove(obj, id)
+        %REMOVE Remove the requested label definition from the registry.
             id = string(id);
             if id == "unlabeled" || ~isKey(obj.LabelsDict, id), return; end
 
@@ -166,6 +183,7 @@ classdef LabelRegistry < handle
 
 
         function edit(obj, id, opts)
+        %EDIT Update the fields of an existing label definition.
             arguments
                 obj
                 id
@@ -223,12 +241,15 @@ classdef LabelRegistry < handle
 
 
         function S = toStruct(obj)
+        %TOSTRUCT Serialize the current values into a plain MATLAB structure.
             arr = obj.labels();
+            % Struct carrying serialized or resolved settings.
             S = struct();
             S.ActiveLabelID = obj.ActiveLabelID;
             S.SelectedLabelIDs = obj.SelectedLabelIDs;
 
             S.Labels = repmat(struct(), 1, numel(arr));
+            % Process arr in order.
             for k = 1:numel(arr)
                 L = arr(k);
                 S.Labels(k).ID = L.ID;
@@ -244,9 +265,12 @@ classdef LabelRegistry < handle
 
     methods (Static)
         function bank = fromStruct(S)
+        %FROMSTRUCT Read saved values from a MATLAB structure.
+            % Project registry for region labels.
             bank = desmostorm.model.LabelRegistry();
 
             if isfield(S,'Labels') && ~isempty(S.Labels)
+                % Process labels in order.
                 for k = 1:numel(S.Labels)
                     L = S.Labels(k);
                     id = bank.add(string(L.Name), ...
@@ -281,6 +305,7 @@ classdef LabelRegistry < handle
 
 
         function obj = default()
+        %DEFAULT Return the default value used when no override is supplied.
             obj = desmostorm.model.LabelRegistry();
             obj.add("Unlabeled","ID","unlabeled","Hotkey","u","Color",[1 1 1]);
             % Examples (edit/remove as you like)

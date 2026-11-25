@@ -17,13 +17,18 @@
 classdef (ConstructOnLoad) ChangeEvent < event.EventData
 % event data class for settings changed events
     properties
+        % Domain.
         Domain   string   % "Analysis" | "Display" | "IO" | "PeaksPlot" | "ROI" | "Box"
+        % Display name shown in the application.
         Name     string   % e.g., "BoxSize", "ColormapName"
+        % Old value.
         OldValue
+        % New value.
         NewValue
     end
     methods
         function this = ChangeEvent(domain, name, oldv, newv)
+        %CHANGEEVENT Capture a settings category, field name, and the values before and after an edit.
             this.Domain = string(domain);
             this.Name   = string(name);
             this.OldValue = oldv;

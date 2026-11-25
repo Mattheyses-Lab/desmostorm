@@ -19,54 +19,75 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
 
     %% Identity/metadata
     properties
+        % Stable identifier used to look up this record.
         ID (1,1) string = matlabx.utils.text.uniqueID()
+        % Display name shown in the application.
         Name (1,1) string = "untitled"
+        % Path to the source file.
         SourcePath (1,1) string = ""
+        % Time when this record was created.
         CreatedAt datetime = datetime('now')
+        % Version associated with the saved record.
         Version (1,1) string = desmostorm.Info.Version
+        % Whether this project has already been saved to a file.
         isOnDisk (1,1) logical = false
+        % Whether the working project differs from the last saved version.
         HasUnsavedChanges (1,1) logical = false
     end
 
     %% Label bank
     properties
+        % Registry that owns project label definitions.
         LabelBank desmostorm.model.LabelRegistry
     end
 
     %% Images (dictionary + order) and active selection
     properties (Access=private)
+        % Lookup table for images.
         ImagesDict = dictionary   % string ID -> desmostorm.model.STORMImage
+        % Image IDs in project display order.
         ImageOrder (:,1) string = string.empty(0,1)
+        % ID of the image currently in focus.
         ActiveImageID (1,1) string = ""
     end
 
     properties (Access=private)
+        % Maximum number of images retained by the data cache.
         ImageDataCacheSize (1,1) double {mustBeNonnegative, mustBeInteger} = 2  % active + 1 previous
+        % Image IDs ordered by most recent access for cache eviction.
         RecentImageIDs (:,1) string = string.empty(0,1)
     end
 
     properties (Dependent)
+        % Display names of project images in project order.
         ImageNames
+        % Stable image IDs in project order.
         ImageIDs
     end
 
     properties (SetAccess=private)
+        % IDs checked for batch image operations.
         SelectedImageIDs (:,1) string = strings(0,1)
     end
 
     %% ergonomic array view, public, editor-friendly
     properties (Dependent, GetAccess=public, SetAccess=private)
+        % Project images in display order.
         ImageArray   % [Nx1 desmostorm.model.STORMImage] in ImageOrder
+        % Image currently in focus.
         ActiveImage (:,1) desmostorm.model.STORMImage
+        % Region currently in focus.
         ActiveRegion (:,1) desmostorm.model.STORMRegion
     end
 
     %% Project-wide info
     properties
+        % Default physical calibration for newly imported images.
         DefaultPixelSize desmostorm.model.units.PixelSize = desmostorm.model.units.PixelSize(1, 'px');
     end
 
     properties (SetObservable, AbortSet)
+        % Largest source channel count among project images.
         MaxSizeC (1,1) double = 0
     end
 
@@ -77,7 +98,9 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
     end
 
     properties (Access=private)
+        % Fallback channel colormap name.
         DefaultChannelColormapName (1,1) string = "gray"
+        % Fallback channel colormap category.
         DefaultChannelColormapCategory (1,1) string = "MATLAB"
     end
 
@@ -103,9 +126,13 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
     end
 
     properties
+        % Listener handles for region.
         RegionListeners event.listener
+        % Listener handles for image.
         ImageListeners event.listener
+        % Listener handles for max size c.
         MaxSizeCListener event.listener
+        % Listener handles for labels changed.
         LabelsChangedListener event.listener
     end
 
@@ -113,6 +140,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
     methods
 
         function arr = get.ImageArray(obj)
+        %GET.IMAGEARRAY Return the image array.
             if numel(obj.ImageOrder)==0
                 arr = desmostorm.model.STORMImage.empty(); return;
             end
@@ -121,6 +149,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
         end
 
         function img = get.ActiveImage(obj)
+        %GET.ACTIVEIMAGE Return the active image.
             img = [];
             if strlength(obj.ActiveImageID)==0, return; end
             if isKey(obj.ImagesDict, obj.ActiveImageID)
@@ -129,12 +158,14 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
         end
 
         function reg = get.ActiveRegion(obj)
+        %GET.ACTIVEREGION Return the active region.
             reg = [];
             if isempty(obj.ActiveImage), return; end
             reg = obj.ActiveImage.ActiveRegion;
         end
 
         function names = get.ImageNames(obj)
+        %GET.IMAGENAMES Return the image names.
             arr = obj.ImageArray;
             if isempty(arr)
                 names = string.empty(1,0);
@@ -144,6 +175,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
         end
 
         function IDs = get.ImageIDs(obj)
+        %GET.IMAGEIDS Return the image IDs.
             arr = obj.ImageArray;
             if isempty(arr)
                 IDs = string.empty(1,0);
@@ -159,6 +191,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
     methods
 
         function obj = STORMProject(name)
+        %STORMPROJECT Initialize project state and the label and image registries.
             if nargin >= 1 && ~isempty(name), obj.Name = string(name); end
 
             % dictionary of string ID -> desmostorm.model.STORMImage
@@ -202,6 +235,8 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
         end
 
         function addImagesFromPaths(obj, filePaths)
+        %ADDIMAGESFROMPATHS Add images from paths.
+            % Visit each entry in string(file paths).
             for filePath = reshape(string(filePaths),1,[])
                 obj.addImageFromPath(filePath);
             end
@@ -218,6 +253,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             originalCount = numel(channels);
             assignments = cell(size(images));
             palette = matlabx.image.componentColorNames();
+            % Process images in order.
             for i = 1:numel(images)
                 names{i} = reshape(strtrim(string(names{i})),1,[]);
                 colors{i} = reshape(string(colors{i}),1,[]);
@@ -230,6 +266,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
                     'Each source component needs a distinct channel name.');
 
                 ids = strings(1,images(i).SizeC);
+                % Process each source channel in its original component order.
                 for c = 1:images(i).SizeC
                     name = names{i}(c);
                     index = find(strcmpi(string({channels.Name}),name),1);
@@ -257,6 +294,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
 
             changed = ~isequal(channels,obj.Channels);
             obj.Channels = channels;
+            % Process images in order.
             for i = 1:numel(images)
                 img = images(i);
                 img.setChannelIDs(assignments{i});
@@ -271,6 +309,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
         end
 
         function editChannels(obj,names,colors)
+        %EDITCHANNELS Apply edited project channel names and colors.
             names = reshape(strtrim(string(names)),1,[]);
             colors = reshape(string(colors),1,[]);
             assert(numel(names) == numel(obj.Channels) && numel(colors) == numel(names) && ...
@@ -279,6 +318,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
                 'Channel names must be nonempty and unique.');
 
             channels = obj.Channels;
+            % Process each source channel in its original component order.
             for c = 1:numel(channels)
                 channels(c).Name = names(c);
                 channels(c).Color = matlabx.image.normalizeComponentColor(colors(c));
@@ -286,6 +326,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             if ~isequal(obj.Channels,channels)
                 obj.Channels = channels;
                 images = obj.ImageArray;
+                % Visit each entry in images.
                 for i = 1:numel(images)
                     images(i).syncChannelNames();
                 end
@@ -295,6 +336,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
         end
 
         function index = channelIndex(obj,channel)
+        %CHANNELINDEX Resolve a project channel reference to its registry index.
             if isnumeric(channel)
                 index = channel;
             else
@@ -303,10 +345,12 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
         end
 
         function name = getChannelName(obj,channel)
+        %GETCHANNELNAME Return channel name.
             name = obj.Channels(obj.channelIndex(channel)).Name;
         end
 
         function replaceLabels(obj,labels,opts)
+        %REPLACELABELS Replace labels.
             arguments
                 obj
                 labels struct
@@ -337,12 +381,15 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
                 active = opts.ActivateID;
                 selected = opts.ActivateID;
             end
+            % Project registry for region labels.
             bank = desmostorm.model.LabelRegistry.fromStruct(struct( ...
                 'Labels',labels,'Order',ids,'ActiveLabelID',active,'SelectedLabelIDs',selected));
 
             images = obj.ImageArray;
+            % Process images in order.
             for i = 1:numel(images)
                 regs = images(i).RegionArray;
+                % Process regs in order.
                 for k = 1:numel(regs)
                     [found,index] = ismember(regs(k).LabelID,oldIDs);
                     if found && targets(index) ~= regs(k).LabelID
@@ -357,6 +404,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
         end
 
         function setImageSelection(obj,ids)
+        %SETIMAGESELECTION Set image selection.
             ids = intersect(obj.ImageOrder,string(ids(:)),'stable');
             if ~isequal(obj.SelectedImageIDs,ids)
                 obj.SelectedImageIDs = ids;
@@ -463,8 +511,10 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
 
         % needs to be optimized
         function regs = getRegionsByLabelID(obj,labelID)
+        %GETREGIONSBYLABELID Return regions by label ID.
             regs = desmostorm.model.STORMRegion.empty(0,1);
             imgs = obj.ImageArray;
+            % Process imgs in order.
             for i = 1:numel(imgs)
                 matches = imgs(i).getRegionsByLabelID(labelID);
                 if ~isempty(matches), regs = [regs;matches(:)]; end
@@ -481,6 +531,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
 
         % process all Regions (compute and analyze linescans from drawn ROIs)
         function processAll(obj, config, opts)
+        %PROCESSALL Process all.
             arguments
                 obj (1,1) desmostorm.model.STORMProject
                 config desmostorm.config.RunConfig
@@ -493,6 +544,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             if isempty(arr), return; end
 
             total = 0;
+            % Process arr in order.
             for i = 1:numel(arr)
                 regs = arr(i).RegionArray;
                 valid = arrayfun(@(r) desmostorm.model.STORMRegion.hasValidROI(r.ROI),regs);
@@ -502,10 +554,12 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
 
             % otherwise, process each image and region
             n = 0;
+            % Process arr in order.
             for i = 1:numel(arr)
                 regs = arr(i).RegionArray;
                 valid = arrayfun(@(r) desmostorm.model.STORMRegion.hasValidROI(r.ROI),regs);
                 regs = regs(valid);
+                % Process regs in order.
                 for j = 1:numel(regs)
                     n = n + 1;
                     desmostorm.runtime.updateProgress(opts.ProgressDialog, ...
@@ -524,6 +578,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
         function refreshRegionLinescanPixelSizes(obj)
         %REFRESHREGIONLINESCANPIXELSIZES Apply current pixel size to stored measurements.
             arr = obj.ImageArray;
+            % Visit each entry in arr.
             for i = 1:numel(arr)
                 arr(i).refreshRegionLinescanPixelSizes();
             end
@@ -531,6 +586,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
 
         % process all Regions (compute and analyze linescans from drawn ROIs)
         function summary = autofitAllRegionROIs(obj, config, opts)
+        %AUTOFITALLREGIONROIS Fit linescan ROIs for the regions in the current project.
             arguments
                 obj (1,1) desmostorm.model.STORMProject
                 config desmostorm.config.RunConfig
@@ -544,6 +600,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             if isempty(arr), return; end
 
             total = 0;
+            % Process arr in order.
             for i = 1:numel(arr)
                 total = total + numel(arr(i).RegionArray);
             end
@@ -554,6 +611,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             % details while it is running.
             for i = 1:numel(arr)
                 regs = arr(i).RegionArray;
+                % Process regs in order.
                 for j = 1:numel(regs)
                     summary.Attempted = summary.Attempted + 1;
                     progressPrefix = string(sprintf( ...
@@ -592,12 +650,14 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
     methods
 
         function onMaxSizeCPostSet(obj)
+        %ONMAXSIZECPOSTSET Handle max size c post set.
 
             notify(obj,'MaxSizeCChanged');
 
         end
 
         function onImageAdded(obj,evt)
+        %ONIMAGEADDED Respond to image addition.
 
             obj.updateImageStats();
 
@@ -611,12 +671,14 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
         end
 
         function onImageRemoved(obj,~)
+        %ONIMAGEREMOVED Respond to image removal.
 
             obj.updateImageStats();
 
         end
 
         function onActiveImageChanged(obj,evt)
+        %ONACTIVEIMAGECHANGED Synchronize the viewers and trees to the active image.
 
             % --- buffer clearing policy: keep active + last N-1 ---
             % imageID = obj.ActiveImageID;
@@ -636,6 +698,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             keep = obj.RecentImageIDs;
             toClear = imageIDs(~ismember(imageIDs, keep));
         
+            % Visit each entry in to clear.
             for k = 1:numel(toClear)
                 if isKey(obj.ImagesDict, toClear(k))
                     try
@@ -667,6 +730,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
         end
 
         function onLabelBankChanged(obj)
+        %ONLABELBANKCHANGED Refresh label-dependent controls after edits to the registry.
             notify(obj,'LabelsChanged');
             obj.markDirty();
         end
@@ -677,6 +741,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
     methods
 
         function markDirty(obj)
+        %MARKDIRTY Mark dirty.
             if obj.HasUnsavedChanges
                 return
             end
@@ -686,6 +751,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
         end
 
         function markClean(obj)
+        %MARKCLEAN Mark clean.
             if ~obj.HasUnsavedChanges
                 return
             end
@@ -695,11 +761,13 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
         end
 
         function attachLabelBankListener(obj)
+        %ATTACHLABELBANKLISTENER Attach label bank listener.
             delete(obj.LabelsChangedListener);
             obj.LabelsChangedListener = addlistener(obj.LabelBank,'LabelsChanged',@(~,~) obj.onLabelBankChanged());
         end
 
         function setDefaultPixelSize(obj, ps)
+        %SETDEFAULTPIXELSIZE Set default pixel size.
             arguments
                 obj
                 ps (1,1) desmostorm.model.units.PixelSize
@@ -708,12 +776,14 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             obj.DefaultPixelSize = ps;
             % Reset all image overrides
             imgs = obj.ImageArray;
+            % Process imgs in order.
             for k = 1:numel(imgs)
                 imgs(k).PixelSizeOverride = desmostorm.model.units.PixelSize.empty;
             end
         end
 
         function updateImageStats(obj)
+        %UPDATEIMAGESTATS Update image stats.
 
             imgs = obj.ImageArray;
 
@@ -728,6 +798,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
         end
 
         function setDefaultChannelColormap(obj,name,category)
+        %SETDEFAULTCHANNELCOLORMAP Set default channel colormap.
             assert(matlabx.colors.maps.Registry.has(name,category), ...
                 'Colormap "%s" not found in category "%s".',name,category);
             obj.DefaultChannelColormapName = name;
@@ -735,6 +806,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
         end
 
         function setChannelColormap(obj,channel,name,category)
+        %SETCHANNELCOLORMAP Set channel colormap.
             index = obj.channelIndex(channel);
             assert(matlabx.colors.maps.Registry.has(name,category), ...
                 'Colormap "%s" not found in category "%s".',name,category);
@@ -747,22 +819,27 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
         end
 
         function [name,category] = getChannelColormapInfo(obj,channel)
+        %GETCHANNELCOLORMAPINFO Return channel colormap info.
             definition = obj.Channels(obj.channelIndex(channel));
             name = definition.ColormapName;
             category = definition.ColormapCategory;
         end
 
         function cmap = getChannelColormap(obj,channel)
+        %GETCHANNELCOLORMAP Return channel colormap.
             [name,category] = obj.getChannelColormapInfo(channel);
+            % Colormap used to display the current channel.
             cmap = matlabx.colors.maps.Registry.map(name,category);
         end
 
         function cmaps = getChannelColormaps(obj,n)
+        %GETCHANNELCOLORMAPS Return channel colormaps.
             if nargin < 2, n = numel(obj.Channels); end
             cmaps = arrayfun(@(c) obj.getChannelColormap(c),1:n,'UniformOutput',false);
         end
 
         function setChannelColor(obj,channel,color)
+        %SETCHANNELCOLOR Set channel color.
             index = obj.channelIndex(channel);
             color = matlabx.image.normalizeComponentColor(color);
             if obj.Channels(index).Color ~= color
@@ -773,10 +850,12 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
         end
 
         function color = getChannelColorName(obj,channel)
+        %GETCHANNELCOLORNAME Return channel color name.
             color = obj.Channels(obj.channelIndex(channel)).Color;
         end
 
         function rgb = getChannelRGB(obj,channel)
+        %GETCHANNELRGB Return channel RGB.
             [~,rgb] = matlabx.image.normalizeComponentColor(obj.getChannelColorName(channel));
         end
 
@@ -786,8 +865,10 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
     methods
 
         function T = imagesTable(obj)
+        %IMAGESTABLE Collect project image metadata in a table.
             if numel(obj.ImageOrder)==0, T = table(); return; end
             imgs = obj.ImagesDict(obj.ImageOrder);  % -> array of STORMImage
+            % Table assembled from the current records.
             T = table( ...
                 obj.ImageOrder(:), ...
                 arrayfun(@(im) im.Name, imgs, 'uni',0).', ...
@@ -825,6 +906,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
 
             if folder == "", folder = string(pwd); end
             temporary = string(tempname(folder)) + ".mat";
+            % Delete temporary project file when this scope exits.
             cleanup = onCleanup(@() deleteTemporaryProjectFile(temporary));
             save(temporary,'Project','-mat');
             [written,message] = movefile(temporary,file,'f');
@@ -858,6 +940,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             if ~isfield(saveStruct,'Project')
                 error('STORMProject:InvalidProjectFile', 'Cannot load project file: no variable named "Project" found')
             else
+                % Struct carrying serialized or resolved settings.
                 S = saveStruct.Project;
             end
 
@@ -878,12 +961,14 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
         end
 
         function [proj, settings] = fromStruct(P, file, opts)
+        %FROMSTRUCT Read saved values from a MATLAB structure.
             arguments
                 P
                 file (1,1) string
                 opts.MissingImageResolver = []
             end
 
+            % Filesystem path for project.
             projectFolder = string(fileparts(file));
 
             % Settings restore
@@ -898,6 +983,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             proj.SourcePath = file;
 
             if isfield(P.Project,'DefaultPixelSize')
+                % Physical calibration used to convert pixel measurements.
                 ps = P.Project.DefaultPixelSize;
                 proj.DefaultPixelSize = desmostorm.model.units.PixelSize(ps.Value, ps.Unit);
             end
@@ -933,6 +1019,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
             proj.ImageOrder = string.empty(1,0);
 
             desmostorm.Log.DEBUG("Rebuilding images...")
+            % Number of resolved.
             nResolved = numel(resolved);
             for k = 1:nResolved
                 desmostorm.Log.DEBUG(sprintf("Image (%i/%i): %s",k,nResolved,resolved(k).Name))
@@ -1012,7 +1099,9 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
     methods (Access=private)
 
         function channels = legacyChannels(obj,project)
+        %LEGACYCHANNELS Build channel definitions from legacy source component indices.
             channels = obj.Channels;
+            % Struct for display.
             display = struct();
             if isfield(project,'ChannelDisplay') && isstruct(project.ChannelDisplay) && ...
                     isscalar(project.ChannelDisplay)
@@ -1051,6 +1140,8 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
     %% Friendlier Command Window / Variable Editor display
     methods (Access=protected)
         function groups = getPropertyGroups(obj)
+        %GETPROPERTYGROUPS Return property groups.
+            % Counts of attempted, successful, and skipped export records.
             summary = struct( ...
                 'Name', obj.Name, ...
                 'CreatedAt', obj.CreatedAt, ...
@@ -1065,6 +1156,7 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
     methods
 
         function groups = getPropGroups(obj)
+        %GETPROPGROUPS Return prop groups.
 
             groups = obj.getPropertyGroups();
         end
@@ -1074,5 +1166,6 @@ classdef STORMProject < handle & matlab.mixin.CustomDisplay
 end
 
 function deleteTemporaryProjectFile(file)
+%DELETETEMPORARYPROJECTFILE Delete temporary project file.
     if isfile(file), delete(file); end
 end

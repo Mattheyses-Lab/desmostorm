@@ -17,6 +17,7 @@
 function metrics = scorePeaksData(peaksData,ROI)
 %SCOREPEAKSDATA Convert peak measurements into one angle score.
 
+% Struct for metrics.
 metrics = struct( ...
     "Score",0, ...
     "NPeaks",peaksData.nPeaks, ...
@@ -43,6 +44,7 @@ rightProm = peaksData.RightPeakProminence;
 
 pairDist = rightLoc - leftLoc;
 pairCenter = mean([leftLoc rightLoc]);
+% Scan half width.
 scanHalfWidth = max(abs(peaksData.Location));
 
 p1 = desmostorm.analysis.image.autofit.nearestIndex(peaksData.Location,leftLoc);

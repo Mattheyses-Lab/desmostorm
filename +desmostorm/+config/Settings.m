@@ -17,11 +17,17 @@
 classdef Settings < handle
     % Orchestrates sub-settings. Observable; bubbles child changes.
     properties (SetAccess=public)
+        % Analysis.
         Analysis  desmostorm.config.Analysis   % analysis settings
+        % Display.
         Display   desmostorm.config.Display    % general display settings
+        % I/O.
         IO        desmostorm.config.IO         % import/export settings
+        % Peaks plot.
         PeaksPlot desmostorm.config.PeaksPlot  % PeaksPlot appearance settings
+        % ROI.
         ROI       desmostorm.config.ROI        % RegionViewer ROI appearance settings
+        % Box.
         Box       desmostorm.config.Box        % region selection box settings
     end
 
@@ -38,6 +44,7 @@ classdef Settings < handle
 
     methods
         function this = Settings()
+        %SETTINGS Create the application’s settings categories and forward their change events.
             this.Analysis   = desmostorm.config.Analysis();
             this.Display    = desmostorm.config.Display();
             this.IO         = desmostorm.config.IO();
@@ -63,6 +70,7 @@ classdef Settings < handle
         end
 
         function save(this, file)
+        %SAVE Write the current state to disk.
             if nargin < 2
                 file = desmostorm.config.Settings.defaultFile();
             end
@@ -96,6 +104,7 @@ classdef Settings < handle
 
 
         function S = toStruct(obj)
+        %TOSTRUCT Serialize the current values into a plain MATLAB structure.
             S.Version = char(desmostorm.Info.Version);
             S.SettingsSchemaVersion = char(desmostorm.Info.SettingsSchemaVersion);
             S.FactoryDefaultsVersion = char(desmostorm.Info.FactoryDefaultsVersion);
@@ -126,6 +135,7 @@ classdef Settings < handle
     methods (Static)
 
         function obj = load(file)
+        %LOAD Read the saved state from disk.
             if nargin < 1
                 file = desmostorm.config.Settings.defaultFile();
             end
@@ -135,6 +145,7 @@ classdef Settings < handle
 
             if isfile(file)
                 txt = fileread(file);
+                % Struct carrying serialized or resolved settings.
                 S = jsondecode(txt);
 
                 % App-level settings get both migrations:
@@ -218,6 +229,7 @@ classdef Settings < handle
             old = desmostorm.config.Settings.schemaVersion_(S);
             target = desmostorm.Info.SettingsSchemaVersion;
 
+            % Struct carrying serialized or resolved settings.
             S = desmostorm.config.Settings.ensureVersionFields_(S);
             S = desmostorm.config.Settings.ensureSettingCategories_(S);
 
@@ -263,6 +275,7 @@ classdef Settings < handle
                     "DistanceAnnotationsMode"
                     "WidthAnnotations"
                     "WidthAnnotationsMode"];
+                % Process new peaks plot fields in order.
                 for i = 1:numel(newPeaksPlotFields)
                     f = char(newPeaksPlotFields(i));
                     if ~isfield(S.PeaksPlot,f)
@@ -361,6 +374,7 @@ classdef Settings < handle
         %ENSURESETTINGCATEGORIES_ Add missing category structs before field migration.
             defaults = desmostorm.config.Settings();
             categories = ["Analysis","Display","IO","PeaksPlot","ROI","Box"];
+            % Process categories in order.
             for i = 1:numel(categories)
                 f = char(categories(i));
                 if ~isfield(S,f) || isempty(S.(f))

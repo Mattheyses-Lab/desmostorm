@@ -18,27 +18,45 @@ classdef PeaksPlotStyle
 %PEAKSPLOTSTYLE Resolved trace styling and axes presentation for a linescan.
 
     properties
+        % Colors.
         Colors (:,3) double {mustBeInRange(Colors,0,1)} = [0 0 0]
+        % Annotation colors.
         AnnotationColors (:,3) double {mustBeInRange(AnnotationColors,0,1)} = zeros(0,3)
+        % RGB color for raw line.
         RawLineColor double = []
+        % RGB color for smooth line.
         SmoothLineColor double = []
+        % Opacity of raw line.
         RawLineAlpha (1,1) double {mustBeInRange(RawLineAlpha,0,1)} = 0.45
+        % Stroke width in points for raw.
         RawLineWidth (1,1) double {mustBePositive,mustBeFinite} = 1
+        % Stroke width in points for smooth.
         SmoothLineWidth (1,1) double {mustBePositive,mustBeFinite} = 1
+        % Stroke width in points for annotation.
         AnnotationLineWidth (1,1) double {mustBePositive,mustBeFinite} = 1
+        % RGB color for background.
         BackgroundColor (1,3) double {mustBeInRange(BackgroundColor,0,1)} = [1 1 1]
+        % RGB color for foreground.
         ForegroundColor (1,3) double {mustBeInRange(ForegroundColor,0,1)} = [0 0 0]
+        % Distance annotations.
         DistanceAnnotations (1,1) matlab.lang.OnOffSwitchState = "on"
+        % Width annotations.
         WidthAnnotations (1,1) matlab.lang.OnOffSwitchState = "on"
+        % Mode used for distance annotations.
         DistanceAnnotationsMode (1,1) string {mustBeMember(DistanceAnnotationsMode,["data","lanes"])} = "lanes"
+        % Mode used for width annotations.
         WidthAnnotationsMode (1,1) string {mustBeMember(WidthAnnotationsMode,["normal","hover"])} = "normal"
+        % Font size in points for measurement annotations.
         AnnotationsFontSize (1,1) double {mustBePositive,mustBeFinite} = 10
+        % Padding around annotation text.
         AnnotationsMargin (1,1) double {mustBeNonnegative,mustBeFinite} = 1
+        % X lim.
         XLim double = []
     end
 
     methods
         function obj = PeaksPlotStyle(opts)
+        %PEAKSPLOTSTYLE Initialize appearance and annotation options for linescan content.
             arguments
                 opts.Colors (:,3) double {mustBeInRange(opts.Colors,0,1)} = [0 0 0]
                 opts.AnnotationColors (:,3) double {mustBeInRange(opts.AnnotationColors,0,1)} = zeros(0,3)
@@ -58,6 +76,7 @@ classdef PeaksPlotStyle
                 opts.AnnotationsMargin (1,1) double {mustBeNonnegative,mustBeFinite} = 1
                 opts.XLim double = []
             end
+            % Process the named fields in opts.
             for name = reshape(string(fieldnames(opts)),1,[])
                 obj.(name) = opts.(name);
             end
