@@ -1,6 +1,7 @@
 # DesmoSTORM
 
 [![Version](https://img.shields.io/badge/version-1.2.0-green.svg)](https://github.com/Mattheyses-Lab/desmostorm/releases)
+[![MATLAB R2026b or later](https://img.shields.io/badge/MATLAB-R2026b%2B-orange.svg)](#requirements)
 [![License: GPL v2 or later](https://img.shields.io/badge/license-GPL--2.0--or--later-blue.svg)](LICENSE)
 
 **DesmoSTORM** is a MATLAB application for viewing and analyzing reconstructed
