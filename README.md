@@ -52,7 +52,8 @@ package, navigate back to the project root and run the command again.
 2. Create or open a project from the **File** menu.
 3. Import reconstructed image files with **File > Import Images...**.
    Map each source channel to an existing project channel or give it a new name
-   and color. All channels are imported in source order.
+   and color. Entering an existing channel name reuses its definition. All
+   channels are imported in source order.
 4. Place region boxes in the main image viewer.
 5. Adjust region boxes and linescan ROIs as needed.
 6. Review measurements, linescan plots, and region summaries.
@@ -70,8 +71,10 @@ exiting the GUI will prompt you to save or discard those changes.
 
 The top menu bar contains the main project, analysis, and export commands:
 
-- **File**: create, open, close, and save projects; save app settings; load
-  images; and access export commands.
+- **File**: create, open, close, and save projects, import images, and access
+  export commands.
+- **Edit**: manage project channels and labels.
+- **Settings**: save or load app defaults.
 - **File > Export**: export measurements, summary PDFs, region images, images
   with region boxes, linescan plots, and region images with ROI overlays.
 - **Run**: run classifier proposal generation, train or retrain classifiers,
@@ -108,6 +111,10 @@ projects open with channels named **Channel 1**, **Channel 2**, and so on, based
 on their original indices.
 
 ## Region Boxes And Labels
+
+Use the **Region Boxes** settings panel to color boxes by region label or use
+a manual color. It also controls label visibility and font size. Box labels
+are shown at 7 pt by factory default.
 
 Use the Box tool in the main image viewer to create and edit region boxes.
 Click the Box tool icon to activate it. While the Box tool is active:
@@ -155,26 +162,31 @@ project channel colors or use a manual color from the Peaks Plot settings.
 
 ## Exports
 
-Export commands are under **File > Export**. Most export dialogs ask for the
-target channel, intensity scaling mode, output format, and any appearance
-options relevant to that export.
+Export commands are under **File > Export**. Export dialogs group settings
+into tabs. Image exports default to **Auto** display limits and can use each
+channel's configured scaling method or an export-specific method. **Current
+limits** uses the stored display range, and **Data range** uses the full
+intensity range. For images with overlays, **Preserve physical sizes** keeps
+overlay strokes, markers, and labels close to their configured sizes.
 
 - **Measurements (.xlsx)**: writes region-level measurements and peak/linescan
   results to spreadsheet tables.
 - **Summary PDF**: writes a multi-page region summary report. Each page combines
-  a region image, ROI overlay, measurement table, and linescan plot.
-  Multi-channel projects can export a selected channel or all channels.
-- **Region Images (.tif)**: writes raw region subimages. It can export grayscale
-  TIFFs or RGB PNG previews using project channel colors/LUTs, and can
-  optionally create a tiled summary image.
+  a separately rendered region image with ROI, measurement table, and vector
+  linescan plot. Choose the image DPI independently of plot styling. All
+  channels are included by default. PDF assembly uses the bundled PDFBox
+  library and requires MATLAB to run with Java enabled.
+- **Region Images (.tif)**: writes region crops as scaled grayscale TIFFs or
+  RGB PNGs using project channel colors or LUTs. A tiled summary is optional.
 - **Image + Region Boxes**: writes full-image exports with region box overlays.
   Box colors can follow region labels or use one manual color, and region names
   can be shown or hidden.
-- **Linescan Plot**: writes the active region's linescan plot to vector formats
-  such as SVG, EPS, or PDF.
+- **Linescan Plot**: writes the active region's linescan plot as vector PDF or
+  SVG, or raster PNG or TIFF. All channels are included by default. Leave one
+  dimension blank to derive it from the plot's aspect ratio.
 - **Region Image + ROI**: writes active-region or all-region subimages with the
-  linescan ROI overlay. It supports channel selection, scaling mode, ROI
-  appearance options, and an optional tiled summary image.
+  linescan ROI overlay. The angle label font size starts from the project's
+  ROI settings. A tiled summary is optional.
 
 ## Classifier Training And Detection
 
@@ -380,6 +392,11 @@ Setup currently:
 - Runs matlabx UI calibration.
 - Creates or migrates DesmoSTORM settings.
 
+On upgrade to 1.2.0, loading an installed app settings file from an older
+factory-defaults generation replaces it with the current class defaults.
+Settings embedded in saved projects are loaded separately and keep their
+saved values.
+
 If setup needs to be rerun manually:
 
 ```matlab
@@ -401,6 +418,7 @@ Common panels:
 - **Image Display**: color mode, channel picker, and color or LUT for that channel.
 - **Peaks Plot**: linescan plot visibility, colors, annotations, and line widths.
 - **Linescan ROI**: ROI overlay, rotation annotation, and label appearance.
+- **Region Boxes**: box color mode, manual color, label visibility, and label font size.
 - **Labels**: region label definitions and active label selection.
 
 To reset saved app settings:
@@ -413,8 +431,14 @@ This overwrites the saved settings file with defaults.
 
 ## Preferences
 
-Preferences are sparse persistent command-line options stored with MATLAB's
-preferences system. They are separate from project files and app settings.
+Preferences are persistent application state stored with MATLAB's preferences
+system. They are separate from project files and app settings.
+
+`LastWorkingFolder` supplies the starting location for DesmoSTORM's project,
+image import, and menubar export pickers. Picking a file remembers its
+containing folder. Picking an export directory remembers that directory's
+parent so other exports can start alongside it. Classifier and missing-image
+pickers use their own starting locations.
 
 Print stored preferences:
 
