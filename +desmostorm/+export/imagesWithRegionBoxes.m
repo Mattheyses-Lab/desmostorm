@@ -23,6 +23,7 @@ arguments
     opts.Scope                      (1,1) string {mustBeMember(opts.Scope,["active","all"])} = "active"
     opts.Channel                    (1,1) double {mustBeInteger,mustBePositive} = 1
     opts.DisplaySettings (1,1) desmostorm.config.Display = desmostorm.config.Display()
+    opts.AutoScalingMethod (1,1) string = ""
     opts.ScalingMode                (1,1) string {mustBeMember(opts.ScalingMode,["data","auto","user"])} = "data"
     opts.Colormap                   (256,3) double = gray
     opts.ColorMode                  (1,1) string {mustBeMember(opts.ColorMode,["label","manual"])} = "label"
@@ -30,7 +31,7 @@ arguments
     opts.RegionNamesVisible         (1,1) matlab.lang.OnOffSwitchState = "on"
     opts.BoxLineWidth               (1,1) double {mustBePositive} = 1
     opts.BoxFaceAlpha               (1,1) double {mustBeInRange(opts.BoxFaceAlpha,0,1)} = 0
-    opts.FontSize                   (1,1) double {mustBePositive} = 10
+    opts.FontSize                   (1,1) double {mustBePositive} = 7
     opts.Format (1,1) string {mustBeMember(opts.Format,["PNG","TIFF","JPEG"])} = "PNG"
     opts.Width (1,1) double {mustBeNonnegative,mustBeFinite} = 0
     opts.Height (1,1) double {mustBeNonnegative,mustBeFinite} = 0
@@ -68,7 +69,7 @@ end
     "Units","inches");
 c = onCleanup(@() delete(fig));
 
-ax.CLim = desmostorm.export.imageDisplayLimits(firstImage,firstImage.sourceChannelIndex(opts.Channel),opts.ScalingMode,opts.DisplaySettings);
+ax.CLim = desmostorm.export.imageDisplayLimits(firstImage,firstImage.sourceChannelIndex(opts.Channel),opts.ScalingMode,opts.DisplaySettings,opts.AutoScalingMethod);
 addRegionBoxOverlays(ax,project,firstImage,opts);
 
 % Match the ROI overlay export behavior: show once so ImageAxes and overlay
@@ -96,7 +97,7 @@ for k = 1:numel(imgs)
     end
 
     ax.CData = getImageChannel(img,sourceIndex);
-    ax.CLim = desmostorm.export.imageDisplayLimits(img,sourceIndex,opts.ScalingMode,opts.DisplaySettings);
+    ax.CLim = desmostorm.export.imageDisplayLimits(img,sourceIndex,opts.ScalingMode,opts.DisplaySettings,opts.AutoScalingMethod);
     ax.Overlays.clear();
     addRegionBoxOverlays(ax,project,img,opts);
 

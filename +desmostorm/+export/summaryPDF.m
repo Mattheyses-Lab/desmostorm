@@ -23,6 +23,7 @@ arguments
     config (1,1) desmostorm.config.Settings
     opts.ProgressDialog = matlab.ui.dialog.ProgressDialog.empty()
     opts.ImageChannel (1,1) string = "1"
+    opts.AutoScalingMethod (1,1) string = ""
     opts.ScalingMode (1,1) string {mustBeMember(opts.ScalingMode,["data","auto","user"])} = "data"
     opts.ColorSource (1,1) string {mustBeMember(opts.ColorSource,["channel","manual"])} = "manual"
     opts.Color (1,3) double = [0 0 0]
@@ -40,7 +41,7 @@ arguments
     opts.RawLineWidth (1,1) double = 0.5
     opts.SmoothLineWidth (1,1) double = 2
     opts.AnnotationLineWidth (1,1) double {mustBePositive,mustBeFinite} = 0.5
-    opts.AnnotationFontSize (1,1) double {mustBePositive,mustBeFinite} = 10
+    opts.AnnotationFontSize (1,1) double {mustBePositive,mustBeFinite} = 7
     opts.TitleVisible (1,1) matlab.lang.OnOffSwitchState = "off"
     opts.TitleFontSizeMultiplier (1,1) double {mustBePositive,mustBeFinite} = 1
     opts.LabelFontSizeMultiplier (1,1) double {mustBePositive,mustBeFinite} = 1
@@ -159,7 +160,7 @@ end
     ax.Layout.Row = 1;
     ax.Layout.Column = 2;
     applyROISettings(ax.Tools.DrawRectangle,config.ROI,opts);
-    ax.setComponentCLim(desmostorm.export.imageDisplayLimits(img,channel,opts.ScalingMode,config.Display),channel);
+    ax.setComponentCLim(desmostorm.export.imageDisplayLimits(img,channel,opts.ScalingMode,config.Display,opts.AutoScalingMethod),channel);
 
     ax.Tools.DrawRectangle.setROIPosition(reg.ROI);
 
@@ -218,7 +219,7 @@ end
         ax.CData = Icell;
         ax.C = channel;
 
-        ax.setComponentCLim(desmostorm.export.imageDisplayLimits(img,channel,opts.ScalingMode,config.Display),channel);
+        ax.setComponentCLim(desmostorm.export.imageDisplayLimits(img,channel,opts.ScalingMode,config.Display,opts.AutoScalingMethod),channel);
 
         switch config.Display.ChannelColorMode
             case 'colors'

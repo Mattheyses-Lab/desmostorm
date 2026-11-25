@@ -63,6 +63,7 @@ classdef Exporter
                     numberField("ImageResolution","Image resolution (DPI)",600)
                     numberField("AngleLabelFontSize","Angle label font size (points)",config.ROI.FontSize)
                     scalingField()
+                    autoScalingMethodField()
                 }
             });
             desmostorm.app.focusMainFigure();
@@ -117,7 +118,7 @@ classdef Exporter
                     choiceField("OutputFormat","Format",["grayscale TIFF","RGB PNG"],"grayscale TIFF")
                     toggleField("TiledSummary","Tiled summary",false)
                 }
-                "Image Options", {scalingField()}
+                "Image Options", {scalingField();autoScalingMethodField()}
             });
             desmostorm.app.focusMainFigure();
 
@@ -132,6 +133,7 @@ classdef Exporter
             desmostorm.export.regionImages(project, folderName, ...
                 "Channel",find(channelChoices == string(options.Channel),1), ...
                 "ScalingMode",string(options.ScalingMode), ...
+                "AutoScalingMethod",options.AutoScalingMethod, ...
                 "DisplaySettings",config.Display, ...
                 "OutputFormat",string(options.OutputFormat), ...
                 "ChannelColorMode",config.Display.ChannelColorMode, ...
@@ -161,12 +163,12 @@ classdef Exporter
                     }
                     imageFileFields(7)
                 ]
-                "Image Options", {scalingField()}
+                "Image Options", {scalingField();autoScalingMethodField()}
                 "Region Boxes", {
-                    colorModeField("ColorMode","Box colors",["label","manual"],"label","Color",config.Box.EdgeColor)
+                    colorModeField("ColorMode","Box colors",["label","manual"],config.Box.ColorMode,"Color",config.Box.EdgeColor)
                     toggleField("RegionNamesVisible","Show region names",config.Box.ShowTitle)
                     opacityField("BoxFaceAlpha","Box opacity",0)
-                    numberField("FontSize","Font size",10)
+                    numberField("FontSize","Label font size (pt)",config.Box.LabelFontSize)
                 }
             });
             desmostorm.app.focusMainFigure();
@@ -205,6 +207,7 @@ classdef Exporter
                 project (1,1) desmostorm.model.STORMProject
                 config  (1,1) desmostorm.config.Settings
                 opts.CurrentChannel (1,1) double {mustBeInteger,mustBePositive} = 1
+                opts.PlotHost matlabx.ui.axes.PlotAxes = matlabx.ui.axes.PlotAxes.empty()
                 opts.ProgressDialog = []
                 opts.ProgressFactory = []
             end
@@ -222,18 +225,23 @@ classdef Exporter
 
             names = region.Parent.channelNames();
             channelChoices = ["current","all","C" + (1:numel(names)) + " — " + names];
+            if isempty(opts.PlotHost)
+                plotOptions = plotFields(config.PeaksPlot);
+            else
+                plotOptions = peakAnnotationFields(config.PeaksPlot);
+            end
             options = desmostorm.export.ExportDialog.prompt("Export Linescan Plot", {
                 "Export Options", {
                     choiceField("Channels","Channels",channelChoices,"all")
                     choiceField("Format","Format",["SVG","PDF","EPS"],"SVG")
-                    choiceField("Units","Units",["inches","centimeters","pixels","points"],"inches")
-                    numberField("Width","Width",6.5)
-                    numberField("Height","Height",3)
+                    choiceField("Units","Units",["inches","centimeters","points"],"inches")
+                    dimensionField("Width","Width","7")
+                    dimensionField("Height","Height","")
                     toggleField("PreserveAspectRatio","Preserve aspect ratio",true)
                     sizingField("StyleSizing","Style sizing")
                 }
-                "Plot Options", plotFields(config.PeaksPlot)
-            });
+                "Peak Annotations", plotOptions
+            },opts.PlotHost);
 
             if isempty(options), return; end % return on cancel
 
@@ -247,6 +255,12 @@ classdef Exporter
             selected = find(channelChoices == string(options.Channels),1);
             if selected > 2
                 options.Channels = selected - 2;
+            end
+            if ~isempty(opts.PlotHost)
+                axes = opts.PlotHost.Axes;
+                inset = axes.TightInset;
+                capturedSize = axes.InnerPosition(3:4) + inset(1:2) + inset(3:4);
+                options.AspectRatio = capturedSize(1) / capturedSize(2);
             end
             options.CurrentChannel = opts.CurrentChannel;
             options = inheritPlotStyle(options,config.PeaksPlot);
@@ -299,7 +313,7 @@ classdef Exporter
                     imageFileFields(3)
                     {toggleField("TiledSummary","Tiled summary",false)}
                 ]
-                "Image Options", {scalingField()}
+                "Image Options", {scalingField();autoScalingMethodField()}
                 "Linescan ROI", {numberField("FontSize","Angle label font size (points)",config.ROI.FontSize)}
             });
 
@@ -370,14 +384,22 @@ function choices = projectChannelChoices(project)
 end
 
 function fields = plotFields(plot)
+    fields = [
+        peakAnnotationFields(plot)
+        {
+            toggleField("TitleVisible","Show title",logical(plot.TitleVisible))
+            numberField("FontSize","Axes font size (points)",plot.FontSize)
+            numberField("TitleFontSizeMultiplier","Title size multiplier",1)
+            numberField("LabelFontSizeMultiplier","Axis-label size multiplier",1)
+        }
+    ];
+end
+
+function fields = peakAnnotationFields(plot)
     fields = {
         numberField("AnnotationFontSize","Annotation font size (points)",plot.AnnotationFontSize)
         toggleField("DistanceAnnotations","Show distance labels",logical(plot.DistanceAnnotations))
         toggleField("WidthAnnotations","Show width labels",logical(plot.WidthAnnotations))
-        toggleField("TitleVisible","Show title",logical(plot.TitleVisible))
-        numberField("FontSize","Axes font size (points)",plot.FontSize)
-        numberField("TitleFontSizeMultiplier","Title font size multiplier",1)
-        numberField("LabelFontSizeMultiplier","Label font size multiplier",1)
     };
 end
 
@@ -417,6 +439,17 @@ function field = scalingField()
     field = choiceField("ScalingMode","Display limits", ...
         ["Auto","Current limits","Data range"],"Auto");
     field.OutputValues = ["auto","user","data"];
+end
+
+function field = autoScalingMethodField()
+    field = choiceField("AutoScalingMethod","Auto method", ...
+        ["Channel setting",desmostorm.config.Display.AutoMethods], ...
+        "Channel setting");
+    field.OutputValues(1) = "";
+end
+
+function field = dimensionField(name,label,value)
+    field = struct("Name",name,"Label",label,"Type","dimension","Value",value);
 end
 
 function fields = imageFileFields(sizeValue)

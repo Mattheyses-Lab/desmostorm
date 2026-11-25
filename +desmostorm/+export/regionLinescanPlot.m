@@ -20,8 +20,8 @@ function regionLinescanPlot(region,filename,opts)
         region      (1,1) desmostorm.model.STORMRegion
         filename    (1,:) char
         % plot appearance options
-        opts.FontSize (1,1) double {mustBePositive,mustBeFinite} = 12
-        opts.AnnotationFontSize (1,1) double {mustBePositive,mustBeFinite} = 10
+        opts.FontSize (1,1) double {mustBePositive,mustBeFinite} = 9
+        opts.AnnotationFontSize (1,1) double {mustBePositive,mustBeFinite} = 7
         opts.TitleFontSizeMultiplier (1,1) double {mustBePositive,mustBeFinite} = 1
         opts.LabelFontSizeMultiplier (1,1) double {mustBePositive,mustBeFinite} = 1
         opts.TitleVisible           (1,1) matlab.lang.OnOffSwitchState = "off"
@@ -50,8 +50,11 @@ function regionLinescanPlot(region,filename,opts)
         % export options
         opts.ContentType        (1,:) char {mustBeMember(opts.ContentType,{'vector','image'})} = 'vector'
         opts.Units              (1,:) char = 'inches'
-        opts.Width              (1,1) double = 6.5
-        opts.Height             (1,1) double = 3
+        opts.Width              double = 6.5
+        opts.Height             double = 3
+        opts.AspectRatio        (1,1) double {mustBePositive,mustBeFinite} = 6.5/3
+        opts.AxesAppearance     (1,1) struct = struct()
+        opts.AxesView           (1,1) struct = struct()
         opts.BackgroundColor    = [1 1 1]
         opts.ForegroundColor    (1,3) double = [0 0 0]
         opts.ProgressDialog = matlab.ui.dialog.ProgressDialog.empty()
@@ -59,7 +62,18 @@ function regionLinescanPlot(region,filename,opts)
 
     desmostorm.runtime.updateProgress(opts.ProgressDialog,'Preparing linescan plot...');
 
-    figureSize = desmostorm.export.outputSizeInches([opts.Width opts.Height],opts.Units,opts.Resolution);
+    width = opts.Width;
+    height = opts.Height;
+    if isempty(width) && isempty(height)
+        error('desmostorm:export:MissingPlotSize','Specify a plot width or height.');
+    elseif isempty(width)
+        width = height * opts.AspectRatio;
+    elseif isempty(height)
+        height = width / opts.AspectRatio;
+    end
+    validateattributes(width,{'double'},{'scalar','positive','finite'});
+    validateattributes(height,{'double'},{'scalar','positive','finite'});
+    figureSize = desmostorm.export.outputSizeInches([width height],opts.Units,opts.Resolution);
     if opts.StyleSizing == "scale"
         figureSize = [6.5 3];
     end
@@ -119,6 +133,23 @@ function regionLinescanPlot(region,filename,opts)
     title(host.Axes,matlabx.utils.text.texFriendly(img.Name) + " | " + ...
         matlabx.utils.text.texFriendly(region.Name));
 
+    background = opts.BackgroundColor;
+    axesColor = opts.BackgroundColor;
+    appearance = opts.AxesAppearance;
+    if isfield(appearance,"BackgroundColorOverride") && ~isempty(appearance.BackgroundColorOverride)
+        background = appearance.BackgroundColorOverride;
+    end
+    if isfield(appearance,"AxesColorOverride") && ~isempty(appearance.AxesColorOverride)
+        axesColor = appearance.AxesColorOverride;
+    end
+    for name = reshape(string(fieldnames(appearance)),1,[])
+        if ~ismember(name,["BackgroundColorOverride","AxesColorOverride"])
+            host.(name) = appearance.(name);
+        end
+    end
+    viewArgs = namedargs2cell(opts.AxesView);
+    host.setAxesView(viewArgs{:});
+
     % draw and pause briefly for graphics to render
     drawnow
     pause(1)
@@ -130,10 +161,11 @@ function regionLinescanPlot(region,filename,opts)
     % --- export plot to specified file location ---
     desmostorm.runtime.updateProgress(opts.ProgressDialog,'Writing linescan plot...');
     host.exportPlot(filename,ContentType=opts.ContentType, ...
-        BackgroundColor=opts.BackgroundColor,Color=opts.BackgroundColor,Units=opts.Units, ...
+        BackgroundColor=background,Color=axesColor,Units=opts.Units, ...
         Height=opts.Height,Width=opts.Width,Resolution=opts.Resolution, ...
         StyleSizing=opts.StyleSizing, ...
-        PreserveAspectRatio=logical(opts.PreserveAspectRatio) || opts.StyleSizing == "physical");
+        PreserveAspectRatio=logical(opts.PreserveAspectRatio) || opts.StyleSizing == "physical" || ...
+            isempty(opts.Width) || isempty(opts.Height));
 end
 
 function color = resolvePlotBackgroundColor(color)

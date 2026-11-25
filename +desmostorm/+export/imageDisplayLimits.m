@@ -1,8 +1,13 @@
-function limits = imageDisplayLimits(img,channel,mode,displaySettings)
+function limits = imageDisplayLimits(img,channel,mode,displaySettings,autoMethod)
 %IMAGEDISPLAYLIMITS Resolve image limits for the source channel being exported.
+    if nargin < 5, autoMethod = ""; end
     switch mode
         case "auto"
             policy = displaySettings.channelPolicy(img.ChannelIDs(channel));
+            if autoMethod ~= ""
+                mustBeMember(autoMethod,desmostorm.config.Display.AutoMethods);
+                policy.Method = autoMethod;
+            end
             policy.KeepAuto = true;
             limits = img.displayLimits(channel,policy);
         case "user"

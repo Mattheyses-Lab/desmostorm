@@ -44,45 +44,9 @@ classdef PeaksPlotRenderer < matlabx.ui.axes.PlotContent
             obj.refresh();
         end
 
-        function refresh(obj)
-            if isempty(obj.Host) || ~isvalid(obj.Host), return, end
-            axes = obj.Host.Axes;
-            obj.Host.BackgroundColor = obj.Style.BackgroundColor;
-            obj.Host.Color = obj.Style.BackgroundColor;
-            obj.Host.ForegroundColor = obj.Style.ForegroundColor;
-            axes.Clipping = 'off';
-            axes.TitleHorizontalAlignment = 'left';
-
-            count = numel(obj.Data.Traces);
-            excess = obj.PeaksPlot(count+1:end);
-            delete(excess);
-            obj.PeaksPlot = obj.PeaksPlot(1:min(count,numel(obj.PeaksPlot)));
-            for k = numel(obj.PeaksPlot)+1:count
-                obj.PeaksPlot(k,1) = desmostorm.plot.PeaksPlot(axes);
-            end
-
-            limits = obj.getDistanceAnnotationAxisLimits();
-            laneY = obj.getDistanceAnnotationLanes(limits);
-            for k = 1:count
-                obj.PeaksPlot(k).render(obj.Data.Traces(k),obj.Style,k,laneY(k), ...
-                    obj.Data.ChannelIDs(k),obj.Data.Names(k),obj.Host.FontName);
-            end
-
-            if obj.UpdateLimits
-                if isempty(obj.Style.XLim)
-                    axes.XLimMode = 'auto';
-                else
-                    axes.XLim = obj.Style.XLim;
-                end
-                if isempty(limits)
-                    axes.YLimMode = 'auto';
-                    axes.YTickMode = 'auto';
-                else
-                    axes.YLim = limits.DisplayLim;
-                    axes.YTick = limits.Ticks;
-                end
-                obj.UpdateLimits = false;
-            end
+        function capabilities = axesCapabilities(obj)
+            capabilities = axesCapabilities@matlabx.ui.axes.PlotContent(obj);
+            capabilities = capabilities(~ismember(capabilities,["YLim","YTickInterval"]));
         end
 
         function handleEvent(obj,kind,event)
@@ -129,6 +93,51 @@ classdef PeaksPlotRenderer < matlabx.ui.axes.PlotContent
     end
 
     methods (Access=protected)
+        function refreshGraphics(obj)
+            if isempty(obj.Host) || ~isvalid(obj.Host), return, end
+            axes = obj.Host.Axes;
+            obj.Host.BackgroundColor = obj.Style.BackgroundColor;
+            obj.Host.Color = obj.Style.BackgroundColor;
+            obj.Host.ForegroundColor = obj.Style.ForegroundColor;
+            axes.Clipping = 'off';
+            axes.TitleHorizontalAlignment = 'left';
+
+            count = numel(obj.Data.Traces);
+            excess = obj.PeaksPlot(count+1:end);
+            delete(excess);
+            obj.PeaksPlot = obj.PeaksPlot(1:min(count,numel(obj.PeaksPlot)));
+            for k = numel(obj.PeaksPlot)+1:count
+                obj.PeaksPlot(k,1) = desmostorm.plot.PeaksPlot(axes);
+            end
+
+            limits = obj.getDistanceAnnotationAxisLimits();
+            laneY = obj.getDistanceAnnotationLanes(limits);
+            for k = 1:count
+                obj.PeaksPlot(k).render(obj.Data.Traces(k),obj.Style,k,laneY(k), ...
+                    obj.Data.ChannelIDs(k),obj.Data.Names(k),obj.Host.FontName);
+            end
+
+            % Clearing a host override returns XLimMode to auto before refresh.
+            if obj.UpdateLimits || (isempty(obj.Host.AxesView.XLim) && ...
+                    ~isempty(obj.Style.XLim) && axes.XLimMode == "auto")
+                if isempty(obj.Style.XLim)
+                    axes.XLimMode = 'auto';
+                else
+                    axes.XLim = obj.Style.XLim;
+                end
+            end
+            if obj.UpdateLimits
+                if isempty(limits)
+                    axes.YLimMode = 'auto';
+                    axes.YTickMode = 'auto';
+                else
+                    axes.YLim = limits.DisplayLim;
+                    axes.YTick = limits.Ticks;
+                end
+                obj.UpdateLimits = false;
+            end
+        end
+
         function attachGraphics(obj,axes)
             for k = 1:numel(obj.PeaksPlot)
                 obj.PeaksPlot(k).attach(axes);

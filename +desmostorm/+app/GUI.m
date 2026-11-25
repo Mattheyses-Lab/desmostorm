@@ -355,7 +355,7 @@ classdef GUI < handle
                 'BackgroundColor',[.12 .12 .12]);
 
             % initialize items
-            itemTitles = ["Images","Regions","Analysis","Display Limits","Image Display","Peaks Plot","Linescan ROI","Labels"];
+            itemTitles = ["Images","Regions","Analysis","Display Limits","Image Display","Peaks Plot","Linescan ROI","Region Boxes","Labels"];
 
             for i = 1:numel(itemTitles)
                 obj.SettingsAccordion.addItem("Title",itemTitles(i),...
@@ -403,6 +403,8 @@ classdef GUI < handle
             % --- Peaks Plot ---
             desmostorm.Log.DEBUG("Setting up Peaks Plot controls...");
             try obj.setupPeaksPlotControls(); catch ME, desmostorm.Log.EXCEPTION(ME); rethrow(ME); end
+
+            obj.setupRegionBoxControls();
 
             % --- Linescan ROI ---
             desmostorm.Log.DEBUG("Setting up Linescan ROI controls...");
@@ -633,6 +635,42 @@ classdef GUI < handle
             controls.AnnotationColor.Enable = settings.AnnotationColorMode == "manual";
             controls.DistanceAnnotationsMode.Enable = logical(settings.DistanceAnnotations);
             controls.WidthAnnotationsMode.Enable = logical(settings.WidthAnnotations);
+        end
+
+        function setupRegionBoxControls(obj)
+            item = obj.SettingsAccordion.getItem("Region Boxes");
+            pane = item.Pane;
+            set(pane,RowHeight={'fit','fit','fit'},ColumnWidth={'fit','1x'}, ...
+                Padding=5,RowSpacing=5,ColumnSpacing=5);
+            uilabel(pane,Text="Color",FontColor=[.85 .85 .85]);
+            pair = uigridlayout(pane,[1 2],Padding=0,ColumnSpacing=5, ...
+                RowHeight={'fit'},ColumnWidth={'1x','fit'},BackgroundColor=[.18 .18 .18]);
+            obj.SettingsUI.Box.ColorMode = uidropdown(pair,Items={'label','manual'}, ...
+                BackgroundColor=[.3 .3 .3],FontColor=[.9 .9 .9], ...
+                ValueChangedFcn=@(src,~) obj.setRegionBoxSetting("ColorMode",src.Value));
+            obj.SettingsUI.Box.EdgeColor = uicolorpicker(pair, ...
+                ValueChangedFcn=@(src,~) obj.setRegionBoxSetting("EdgeColor",src.Value));
+            uilabel(pane,Text="Show Labels",FontColor=[.85 .85 .85]);
+            obj.SettingsUI.Box.ShowTitle = uicheckbox(pane,Text="", ...
+                ValueChangedFcn=@(src,~) obj.setRegionBoxSetting("ShowTitle",src.Value));
+            uilabel(pane,Text="Label Font Size (pt)",FontColor=[.85 .85 .85]);
+            obj.SettingsUI.Box.LabelFontSize = uieditfield(pane,"numeric", ...
+                Limits=[eps Inf],ValueChangedFcn=@(src,~) obj.setRegionBoxSetting("LabelFontSize",src.Value));
+            obj.refreshRegionBoxControls();
+        end
+
+        function setRegionBoxSetting(obj,name,value)
+            obj.Settings.Box.(name) = value;
+        end
+
+        function refreshRegionBoxControls(obj)
+            controls = obj.SettingsUI.Box;
+            style = obj.Settings.Box;
+            controls.ColorMode.Value = char(style.ColorMode);
+            controls.EdgeColor.Value = style.EdgeColor;
+            controls.EdgeColor.Enable = style.ColorMode == "manual";
+            controls.ShowTitle.Value = style.ShowTitle;
+            controls.LabelFontSize.Value = style.LabelFontSize;
         end
 
         function setupROIControls(obj)
@@ -1038,6 +1076,7 @@ classdef GUI < handle
             obj.SettingsUI.ROI.FontColorPicker.Value = S.ROI.FontColor;
             obj.SettingsUI.ROI.FontSizeEditField.Value = S.ROI.FontSize;
             obj.refreshROISettings();
+            obj.refreshRegionBoxControls();
             obj.refreshDisplayLimits();
         end
 
@@ -1620,13 +1659,9 @@ classdef GUI < handle
                 return
             end
 
-            % add a box for each region, colored according to its label
             for r = img.RegionArray'
-                label = obj.Project.LabelBank.getByID(r.LabelID);
-                if isempty(label), label = obj.Project.LabelBank.getByID("unlabeled"); end
-                boxColor = label.Color;
-                obj.ImageViewer.Tools.Box.addBox(r.ID, r.Center, r.BoxSize, ...
-                    "EdgeColor", boxColor, "FaceColor", boxColor, "Label", r.Name);
+                obj.ImageViewer.Tools.Box.addBox(r.ID,r.Center,r.BoxSize);
+                obj.applyRegionBoxStyle(r);
             end
 
             % apply selection status to region boxes
@@ -1635,6 +1670,24 @@ classdef GUI < handle
             id = img.ActiveRegionID;
             if isempty(id), id = ""; end
             obj.ImageViewer.Tools.Box.setActiveBoxID(id);
+        end
+
+        function applyRegionBoxStyle(obj,region)
+            style = obj.Settings.Box;
+            box = obj.ImageViewer.Overlays.get(region.ID);
+            if isempty(box), return; end
+            color = style.EdgeColor;
+            if style.ColorMode == "label"
+                label = obj.Project.LabelBank.getByID(region.LabelID);
+                if isempty(label), label = obj.Project.LabelBank.getByID("unlabeled"); end
+                color = label.Color;
+            end
+            box.EdgeColor = color;
+            box.FaceColor = color;
+            box.FontSize = style.LabelFontSize;
+            labelText = "";
+            if style.ShowTitle, labelText = region.Name; end
+            box.Label = labelText;
         end
 
         function refreshDisplayLimits(obj)
@@ -1717,7 +1770,7 @@ classdef GUI < handle
             label = uilabel(host,'Text','Scaling method','FontColor',[.75 .75 .75]);
             label.Layout.Row = 3;
             method = uidropdown(host, ...
-                'Items',{'Light contrast','Medium contrast','Strong contrast','Zero to max','Data range'}, ...
+                'Items',cellstr(desmostorm.config.Display.AutoMethods), ...
                 'ValueChangedFcn',@(src,~) obj.changeDisplayLimitPolicy(c,"Method",string(src.Value)));
             method.Layout.Row = 3;
             method.Layout.Column = 2;
@@ -2334,7 +2387,13 @@ classdef GUI < handle
         end
 
         function onBoxChanged(obj,~)
-            % do something
+            obj.refreshRegionBoxControls();
+            img = obj.Project.ActiveImage;
+            if ~isempty(img)
+                for region = img.RegionArray'
+                    obj.applyRegionBoxStyle(region);
+                end
+            end
             obj.markProjectDirty();
         end
 
@@ -3064,9 +3123,7 @@ classdef GUI < handle
             img.addRegion(data.ID, data.CenterPx, obj.Settings.Analysis.BoxSize, L.ID, "user");
 
 
-            % Apply active label color to the newly created box
-            obj.ImageViewer.Tools.Box.setBoxColorByID(data.ID, L.Color);
-            obj.ImageViewer.Tools.Box.setBoxLabelByID(data.ID, img.getRegion(data.ID).Name);
+            obj.applyRegionBoxStyle(img.getRegion(data.ID));
         end
 
         function onBoxMoveStarted(obj, data)
@@ -3263,6 +3320,7 @@ classdef GUI < handle
             desmostorm.Log.INFO("Exporting region linescan plot...");
             try
                 success = desmostorm.export.Exporter.exportRegionLinescanPlot(obj.Project,obj.Settings, ...
+                    "PlotHost",obj.RegionLinescanPlot, ...
                     "CurrentChannel",obj.ImageViewer.C, ...
                     "ProgressFactory",@(message) obj.createProgressDialog(message));
                 if success

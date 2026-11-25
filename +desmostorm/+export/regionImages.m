@@ -22,6 +22,7 @@ arguments
     folderName {mustBeTextScalar}
     opts.Channel (1,1) double {mustBeInteger,mustBePositive} = 1
     opts.DisplaySettings (1,1) desmostorm.config.Display = desmostorm.config.Display()
+    opts.AutoScalingMethod (1,1) string = ""
     opts.ScalingMode (1,1) string {mustBeMember(opts.ScalingMode,["data","auto","user"])} = "data"
     opts.OutputFormat (1,1) string {mustBeMember(opts.OutputFormat,["grayscale TIFF","RGB PNG"])} = "grayscale TIFF"
     opts.ChannelColorMode (1,1) string {mustBeMember(opts.ChannelColorMode,["colors","luts"])} = "colors"
@@ -63,7 +64,7 @@ for i = 1:numel(project.ImageArray)
 
         Icell = img.regionSubimageCell(reg);
         I = Icell{sourceIndex};
-        clim = desmostorm.export.imageDisplayLimits(img,sourceIndex,opts.ScalingMode,opts.DisplaySettings);
+        clim = desmostorm.export.imageDisplayLimits(img,sourceIndex,opts.ScalingMode,opts.DisplaySettings,opts.AutoScalingMethod);
         switch opts.OutputFormat
             case "grayscale TIFF"
                 matlabx.image.io.write16BitTiff(scaleFor16BitExport(I,clim),fullName);

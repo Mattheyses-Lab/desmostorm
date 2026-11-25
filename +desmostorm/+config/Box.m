@@ -15,12 +15,14 @@
 % with this program; if not, see <https://www.gnu.org/licenses/>.
 
 classdef Box < handle
-% Display options with directory-based colormap selection
+% Appearance settings for region boxes.
 
     % --- Region boxes ---
     properties (Access=private)
         FaceColor_          (1,3) double {mustBeInRange(FaceColor_,0,1)} = [0 0 0]
         EdgeColor_          (1,3) double {mustBeInRange(EdgeColor_,0,1)} = [1 1 1]
+        ColorMode_ (1,1) string {mustBeMember(ColorMode_,["label","manual"])} = "label"
+        LabelFontSize_ (1,1) double {mustBePositive,mustBeFinite} = 7
         ShowTitle_          (1,1) logical = true
         TitleContent_       (1,:) char {mustBeMember(TitleContent_,{'Name','Score'})} = 'Name'
     end
@@ -28,6 +30,8 @@ classdef Box < handle
     properties (Dependent)
         FaceColor
         EdgeColor
+        ColorMode
+        LabelFontSize
         ShowTitle
         TitleContent
     end
@@ -45,7 +49,13 @@ classdef Box < handle
         function v = get.TitleContent(this),    v = this.TitleContent_;  end
 
 
+        function v = get.ColorMode(this), v = this.ColorMode_; end
+        function v = get.LabelFontSize(this), v = this.LabelFontSize_; end
+
         % ---------- Setters ----------
+
+        function set.ColorMode(this,v), this.setValue("ColorMode",string(v)); end
+        function set.LabelFontSize(this,v), this.setValue("LabelFontSize",v); end
 
         function set.FaceColor(this,v),       this.setValue("FaceColor",v);       end
         function set.EdgeColor(this,v),       this.setValue("EdgeColor",v);       end
@@ -57,6 +67,8 @@ classdef Box < handle
             S = struct( ...
                 'FaceColor',        this.FaceColor, ...
                 'EdgeColor',        this.EdgeColor, ...
+                'ColorMode',this.ColorMode, ...
+                'LabelFontSize',this.LabelFontSize, ...
                 'ShowTitle',        this.ShowTitle, ...
                 'TitleContent',     this.TitleContent);
         end

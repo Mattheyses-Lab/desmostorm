@@ -18,6 +18,10 @@ classdef Display < handle
 % Display options with directory-based colormap selection
 
     % --- Colormaps ---
+    properties (Constant)
+        AutoMethods = ["Light contrast","Medium contrast","Strong contrast","Zero to max","Data range"]
+    end
+
     properties (Access=private)
         ColormapName_     string = "turbo"    % selection name
         ColormapCategory_ string = "MATLAB"   % selection category

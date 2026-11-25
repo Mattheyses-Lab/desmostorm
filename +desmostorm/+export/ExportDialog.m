@@ -16,8 +16,9 @@
 
 classdef ExportDialog
     methods (Static)
-        function options = prompt(name,sections)
-        %PROMPT Collect menubar export settings in a modal accordion.
+        function options = prompt(name,sections,plotHost)
+        %PROMPT Collect menubar export settings in a tabbed modal dialog.
+            if nargin < 3, plotHost = []; end
             background = [.12 .12 .12];
             paneColor = [.18 .18 .18];
             controlColor = [.3 .3 .3];
@@ -27,36 +28,28 @@ classdef ExportDialog
             fields = struct();
             controls = struct();
 
-            rowCount = sum(cellfun(@numel,sections(:,2)));
-            height = min(600,max(240,85+25*rowCount+25*size(sections,1)));
             fig = uifigure(Visible="off",Name=name, ...
-                InnerPosition=[0 0 470 height],Resize="off", ...
+                InnerPosition=[0 0 470 420],Resize="off", ...
                 WindowStyle="modal",Color=background);
             fig.CloseRequestFcn = @(~,~) closeDialog();
             cleanup = onCleanup(@() deleteDialog(fig));
             root = uigridlayout(fig,[2 1],Padding=[10 10 10 10], ...
                 RowSpacing=10,ColumnSpacing=0,BackgroundColor=background, ...
                 RowHeight={'1x','fit'},ColumnWidth={'1x'});
-            host = uigridlayout(root,[1 1],Padding=0,RowSpacing=0, ...
-                ColumnSpacing=0,BackgroundColor=background, ...
-                RowHeight={'fit'},ColumnWidth={'1x'},Scrollable="on");
-            host.Layout.Row = 1;
-            accordion = matlabx.ui.container.Accordion(host, ...
-                ItemSpacing=5,BorderWidth=0,BorderColor=paneColor, ...
-                Padding=0,BackgroundColor=background);
-
+            tabs = uitabgroup(root);
+            tabs.Layout.Row = 1;
+            readAxes = [];
             for section = 1:size(sections,1)
-                title = sections{section,1};
+                if section == 2 && ~isempty(plotHost)
+                    readAxes = matlabx.ui.axes.internal.plotAxesControlTabs(tabs,plotHost,@() [],true);
+                end
                 specs = sections{section,2};
-                accordion.addItem(Title=title,BorderColor=[.49 .49 .49], ...
-                    TitleBackgroundColor=background,HoverTitleBackgroundColor=controlColor, ...
-                    PaneBackgroundColor=paneColor,FontColor=fontColor, ...
-                    BorderWidth=1,ExpandedBorderWidth=1,TitlePadding=1);
-                item = accordion.getItem(title);
-                item.expand();
-                pane = item.Pane;
-                set(pane,ColumnWidth={'fit','1x'},RowHeight=repmat({'fit'},1,numel(specs)), ...
-                    Padding=[5 5 5 5],ColumnSpacing=5,RowSpacing=5,BackgroundColor=paneColor);
+                tab = uitab(tabs,Title=sections{section,1},BackgroundColor=paneColor, ...
+                    ForegroundColor=fontColor);
+                pane = uigridlayout(tab,[numel(specs)+1 2],ColumnWidth={'fit','1x'}, ...
+                    RowHeight=[repmat({'fit'},1,numel(specs)),{'1x'}], ...
+                    Padding=[5 5 5 5],ColumnSpacing=5,RowSpacing=5, ...
+                    BackgroundColor=paneColor,Scrollable="on");
                 for row = 1:numel(specs)
                     spec = specs{row};
                     label = uilabel(pane,Text=spec.Label,FontColor=fontColor);
@@ -98,6 +91,10 @@ classdef ExportDialog
                 controls.StyleSizing.ValueChangedFcn = @(~,~) updateAspectControl();
                 updateAspectControl();
             end
+            if isfield(controls,"ScalingMode") && isfield(controls,"AutoScalingMethod")
+                controls.ScalingMode.ValueChangedFcn = @(~,~) updateScalingControl();
+                updateScalingControl();
+            end
             movegui(fig,"center");
             fig.Visible = "on";
             uiwait(fig);
@@ -111,6 +108,9 @@ classdef ExportDialog
                 switch spec.Type
                     case "choice"
                         control = uidropdown(pane,Items=cellstr(spec.Items),Value=char(spec.Value), ...
+                            BackgroundColor=controlColor,FontColor=controlFontColor);
+                    case "dimension"
+                        control = uieditfield(pane,"text",Value=spec.Value,Placeholder="Auto", ...
                             BackgroundColor=controlColor,FontColor=controlFontColor);
                     case "number"
                         control = uieditfield(pane,"numeric",Value=spec.Value, ...
@@ -132,6 +132,10 @@ classdef ExportDialog
                 aspect.Enable = ~physical;
             end
 
+            function updateScalingControl()
+                controls.AutoScalingMethod.Enable = string(controls.ScalingMode.Value) == "Auto";
+            end
+
             function acceptDialog()
                 values = struct();
                 for key = reshape(string(fieldnames(fields)),1,[])
@@ -142,6 +146,16 @@ classdef ExportDialog
                             value = spec.OutputValues(spec.Items == string(value));
                         case "toggle"
                             value = matlab.lang.OnOffSwitchState(value);
+                        case "dimension"
+                            input = strtrim(string(value));
+                            value = [];
+                            if strlength(input) > 0
+                                value = str2double(input);
+                                if ~isreal(value) || ~isfinite(value) || value <= 0
+                                    uialert(fig,spec.Label + " must be positive or blank.","Invalid export option");
+                                    return
+                                end
+                            end
                         case "number"
                             if ~isfinite(value)
                                 uialert(fig,spec.Label + " must be finite.","Invalid export option");
@@ -149,6 +163,23 @@ classdef ExportDialog
                             end
                     end
                     values.(key) = value;
+                end
+                if isfield(values,"Width") && isfield(values,"Height") && ...
+                        isempty(values.Width) && isempty(values.Height)
+                    uialert(fig,"Specify a width or height.","Invalid export option");
+                    return
+                end
+                if ~isempty(readAxes)
+                    [style,view,message] = readAxes();
+                    if strlength(message) > 0
+                        uialert(fig,message,"Invalid axes options");
+                        return
+                    end
+                    if isfield(view,"XLim") && isempty(view.XLim) && plotHost.Axes.XLimMode == "manual"
+                        view.XLim = plotHost.Axes.XLim;
+                    end
+                    values.AxesAppearance = style;
+                    values.AxesView = view;
                 end
                 options = values;
                 uiresume(fig);

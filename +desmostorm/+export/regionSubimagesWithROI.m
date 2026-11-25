@@ -27,6 +27,7 @@ arguments
     folderName                      {mustBeTextScalar}
     opts.Channel                    (1,1) double {mustBeInteger,mustBePositive} = 1
     opts.DisplaySettings (1,1) desmostorm.config.Display = desmostorm.config.Display()
+    opts.AutoScalingMethod (1,1) string = ""
     opts.ScalingMode                (1,1) string {mustBeMember(opts.ScalingMode,["data","auto","user"])} = "data"
     opts.Colormap                   (256,3) double = gray
     opts.Format (1,1) string {mustBeMember(opts.Format,["PNG","TIFF","JPEG"])} = "PNG"
@@ -38,14 +39,14 @@ arguments
     opts.ROIColor                   (1,3) double = [1 1 1]
     opts.ROILineWidth               (1,1) double = 1
     opts.ROIFaceAlpha               (1,1) double = 0
-    opts.ROIMarkerSize              (1,1) double = 8
+    opts.ROIMarkerSize              (1,1) double = 7
     opts.AnnotationLineColor        (1,3) double = [1 1 1]
     opts.AnnotationLineWidth        (1,1) double = 0.5
     opts.RotationAngleMode          (1,:) char {mustBeMember(opts.RotationAngleMode,{'full-circle','half-circle'})} = 'half-circle'
     opts.RotationAngleVisible       (1,1) matlab.lang.OnOffSwitchState = "on"
     opts.Size                       (1,1) double = 3
     opts.Units                      (1,:) char = 'inches'
-    opts.FontSize                   (1,1) double = 12
+    opts.FontSize                   (1,1) double = 7
     opts.FontColor                  (1,3) double = [1 1 1]
     opts.TiledSummary               (1,1) matlab.lang.OnOffSwitchState = "off"
     opts.ProgressDialog = matlab.ui.dialog.ProgressDialog.empty()
@@ -80,7 +81,7 @@ I = getRegionChannelImage(firstRegion,firstIndex);
     "Units","inches");
 c = onCleanup(@() delete(fig));
 
-ax.CLim = desmostorm.export.imageDisplayLimits(firstImage,firstIndex,opts.ScalingMode,opts.DisplaySettings);
+ax.CLim = desmostorm.export.imageDisplayLimits(firstImage,firstIndex,opts.ScalingMode,opts.DisplaySettings,opts.AutoScalingMethod);
 ax.Tools.DrawRectangle.ROIColor = opts.ROIColor;
 ax.Tools.DrawRectangle.ROILineWidth = opts.ROILineWidth;
 ax.Tools.DrawRectangle.ROIMarkerSize = opts.ROIMarkerSize;
@@ -128,7 +129,7 @@ for k = 1:numel(regions)
     end
 
     ax.CData = getRegionChannelImage(region,sourceIndex);
-    ax.CLim = desmostorm.export.imageDisplayLimits(img,sourceIndex,opts.ScalingMode,opts.DisplaySettings);
+    ax.CLim = desmostorm.export.imageDisplayLimits(img,sourceIndex,opts.ScalingMode,opts.DisplaySettings,opts.AutoScalingMethod);
     ax.Tools.DrawRectangle.setROIPosition(region.ROI);
 
     drawnow

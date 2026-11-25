@@ -21,12 +21,12 @@ classdef ROI < handle
         ROIColor_ (1,3) double {mustBeInRange(ROIColor_,0,1)} = [1 1 1]
         ROILineWidth_ (1,1) double {mustBePositive} = 1
         ROIFaceAlpha_ (1,1) double {mustBeInRange(ROIFaceAlpha_,0,1)} = 0
-        ROIMarkerSize_ (1,1) double {mustBePositive} = 8
+        ROIMarkerSize_ (1,1) double {mustBePositive} = 7
         AnnotationLineColor_ (1,3) double {mustBeInRange(AnnotationLineColor_,0,1)} = [1 1 1]
         AnnotationLineWidth_ (1,1) double {mustBePositive} = 0.5
         RotationAngleVisible_ (1,1) matlab.lang.OnOffSwitchState = "on"
         RotationAngleMode_ (1,:) char {mustBeMember(RotationAngleMode_,{'full-circle','half-circle'})} = 'half-circle'
-        FontSize_ (1,1) double {mustBePositive} = 12
+        FontSize_ (1,1) double {mustBePositive} = 7
         FontColor_ (1,3) double {mustBeInRange(FontColor_,0,1)} = [1 1 1]
     end
 

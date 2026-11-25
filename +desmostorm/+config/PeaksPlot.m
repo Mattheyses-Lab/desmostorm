@@ -32,8 +32,8 @@ classdef PeaksPlot < handle
         DistanceAnnotationsMode_ (1,1) string {mustBeMember(DistanceAnnotationsMode_,["data","lanes"])} = "data"
         WidthAnnotations_       (1,1) matlab.lang.OnOffSwitchState = "on"
         WidthAnnotationsMode_    (1,1) string {mustBeMember(WidthAnnotationsMode_,["normal","hover"])} = "hover"
-        AnnotationFontSize_ (1,1) double {mustBePositive,mustBeFinite} = 10
-        FontSize_ (1,1) double {mustBePositive,mustBeFinite} = 12
+        AnnotationFontSize_ (1,1) double {mustBePositive,mustBeFinite} = 7
+        FontSize_ (1,1) double {mustBePositive,mustBeFinite} = 9
         TitleVisible_ (1,1) matlab.lang.OnOffSwitchState = "off"
     end
 
